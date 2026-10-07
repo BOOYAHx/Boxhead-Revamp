@@ -1,0 +1,26 @@
+:root {
+  --bg: #111;
+  --fg: #eee;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Verdana, Geneva, sans-serif;
+  overflow: hidden;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game canvas {
+  image-rendering: auto;
+}

@@ -1,0 +1,6 @@
+# Generated from the original SWFs by tools/build_assets.py (copyrighted game assets)
+client/assets/game/
+
+__pycache__/
+*.pyc
+node_modules/
