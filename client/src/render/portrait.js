@@ -1,6 +1,7 @@
-// Character pictures for the lobby (boxhead.ui.CharacterBox.drawCharacter):
-// the character idle, facing south-west with a pistol, over its shadow,
-// drawn from the game's sprite sheets onto a canvas.
+// Character pictures for the lobby (boxhead.ui.CharacterBox.drawCharacter)
+// and the customization window: the character idle with a pistol (facing
+// south-west unless told otherwise), over its shadow, drawn from the game's
+// sprite sheets onto a canvas.
 
 import { MODELS, tintFor } from '../game/bodyParts.js';
 import { Animator } from '../game/Character.js';
@@ -13,15 +14,18 @@ const ONE_HAND = 1; // the pistol's pose (Weapon.ONE_HAND)
 /**
  * A canvas of `width` x `height` with the character's feet at (x, y)
  * (CharacterBox: 48 x 59, feet at the "offset" marker 30, 46).
- * look: { headModel, headColor, bodyModel, bodyColor }.
+ * look: { headModel, headColor, bodyModel, bodyColor }. `dir` turns the
+ * character; `scale` draws it that many times larger (sharper on big screens).
  */
-export function drawPortrait(textures, look, { width = 48, height = 59, x = 30, y = 46 } = {}) {
+export function drawPortrait(textures, look, { width = 48, height = 59, x = 30, y = 46, dir = SW, scale = 1 } = {}) {
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
   const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.scale(scale, scale);
   const anim = new Animator(); // idle
-  const bodyFrame = anim.bodyFrame(SW, ONE_HAND);
+  const bodyFrame = anim.bodyFrame(dir, ONE_HAND);
   const head = MODELS[look.headModel] || MODELS[0];
   const body = MODELS[look.bodyModel] || MODELS[0];
   const draw = (name, index, { alpha = 1, tint = null } = {}) => {
@@ -53,7 +57,7 @@ export function drawPortrait(textures, look, { width = 48, height = 59, x = 30, 
   draw('Character_Shadow', bodyFrame, { alpha: SHADOW_ALPHA });
   draw(body + 'BodyCustom', bodyFrame, { tint: tintFor(body + 'Body', look.bodyColor) });
   draw(body + 'Body', bodyFrame);
-  draw('Pistol', anim.weaponFrame(SW));
+  draw('Pistol', anim.weaponFrame(dir));
   draw(head + 'HeadCustom', bodyFrame, { tint: tintFor(head + 'Head', look.headColor) });
   draw(head + 'Head', bodyFrame);
   return canvas;

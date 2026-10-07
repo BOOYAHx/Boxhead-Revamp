@@ -12,6 +12,7 @@ import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
 import { ShopState } from '../game/shop.js';
 import { FREE_GUNS } from '../config.js';
+import { loadLook } from '../game/profile.js';
 import { PISTOL_ID, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { EquipmentWorld } from '../game/equipment.js';
 import { EquipmentView } from '../render/EquipmentView.js';
@@ -1023,6 +1024,7 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'offline') this.player.stats.money = OFFLINE_MONEY;
     if (this.app) this.app.roundBonus = 0; // Player.newRound spends the bonus
     if (user) Object.assign(this.player.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
+    else Object.assign(this.player.look, loadLook()); // offline: the look saved in this browser
     const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
     this.playerView = new CharacterView(this, this.player);

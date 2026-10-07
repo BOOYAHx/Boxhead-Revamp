@@ -126,6 +126,7 @@ function optionSelector() {
   return (clip) => {
     let options = [];
     let index = -1;
+    let label = String; // how a value is shown (the customization window names the models)
     const valueField = clip.getChildByName('_valueField');
     const left = clip.getChildByName('_leftButton');
     const right = clip.getChildByName('_rightButton');
@@ -136,13 +137,14 @@ function optionSelector() {
       if (i >= options.length - 1) right?.disable?.();
       else right?.enable?.();
       index = i;
-      if (valueField) valueField.text = String(options[i] ?? '');
+      if (valueField) valueField.text = options[i] === undefined ? '' : label(options[i]);
       if (notify) clip.el.dispatchEvent(new Event('change'));
     };
     left?.onClick?.(() => index > 0 && select(index - 1));
     right?.onClick?.(() => index < options.length - 1 && select(index + 1));
-    clip.displayOptions = (name, list, selected) => {
+    clip.displayOptions = (name, list, selected, format = String) => {
       options = list || [];
+      label = format;
       const field = clip.getChildByName('_optionField');
       if (field) field.text = name || '';
       index = -1;
@@ -151,6 +153,42 @@ function optionSelector() {
     Object.defineProperty(clip, 'selectedOption', { get: () => options[index] });
     Object.defineProperty(clip, 'selectedIndex', { get: () => index });
     clip.selectIndex = select;
+  };
+}
+
+/**
+ * ColorSelector: "< colour >" with a swatch (_colorBlock) showing the colour;
+ * options are 0xRRGGBB values, the swatch is multiplied by the selected one
+ * (CharacterColorFinish.tone); fires "change".
+ */
+function colorSelector(lib) {
+  return (clip) => {
+    let options = [];
+    let index = -1;
+    const block = clip.getChildByName('_colorBlock');
+    const left = clip.getChildByName('_leftButton');
+    const right = clip.getChildByName('_rightButton');
+    const select = (i, notify = true) => {
+      if (i === index) return;
+      if (i <= 0) left?.disable?.();
+      else left?.enable?.();
+      if (i >= options.length - 1) right?.disable?.();
+      else right?.enable?.();
+      index = i;
+      const rgb = options[i] ?? 0xffffff;
+      if (block) setColor(lib, block, [[((rgb >> 16) & 255) / 255, ((rgb >> 8) & 255) / 255, (rgb & 255) / 255, 1], [0, 0, 0, 0]]);
+      if (notify) clip.el.dispatchEvent(new Event('change'));
+    };
+    left?.onClick?.(() => index > 0 && select(index - 1));
+    right?.onClick?.(() => index < options.length - 1 && select(index + 1));
+    clip.displayOptions = (name, list, selectedIndex = 0) => {
+      options = list || [];
+      const field = clip.getChildByName('_optionField');
+      if (field) field.text = name || '';
+      index = -1;
+      select(Math.max(0, Math.min(options.length - 1, selectedIndex)), false);
+    };
+    Object.defineProperty(clip, 'selectedIndex', { get: () => index });
   };
 }
 
@@ -362,6 +400,7 @@ export function installWidgets(lib, ui) {
     'MMOcha.lobby.TickBox': tickBox(ui),
     'MMOcha.lobby.OptionTickBox': tickBox(ui),
     'MMOcha.lobby.OptionSelector': optionSelector(ui),
+    'MMOcha.lobby.ColorSelector': colorSelector(lib),
     'MMOcha.lobby.Slider': slider(ui),
     'MMOcha.lobby.OptionSlider': optionSlider(ui),
     'MMOcha.lobby.ScrollBar': scrollBar(ui),

@@ -10,6 +10,7 @@ import { Connection, ServerEvent } from './net/Connection.js';
 import { fetchMapList } from './net/MapService.js';
 import { applyDisplay } from './render/display.js';
 import { drawPortrait } from './render/portrait.js';
+import { cleanLook, saveLook } from './game/profile.js';
 import { FlashMenus } from './ui/menus.js';
 import { Screens } from './ui/Screens.js';
 
@@ -45,6 +46,7 @@ export class App {
       createRoom: (options) => this.createRoom(options),
       chat: (text) => this.lobbyChat(text),
       preferencesChanged: () => this.applyPreferences(),
+      customize: (look) => this.customize(look),
     };
     this.screens = new Screens(overlay, this.handlers);
     this.ui = this.screens;
@@ -52,7 +54,7 @@ export class App {
     this.menusReady = flashRoot
       ? FlashMenus.create(flashRoot, this.handlers, {
           playSound: (name) => this.playSound(name),
-          portrait: (look) => drawPortrait(this.game.textures, look),
+          portrait: (look, options) => drawPortrait(this.game.textures, look, options),
           serverName: SERVER_NAME,
         })
           .then((menus) => (this.menus = menus))
@@ -79,6 +81,20 @@ export class App {
       this.showLogin({ status: 'Connecting…' });
       this.connect();
     }
+  }
+
+  /**
+   * The customization window's OK: wear the new look, tell the server
+   * (MMOchaServer.submitCustomization: 0d0 head, 0d1 body, 0d2 gender) and
+   * keep it in this browser for offline practice.
+   */
+  customize(look) {
+    look = cleanLook(look);
+    saveLook(look);
+    const c = this.connection;
+    if (c.localUser) Object.assign(c.localUser, look);
+    if (c.localUser) c.submitCustomization(look.headModel, look.headColor, look.bodyModel, look.bodyColor, look.gender);
+    if (this.state === 'lobby' && c.room === LOBBY) this.ui.setPlayers?.([c.localUser, ...c.peers].filter(Boolean));
   }
 
   connect() {

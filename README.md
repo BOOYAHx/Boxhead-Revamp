@@ -43,7 +43,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 10 | Controls and weapon-bank setup (Options → configure controls / configure weapon banks), Auto Run and Spin keys | **ready to test** |
 | 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command) | **ready to test** |
 | 12 | Grenades, Grenade Launcher, Plasma Cannon, C4, mines, airstrikes, barrels, barricades and spy satellite | **ready to playtest** |
-| later | Turrets, team deathmatch / infected, customization screen | |
+| 13 | Character customization in the lobby | done |
+| later | Turrets, team deathmatch / infected | |
 
 ## Repository layout
 
@@ -397,6 +398,29 @@ node --test tests/*.test.mjs
 cost nothing in the shop (it shows "Free"), so money only counts for the score.
 Equipment keeps its price. Set it to `false` for the original prices. Each
 player's page decides, so on a website set it in the uploaded `config.js`.
+
+### Step 13: character customization
+
+Update with `git pull`, then **Ctrl+F5**. Nothing to install or rebuild, and
+no server change: your server already saves the look.
+
+In the lobby, **Customize Character** opens the original window:
+- **Head** and **Body**: pick any of the 12 models (Bond, Bambo, GI, Ninja,
+  Swat, Croft, Bride, Cop, Mummy, Zombie, Vampire, Devil). Then pick its
+  colour from the model's own palette; the swatch shows it. A new model starts
+  on its default colour, like the original.
+- **Gender**: Monster, Male or Female. It sets the voice when hurt or killed.
+- **Preview**: drag the character left or right to turn him around.
+- **OK**: saves the look to your account (`0d0` head, `0d1` body, `0d2`
+  gender). You wear it straight away, and players in the same room see it
+  change. **Cancel**: leaves it as it was.
+
+The look is also kept in this browser, and offline practice (Quickplay) uses
+it. All 12 models are free, as in the patched game (the premiums panel stays
+hidden). Your patched game's art has rows for skin tone, hair and glasses.
+Those options were never finished (the code always picks option 0 and the
+server ignores their messages), so those rows are hidden. The third row is
+labelled Gender, which is what it sets.
 
 ## Deploying
 

@@ -3,6 +3,8 @@
 // name, hosting a game, the notification popup and the Most Wanted tab.
 
 import { MOST_WANTED_URL } from '../config.js';
+import { COLORS, MODELS, tintFor } from '../game/bodyParts.js';
+import { DIRECTIONS, SW } from '../game/Direction.js';
 
 const LOBBY_FRAME = 4; // background frames with the premiums tab hidden (Constants.HIDE_PREMIUMS)
 const MOST_WANTED_FRAME = 6;
@@ -25,6 +27,10 @@ const capitalize = (name) => (name ? name.charAt(0).toUpperCase() + name.substr(
 const nameColor = (user) => (user?.wanted ? NAME_COLORS.wanted : user?.level > 0 ? NAME_COLORS.moderator : NAME_COLORS.normal);
 const byY = (list) => [...list].sort((a, b) => a.y - b.y);
 const SVGNS = 'http://www.w3.org/2000/svg';
+const GENDERS = ['Monster', 'Male', 'Female']; // Constants.MONSTER / MALE / FEMALE
+const TURN_STEP = 20; // CustomizationWindow.mouseMove: pixels of drag per eighth of a turn
+const PREVIEW_SCALE = 4; // the preview is drawn this much sharper than the window
+const colorsOf = (part) => (COLORS[part] || [[1, 1, 1]]).map((_, i) => tintFor(part, i));
 
 export class LobbyScreen {
   constructor(menus, { user, maps, serverName }) {
@@ -56,6 +62,7 @@ export class LobbyScreen {
     this.setupHost();
     this.setupNotification();
     this.setupMostWanted();
+    this.setupCustomization();
     this.showTab('lobby');
     this.showBrowser();
   }
@@ -111,7 +118,7 @@ export class LobbyScreen {
     this.quickMatchButton = button('_quickMatchButton', 'Join Random', () => this.joinRandom());
     this.hostButton = button('_hostGameButton', 'Host Game', () => this.showHost());
     this.browseButton = button('_browseGamesButton', 'Browse Games', () => this.showBrowser());
-    this.customizeButton = button('_customizeButton', 'Customize Character', () => this.notify('Character customization comes with a later update.'));
+    this.customizeButton = button('_customizeButton', 'Customize Character', () => this.showCustomization());
     this.exitButton = button('_exitButton', 'Exit', () => this.handlers.logout());
   }
 
@@ -133,6 +140,125 @@ export class LobbyScreen {
     }
     if (w === this.host) this.hostButton?.enable();
     this.current = null;
+  }
+
+  // --- customization (MMOcha.lobby.CustomizationWindow) ----------------------------------------
+
+  setupCustomization() {
+    const win = (this.custom = this.windows.child('_customizationWindow'));
+    if (!win) return;
+    // The premiums (Devil and the rest) are free in this version: their panel stays hidden (Constants.HIDE_PREMIUMS).
+    for (const name of ['premiumsLabel', '_premiumsScrollBar', '_getSomeButton', '_waitingAnim', '_premium0', '_premium1', '_premium2', '_premium3', '_premium4', '_premium5']) {
+      const child = win.child(name);
+      if (child) child.visible = false;
+    }
+    // The patched game's art relabelled rows for hair, skin tone and glasses options it never
+    // finished (and the server ignores): hide those labels and call the third row what it sets.
+    const LABELS = { skinTone: 625, hair: 624, glasses: 271 };
+    const glasses = win.children.find((c) => c.id === LABELS.glasses);
+    for (const c of win.children) if (Object.values(LABELS).includes(c.id)) c.visible = false;
+    if (glasses) {
+      const label = document.createElementNS(SVGNS, 'text');
+      for (const [k, v] of Object.entries({ x: glasses.x + 1, y: glasses.y + 12.5, fill: '#ffffff', 'font-family': '"Myriad Pro", "Myriad Web Pro", Arial, sans-serif', 'font-size': 15 })) label.setAttribute(k, v);
+      label.textContent = 'Gender';
+      win.el.appendChild(label);
+    }
+    const sel = (name) => win.child(name);
+    this.headModelSelector = sel('_headModelSelector');
+    this.headColorSelector = sel('_headColorSelector');
+    this.bodyModelSelector = sel('_bodyModelSelector');
+    this.bodyColorSelector = sel('_bodyColorSelector');
+    this.genderSelector = sel('_genderSelector');
+    const on = (selector, fn) => selector?.el.addEventListener('change', fn);
+    // optionChange: a new model starts on its default colour.
+    on(this.headModelSelector, () => {
+      this.look.headModel = this.headModelSelector.selectedOption;
+      this.look.headColor = 0;
+      this.showColors();
+      this.drawPreview();
+    });
+    on(this.bodyModelSelector, () => {
+      this.look.bodyModel = this.bodyModelSelector.selectedOption;
+      this.look.bodyColor = 0;
+      this.showColors();
+      this.drawPreview();
+    });
+    on(this.headColorSelector, () => ((this.look.headColor = this.headColorSelector.selectedIndex), this.drawPreview()));
+    on(this.bodyColorSelector, () => ((this.look.bodyColor = this.bodyColorSelector.selectedIndex), this.drawPreview()));
+    on(this.genderSelector, () => (this.look.gender = this.genderSelector.selectedOption));
+
+    const ok = win.child('_okButton');
+    const cancel = win.child('_cancelButton');
+    if (ok) ((ok.text = 'OK'), ok.onClick(() => this.saveCustomization()));
+    if (cancel) ((cancel.text = 'Cancel'), cancel.onClick(() => this.closeWindow()));
+
+    // The preview: the character drawn over the window where _characterArea is; drag it to turn him.
+    const area = win.child('_characterArea');
+    if (!area) return;
+    const [x0, y0, x1, y1] = area.bounds;
+    area.visible = false;
+    this.previewBox = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    const image = (this.previewImage = document.createElementNS(SVGNS, 'image'));
+    for (const [k, v] of Object.entries({ x: x0, y: y0, width: x1 - x0, height: y1 - y0 })) image.setAttribute(k, v);
+    image.style.cursor = 'grab';
+    win.el.appendChild(image);
+    image.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      image.setPointerCapture?.(event.pointerId);
+      image.style.cursor = 'grabbing';
+      const clickX = win.localPoint(event).x;
+      const clickDir = this.previewDir.index;
+      const move = (e) => {
+        const steps = Math.trunc((win.localPoint(e).x - clickX) / TURN_STEP);
+        const index = (((clickDir - steps) % DIRECTIONS.length) + DIRECTIONS.length) % DIRECTIONS.length;
+        if (index !== this.previewDir.index) {
+          this.previewDir = DIRECTIONS[index];
+          this.drawPreview();
+        }
+      };
+      const up = () => {
+        image.style.cursor = 'grab';
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+  }
+
+  /** CustomizationWindow.display: start from the player's current look. */
+  showCustomization() {
+    if (!this.custom) return;
+    const u = this.user || {};
+    this.look = { gender: GENDERS.includes(u.gender) ? u.gender : 'Male', headModel: u.headModel || 0, headColor: u.headColor || 0, bodyModel: u.bodyModel || 0, bodyColor: u.bodyColor || 0 };
+    const models = MODELS.map((_, i) => i);
+    const name = (i) => MODELS[i];
+    this.genderSelector?.displayOptions('', GENDERS, this.look.gender);
+    this.headModelSelector?.displayOptions('', models, this.look.headModel, name);
+    this.bodyModelSelector?.displayOptions('', models, this.look.bodyModel, name);
+    this.showColors();
+    this.previewDir = SW;
+    this.drawPreview();
+    this.openWindow(this.custom);
+  }
+
+  showColors() {
+    this.headColorSelector?.displayOptions('', colorsOf(MODELS[this.look.headModel] + 'Head'), this.look.headColor);
+    this.bodyColorSelector?.displayOptions('', colorsOf(MODELS[this.look.bodyModel] + 'Body'), this.look.bodyColor);
+  }
+
+  /** updateCharacter: the character over his shadow, feet a little right of and below the middle. */
+  drawPreview() {
+    if (!this.previewImage || !this.menus.portrait) return;
+    const { width, height } = this.previewBox;
+    const canvas = this.menus.portrait(this.look, { width, height, x: Math.round(width * 0.55), y: Math.round(height * 0.5 + 10), dir: this.previewDir, scale: PREVIEW_SCALE });
+    this.previewImage.setAttribute('href', canvas.toDataURL());
+  }
+
+  /** onOkClick: keep the look and send it to the server (MMOchaLobby.submitCustomization). */
+  saveCustomization() {
+    this.closeWindow();
+    this.handlers.customize?.({ ...this.look });
   }
 
   /** Join Random: a random game with room left (QuickMatchWindow searched the server). */
