@@ -344,6 +344,10 @@ python tools/upscale_textures.py
   suggests `--tile 64`, `--model fast`, or `--cpu` (slow, an hour or more, but
   it always works). Already have broken files from before? Run
   `python tools/hd_sprites.py` and they are dropped.
+* Sprites use the "anime" model (clean outlines); the ground uses the
+  "photo" model, because the anime one smooths grass and gravel into flat
+  colour. If you upscaled before this change and the floor looks blurry, run
+  `python tools/upscale_textures.py --only images --redo`.
 * `--model fast` is quicker and a little softer; `--model photo` is the
   realistic model. `--redo` upscales everything again (for example after
   trying another model).

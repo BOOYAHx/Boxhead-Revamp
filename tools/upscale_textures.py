@@ -17,10 +17,11 @@ Run it again after rebuilding the assets; files already done are skipped
 (--redo does them all again). Delete client/assets/game/sprites-hd/ and
 images-hd/ to go back to the original art.
 
-Models (--model):
-  anime  realesrgan-x4plus-anime: sharp, clean outlines (default; suits the cartoon art)
+Models (--model for the sprites, --ground-model for the ground textures):
+  anime  realesrgan-x4plus-anime: sharp, clean outlines (default for sprites;
+         it smooths fine grain away, so grass turns into flat green)
+  photo  realesrgan-x4plus: keeps and sharpens texture detail (default for the ground)
   fast   realesr-animevideov3: much faster, a little softer
-  photo  realesrgan-x4plus: for photographic detail
 
 Requires Pillow (pip install pillow).
 """
@@ -174,7 +175,8 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game', default=os.path.join('client', 'assets', 'game'), help='the built game assets')
-    ap.add_argument('--model', choices=sorted(MODELS), default='anime')
+    ap.add_argument('--model', choices=sorted(MODELS), default='anime', help='for the sprites (default anime)')
+    ap.add_argument('--ground-model', choices=sorted(MODELS), default='photo', help='for the ground textures (default photo)')
     ap.add_argument('--only', choices=['sprites', 'images'], help='just one of the two folders')
     ap.add_argument('--redo', action='store_true', help='upscale everything again')
     ap.add_argument('--gpu', type=int, help='graphics card number, if you have several')
@@ -191,7 +193,8 @@ def main():
     for src, dest in hd_sprites.FOLDERS:
         if args.only and args.only != src:
             continue
-        n, bad = upscale_folder(exe, MODELS[args.model], args.game, src, dest, args.redo, gpu, args.tile)
+        model = MODELS[args.ground_model if src == 'images' else args.model]
+        n, bad = upscale_folder(exe, model, args.game, src, dest, args.redo, gpu, args.tile)
         done += n
         broken += bad
     hd_sprites.register(args.game, log=lambda *a: None)
