@@ -41,29 +41,33 @@ Back button to return from the game to the homepage.
 
 ## What changed
 
-- Dark indigo header with Boxhead branding and cyan navigation accents.
-- Full-width illustrated warehouse hero, condensed typography, and Play CTA.
-- Game overview, default keyboard controls, and current development roadmap.
-- Mobile navigation with Escape-to-close, keyboard focus styles, and reduced-motion support.
-- Self-hosted display font and optimized WebP hero (about 171 KB), with no
-  external font, analytics, or website script dependencies.
-- `client/play.html` preserves the repository's original game entry page.
-
-The game engine, game CSS, original menus, mechanics, accounts, weapon prices,
-network protocol, and configuration are unchanged.
-
-## Validation
-
-Checked local asset references, section anchors, unique IDs, script syntax,
-the Play links, and preservation of the original game entry page and files.
-Live browser layout verification was unavailable: the preview browser reached
-an existing game server on port 8080 instead of this checkout.
+- **Boxhead after dark:** charcoal concrete, blood red and bounty gold, with
+  hazard-tape dividers, crate cards in steel frames, keycap controls,
+  case-file update cards with rubber stamps and a wanted poster.
+- **Background:** `client/assets/site/arena-hero.webp` (and a small copy for
+  phones) is a night fight in the warehouse, in the game's own top-down
+  view. The hunters are the game's customization characters (SWAT, GI,
+  Mummy, Ninja, Croft, the wanted Bond in a white tux, Devil with dual Uzis
+  and a fallen Zombie). They are drawn from the built game sprites, so the
+  picture contains original game art. The floor, crates, bounty crate, barrel
+  explosion, gunfire and lighting are painted in code by
+  `tools/site/hero-art.html`. To repaint it, build the game assets, run
+  `python -m http.server 8000` in the repository folder, and open
+  `http://localhost:8000/tools/site/hero-art.html`.
+- **Navigation animations:**
+  - The page opens like a shutter lifting.
+  - Section links sweep a three-stripe wipe across the screen and jump.
+  - A red bar slides under the current section's link.
+  - Sections slide in as they come into view, and the bounty counts up.
+  - Every Play link slams steel shutters shut before the game loads. Coming
+    back with the Back button lifts them again.
+  - Also: a scroll progress bar, a header that shrinks, a slowly drifting
+    hero picture with mouse and scroll parallax, and an animated phone menu.
+- With "reduce motion" turned on in the system, navigation is instant. If the
+  script fails to load, the opening shutter lifts by itself after 3 s.
+- No packages or build step. The game is still at `client/play.html`, unchanged.
 
 ## Artwork
 
-The new promotional backdrop is a website asset only; it does not replace
-any in-game graphics. It was created with the built-in imagegen tool and
-optimized to `client/assets/site/warehouse-hero.webp`.
-The complete generation prompt is recorded in `FRONTEND-ARTWORK-PROMPT.txt`.
 The display font is Bebas Neue, distributed under the SIL Open Font License;
 its license is included in `client/assets/site/FONT-LICENSE.txt`.

@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Boxhead homepage artwork</title>
+<style>
+  body { margin: 0; background: #000; color: #ccc; font: 13px sans-serif; }
+  canvas { display: block; width: 100%; height: auto; }
+  p { padding: 8px 12px; margin: 0; }
+</style>
+</head>
+<body>
+<p>The homepage background (client/assets/site/arena-hero.webp). The hunters are the game's own customization
+characters, read from your built assets (client/assets/game/, from tools/build_assets.py); the rest is painted in code.
+From the repository folder run <code>python -m http.server 8000</code>, open
+<code>http://localhost:8000/tools/site/hero-art.html</code> and right-click the picture to save it.</p>
+<canvas id="art" width="2560" height="1440"></canvas>
+<script>
+// A night fight in a Boxhead warehouse, in the game's own 3/4 top-down view:
+// bounty hunters from the customization screen (Bond, SWAT, GI, Ninja,
+// Devil, Mummy, Zombie...) trading fire across the floor, the wanted player
+// marked in red, a bounty crate, a barrel going up in flames and smoke rolling
+// over the crates. The characters are drawn from the game's sprite sheets the
+// way render/CharacterView.js layers them; everything else is painted here.
+const SEED = 7;
+const W = 2560, H = 1440;
+const CW = 120, CH = 84; // one map cell (the game's 40 x 28, three times larger)
+const INK = '#0b0908';
+const canvas = document.getElementById('art');
+const ctx = canvas.getContext('2d');
+
+let seed = SEED;
+const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+const rr = (a, b) => a + rnd() * (b - a);
+const X = (cx) => cx * CW, Y = (cy) => cy * CH;
+
+// Value noise for grime, smoke and fire.
+function makeNoise(s) {
+  const n = 128, g = new Float32Array(n * n);
+  let q = s * 7919 + 13;
+  for (let i = 0; i < g.length; i++) { q = (q * 16807) % 2147483647; g[i] = q / 2147483647; }
+  const at = (x, y) => g[((y & (n - 1)) * n) + (x & (n - 1))];
+  const sm = (t) => t * t * (3 - 2 * t);
+  const v = (x, y) => {
+    const x0 = Math.floor(x), y0 = Math.floor(y), fx = sm(x - x0), fy = sm(y - y0);
+    const a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * fx;
+    const b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * fx;
+    return a + (b - a) * fy;
+  };
+  return (x, y) => (v(x, y) * 0.5 + v(x * 2, y * 2) * 0.25 + v(x * 4, y * 4) * 0.15 + v(x * 8, y * 8) * 0.1);
+}
+const noise = makeNoise(SEED), noise2 = makeNoise(SEED + 5);
+
+// --- floor -------------------------------------------------------------------
+function floor() {
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const n = noise(x / 90, y / 70), m = noise2(x / 14, y / 11);
+      const tile = (x % CW < 2 || y % CH < 2) ? -14 : 0; // the grid between floor plates
+      const stain = Math.max(0, noise2(x / 260 + 40, y / 200) - 0.55) * -90;
+      const v = 44 + n * 30 + m * 10 + tile + stain;
+      const i = (y * W + x) * 4;
+      d[i] = v * 1.02; d[i + 1] = v * 0.97; d[i + 2] = v * 0.92; d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  // Painted lane markings, worn.
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = '#c9a23a';
+  for (let i = 0; i < 26; i++) { ctx.fillRect(X(2) + i * 92, Y(16.35), 52, 14); }
+  ctx.restore();
+}
+
+// --- shapes in the 3/4 view -----------------------------------------------------
+function shadow(x, y, w, h, alpha = 0.45) {
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** A box standing on the floor: (x, y) is its front-left foot, w x d its footprint, h its height. */
+function box(x, y, w, d, h, top, front, opts = {}) {
+  // Drop shadow cast to the lower right (the moon through the skylights).
+  ctx.fillStyle = 'rgba(0,0,0,0.42)';
+  ctx.beginPath();
+  ctx.moveTo(x + w, y - d); ctx.lineTo(x + w + h * 0.55, y - d + h * 0.25); ctx.lineTo(x + w + h * 0.55, y + h * 0.25); ctx.lineTo(x + h * 0.55, y + h * 0.25); ctx.lineTo(x, y);
+  ctx.closePath(); ctx.fill();
+  // Front face, then top.
+  ctx.fillStyle = front; ctx.fillRect(x, y - h, w, h);
+  ctx.fillStyle = top; ctx.fillRect(x, y - h - d, w, d);
+  if (opts.detail) opts.detail(x, y - h - d, w, d, h);
+  ctx.lineWidth = 4; ctx.strokeStyle = INK;
+  ctx.strokeRect(x, y - h - d, w, d + h);
+  ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + w, y - h); ctx.stroke();
+}
+
+function crate(cx, cy, stack = 1) {
+  const x = X(cx), y = Y(cy), w = CW, d = CH;
+  for (let s = 0; s < stack; s++) {
+    const base = y - s * 92;
+    box(x, base, w, d, 92, '#7a5a34', '#4e3820', {
+      detail: (bx, by, bw, bd, bh) => {
+        ctx.save();
+        // Planks on the top, steel corners and a cross brace on the front.
+        ctx.strokeStyle = 'rgba(30,18,8,0.7)'; ctx.lineWidth = 3;
+        for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(bx + 6, by + (bd / 4) * i); ctx.lineTo(bx + bw - 6, by + (bd / 4) * i); ctx.stroke(); }
+        ctx.strokeStyle = '#5d6266'; ctx.lineWidth = 9;
+        ctx.strokeRect(bx + 4, by + 4, bw - 8, bd - 8);
+        ctx.strokeRect(bx + 4, by + bd + 4, bw - 8, bh - 8);
+        ctx.beginPath(); ctx.moveTo(bx + 8, by + bd + 8); ctx.lineTo(bx + bw - 8, by + bd + bh - 8); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,230,180,0.08)'; ctx.fillRect(bx, by, bw, 10);
+        ctx.restore();
+      },
+    });
+  }
+}
+
+function brickWall(y0, height) {
+  // The wall's top, then its brick face.
+  ctx.fillStyle = '#2a1712'; ctx.fillRect(0, 0, W, y0 - height);
+  const top = y0 - height;
+  for (let y = top; y < y0; y += 22) {
+    const row = Math.round((y - top) / 22);
+    for (let x = (row % 2) * -30; x < W; x += 60) {
+      const v = 80 + rnd() * 40;
+      ctx.fillStyle = `rgb(${v + 20},${v * 0.42},${v * 0.32})`;
+      ctx.fillRect(x + 2, y + 2, 56, 18);
+    }
+  }
+  const g = ctx.createLinearGradient(0, top, 0, y0);
+  g.addColorStop(0, 'rgba(0,0,0,0.65)'); g.addColorStop(1, 'rgba(0,0,0,0.15)');
+  ctx.fillStyle = g; ctx.fillRect(0, top, W, height);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, y0, W, 26); // the shadow at its foot
+  ctx.fillStyle = INK; ctx.fillRect(0, top - 3, W, 6);
+}
+
+function barrel(x, y, color = '#7d1712') {
+  shadow(x + 10, y + 4, 44, 16);
+  const w = 64, h = 86;
+  ctx.fillStyle = color; ctx.fillRect(x - w / 2, y - h, w, h);
+  const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+  g.addColorStop(0, 'rgba(0,0,0,0.45)'); g.addColorStop(0.35, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = g; ctx.fillRect(x - w / 2, y - h, w, h);
+  ctx.fillStyle = '#d4a52a'; ctx.fillRect(x - w / 2, y - h * 0.62, w, 12); // hazard band
+  ctx.fillStyle = INK; for (let i = 0; i < 4; i++) ctx.fillRect(x - w / 2 + 6 + i * 16, y - h * 0.62, 7, 12);
+  ctx.fillStyle = '#a3241b';
+  ctx.beginPath(); ctx.ellipse(x, y - h, w / 2, 14, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+  ctx.strokeRect(x - w / 2, y - h, w, h);
+}
+
+// --- Boxhead characters -------------------------------------------------------------
+// --- the game's characters --------------------------------------------------------
+const GAME = '../../client/assets/game/';
+const MODELS = ['Bond', 'Bambo', 'GI', 'Ninja', 'Swat', 'Croft', 'Bride', 'Cop', 'Mummy', 'Zombie', 'Vampire', 'Devil'];
+const DIRS = { S: 0, SW: 1, W: 2, NW: 3, N: 4, NE: 5, E: 6, SE: 7 };
+const SPRITE_SCALE = 4; // the characters are drawn four times their game size
+let atlas, hd = {}, colors = {}, muzzle = {};
+const sheets = new Map();
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = () => reject(new Error('Missing ' + src)); im.src = src; });
+}
+
+async function loadGameArt(names) {
+  atlas = await (await fetch(GAME + 'atlas.json')).json();
+  try { const h = await (await fetch(GAME + 'hd.json')).json(); hd = h.sprites || h; } catch { hd = {}; }
+  if (location.search.includes('nohd')) hd = {};
+  // Customization colours and muzzle positions, read from the game's own source.
+  const parts = await (await fetch('../../client/src/game/bodyParts.js')).text();
+  colors = JSON.parse(parts.match(/export const COLORS = (\{[\s\S]*?\n\});/)[1].replace(/,\s*\}/, '}'));
+  const weapons = await (await fetch('../../client/src/game/weapons.js')).text();
+  for (const m of weapons.matchAll(/^  (\w+): table\('([^']+)'\)/gm)) muzzle[m[1]] = m[2].split(';').map((p) => p.split(',').map(Number));
+  for (const name of names) {
+    const image = atlas[name]?.image;
+    if (!image || sheets.has(image)) continue;
+    const scale = hd[image] || 1;
+    sheets.set(image, { img: await loadImage(GAME + (scale > 1 ? 'sprites-hd/' : 'sprites/') + image + '.png'), scale });
+  }
+}
+
+/** Frame `index` of atlas entry `name` drawn at (x, y), optionally multiplied by `tint` (r, g, b 0-1). */
+function sprite(name, index, x, y, { tint = null, alpha = 1 } = {}) {
+  const entry = atlas[name], f = entry?.frames[index];
+  if (!f) return;
+  const { img, scale } = sheets.get(entry.image);
+  const [fx, fy, fw, fh, dx, dy] = f, S = SPRITE_SCALE;
+  let source = img, sx = fx * scale, sy = fy * scale, sw = fw * scale, sh = fh * scale;
+  if (tint) {
+    // The *Custom layers carry the chosen colour: multiply it in, keep the shape.
+    const c = document.createElement('canvas'); c.width = sw; c.height = sh;
+    const cc = c.getContext('2d');
+    cc.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    cc.globalCompositeOperation = 'multiply';
+    const k = (v) => Math.round(Math.max(8, v * 255));
+    cc.fillStyle = `rgb(${k(tint[0])},${k(tint[1])},${k(tint[2])})`; cc.fillRect(0, 0, sw, sh);
+    cc.globalCompositeOperation = 'destination-in';
+    cc.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    source = c; sx = sy = 0;
+  }
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, sx, sy, sw, sh, x + dx * S, y + dy * S, fw * S, fh * S);
+  ctx.restore();
+}
+
+const POSES = { Pistol: 1, Magnum: 1, Railgun: 1, Shotgun: 2, AK47: 2, M16: 2, Rifle: 2, Minigun: 2, Flamer: 2, AkimboUzis: 3, AkimboPistols: 3 };
+const FLASHES = { Pistol: 'MuzzleFlashSmall1', Magnum: 'MuzzleFlashSmall1', AkimboUzis: 'MuzzleFlashSmall1', AkimboPistols: 'MuzzleFlashSmall1' };
+
+/**
+ * A customization character standing at (x, y), as CharacterView layers it:
+ * shadow, tinted body, body, gun, tinted head, head (the gun and muzzle flash
+ * go behind the head when facing away).
+ */
+function character(x, y, { head = 'Bond', body = head, headColor = 0, bodyColor = 0, dir = 'S', gun = 'Pistol', fire = false, wanted = false, dead = false }) {
+  const d = DIRS[dir], S = SPRITE_SCALE;
+  if (wanted) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y, 10, x, y, 110);
+    g.addColorStop(0, 'rgba(255,40,30,0.0)'); g.addColorStop(0.7, 'rgba(255,40,30,0.35)'); g.addColorStop(1, 'rgba(255,40,30,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, 110, 72, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#e1261c'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.ellipse(x, y, 66, 42, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  const pose = POSES[gun] || 1;
+  const frame = dead ? 42 * d + 36 + 5 : 42 * d + 9 * pose;
+  shadow(x + 8, y + 2, dead ? 70 : 46, dead ? 24 : 16, 0.55);
+  const bodyTint = colors[body + 'Body'][bodyColor], headTint = colors[head + 'Head'][headColor];
+  const layers = [() => sprite(body + 'BodyCustom', frame, x, y, { tint: bodyTint }), () => sprite(body + 'Body', frame, x, y)];
+  const headLayers = [() => sprite(head + 'HeadCustom', frame, x, y, { tint: headTint }), () => sprite(head + 'Head', frame, x, y)];
+  if (dead) {
+    if ([0, 1, 7].includes(d)) layers.unshift(...headLayers); else layers.push(...headLayers);
+    layers.forEach((draw) => draw());
+    return;
+  }
+  const weaponFrame = 9 * d;
+  const table = Array.isArray(muzzle[gun]) && Array.isArray(muzzle[gun][0]?.[0]) ? muzzle[gun][0] : muzzle[gun];
+  const [mx, my] = table?.[weaponFrame] || [0, -20];
+  const flash = () => {
+    if (!fire) return;
+    sprite(FLASHES[gun] || 'MuzzleFlashLarge1', d, x + mx * S, y + my * S);
+    glow(x + mx * S, y + my * S, 150, '255,200,110', 0.55, 0.8);
+  };
+  const behind = [3, 4, 5].includes(d);
+  if (behind) layers.push(flash, () => sprite(gun, weaponFrame, x, y), ...headLayers);
+  else layers.push(() => sprite(gun, weaponFrame, x, y), ...headLayers, flash);
+  layers.forEach((draw) => draw());
+  if (wanted) {
+    ctx.fillStyle = '#e1261c'; ctx.strokeStyle = INK; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x - 20, y - 190); ctx.lineTo(x + 20, y - 190); ctx.lineTo(x, y - 160); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
+
+function blood(x, y, s = 1) {
+  ctx.save();
+  for (let i = 0; i < 26 * s; i++) {
+    const a = rnd() * Math.PI * 2, r = rnd() ** 1.6 * 70 * s;
+    const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * 0.6, size = rr(6, 26) * s * (1 - r / (90 * s));
+    ctx.fillStyle = `rgba(${110 + rnd() * 40},6,8,${rr(0.45, 0.8)})`;
+    ctx.beginPath(); ctx.ellipse(px, py, size, size * 0.65, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function scorch(x, y, s = 1) {
+  ctx.save();
+  const g = ctx.createRadialGradient(x, y, 0, x, y, 130 * s);
+  g.addColorStop(0, 'rgba(8,6,5,0.85)'); g.addColorStop(0.6, 'rgba(10,8,6,0.45)'); g.addColorStop(1, 'rgba(10,8,6,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, 130 * s, 90 * s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function bountyCrate(x, y) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x + 30, y - 30, 0, x + 30, y - 30, 160);
+  g.addColorStop(0, 'rgba(255,190,60,0.55)'); g.addColorStop(1, 'rgba(255,150,30,0)');
+  ctx.fillStyle = g; ctx.fillRect(x - 140, y - 190, 340, 320);
+  ctx.restore();
+  box(x, y, 64, 40, 48, '#e6b443', '#a8771f', {
+    detail: (bx, by, bw, bd, bh) => {
+      ctx.fillStyle = '#5b3c0c'; ctx.font = 'bold 40px Impact, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('$', bx + bw / 2, by + bd + bh - 8);
+    },
+  });
+}
+
+function shell(x, y) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rr(0, Math.PI));
+  ctx.fillStyle = '#c9a44a'; ctx.fillRect(-6, -2, 12, 5);
+  ctx.restore();
+}
+
+function tracer(x1, y1, x2, y2, width = 3, color = '255,236,190') {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(x1, y1, x2, y2);
+  g.addColorStop(0, `rgba(${color},0)`); g.addColorStop(0.75, `rgba(${color},0.55)`); g.addColorStop(1, `rgba(${color},0.95)`);
+  ctx.strokeStyle = g; ctx.lineWidth = width * 3; ctx.globalAlpha = 0.35;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.lineWidth = width;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.restore();
+}
+
+// --- fire and smoke -------------------------------------------------------------
+function puff(x, y, r, color, alpha, mode = 'source-over', lumpy = 0.5) {
+  // A noisy round puff, drawn through a small offscreen canvas.
+  const size = Math.ceil(r * 2);
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const cx = c.getContext('2d');
+  const img = cx.createImageData(size, size), d = img.data;
+  const ox = rr(0, 100), oy = rr(0, 100);
+  for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
+    const dx = (i - r) / r, dy = (j - r) / r, dist = Math.hypot(dx, dy);
+    const n = noise(ox + i / (r * 0.35), oy + j / (r * 0.35));
+    const a = Math.max(0, Math.min(1, (1 - (dist + (n - 0.5) * lumpy)) * 2.2));
+    const shade = 0.75 + 0.35 * noise2(ox + i / (r * 0.18), oy + j / (r * 0.18)) - dy * 0.15;
+    const k = (j * size + i) * 4;
+    d[k] = color[0] * shade; d[k + 1] = color[1] * shade; d[k + 2] = color[2] * shade; d[k + 3] = a * 255 * alpha;
+  }
+  cx.putImageData(img, 0, 0);
+  ctx.save(); ctx.globalCompositeOperation = mode; ctx.drawImage(c, x - r, y - r); ctx.restore();
+}
+
+function glow(x, y, r, rgb, alpha, sy = 0.7) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.translate(x, y); ctx.scale(1, sy);
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+  g.addColorStop(0, `rgba(${rgb},${alpha})`); g.addColorStop(0.4, `rgba(${rgb},${alpha * 0.4})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function explosion(x, y) {
+  // Smoke rolling up and back, a fireball cooling from white to deep red, sparks.
+  for (let i = 0; i < 34; i++) {
+    const t = i / 34;
+    // Lit orange from below near the fire, grey and thinning higher up.
+    const warm = Math.max(0, 1 - t * 2.2);
+    const col = [92 + warm * 120, 84 + warm * 50, 78 + warm * 10];
+    puff(x + rr(-170, 200) + t * 300, y - 140 - t * 560 + rr(-60, 60), rr(100, 190) * (0.7 + t * 0.7), col, rr(0.5, 0.8) * (1 - t * 0.35), 'source-over', 0.85);
+  }
+  for (let i = 0; i < 30; i++) {
+    const a = rnd() * Math.PI * 2, r = (1 - i / 30) ** 0.8 * 190;
+    const k = r / 190;
+    const col = k < 0.25 ? [255, 238, 180] : k < 0.5 ? [255, 175, 60] : k < 0.75 ? [235, 100, 25] : [150, 40, 15];
+    puff(x + Math.cos(a) * r, y - 120 + Math.sin(a) * r * 0.7 - (1 - k) * 50, rr(70, 120) * (1.25 - k * 0.5), col, rr(0.8, 1), 'source-over', 0.95);
+  }
+  for (let i = 0; i < 10; i++) {
+    puff(x + rr(-60, 60), y - 120 + rr(-50, 40), rr(40, 80), [255, 220, 140], 0.6, 'lighter', 0.9);
+  }
+  glow(x, y - 100, 420, '255,140,40', 0.55, 0.8);
+  glow(x, y - 100, 160, '255,240,200', 0.7, 0.9);
+  for (let i = 0; i < 34; i++) {
+    const a = rr(-Math.PI, 0.2), len = rr(14, 34), r = rr(160, 460);
+    const sx = x + Math.cos(a) * r, sy = y - 100 + Math.sin(a) * r * 0.7;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(255,${rr(160, 230)},90,${rr(0.5, 0.95)})`; ctx.lineWidth = rr(2, 4);
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + Math.cos(a) * len, sy + Math.sin(a) * len * 0.7); ctx.stroke();
+    ctx.restore();
+  }
+  // Debris: chunks of barrel flung out.
+  for (let i = 0; i < 18; i++) {
+    const a = rnd() * Math.PI * 2, r = rr(180, 380);
+    ctx.save(); ctx.translate(x + Math.cos(a) * r, y - 60 + Math.sin(a) * r * 0.6); ctx.rotate(rr(0, 6));
+    ctx.fillStyle = rnd() < 0.5 ? '#5a1510' : '#2a2522'; ctx.fillRect(-8, -5, rr(10, 20), rr(6, 12));
+    ctx.restore();
+  }
+}
+
+// --- lighting --------------------------------------------------------------------
+function darkness(lights) {
+  // Night: everything dark except pools of light, cut out of a black layer.
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const lc = c.getContext('2d');
+  lc.fillStyle = 'rgba(4,4,8,0.72)'; lc.fillRect(0, 0, W, H);
+  lc.globalCompositeOperation = 'destination-out';
+  for (const [x, y, r, k, sy] of lights) {
+    lc.save(); lc.translate(x, y); lc.scale(1, sy || 0.7);
+    const g = lc.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, `rgba(0,0,0,${k})`); g.addColorStop(0.55, `rgba(0,0,0,${k * 0.55})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    lc.fillStyle = g; lc.beginPath(); lc.arc(0, 0, r, 0, Math.PI * 2); lc.fill();
+    lc.restore();
+  }
+  ctx.drawImage(c, 0, 0);
+}
+
+function finish() {
+  // Keep the middle calm for the headline, add a vignette and film grain.
+  const mid = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, W * 0.32);
+  mid.addColorStop(0, 'rgba(6,5,6,0.55)'); mid.addColorStop(1, 'rgba(6,5,6,0)');
+  ctx.fillStyle = mid; ctx.fillRect(0, 0, W, H);
+  const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.72);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.85)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  const img = ctx.getImageData(0, 0, W, H), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = (rnd() - 0.5) * 14;
+    d[i] += g; d[i + 1] += g; d[i + 2] += g;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+// --- the scene -----------------------------------------------------------------------
+async function paint() {
+const parts = [];
+for (const m of MODELS) parts.push(m + 'Body', m + 'BodyCustom', m + 'Head', m + 'HeadCustom');
+await loadGameArt([...parts, 'Pistol', 'Magnum', 'Shotgun', 'AK47', 'M16', 'Rifle', 'AkimboUzis', 'MuzzleFlashSmall1', 'MuzzleFlashLarge1']);
+floor();
+brickWall(Y(2.2), 150);
+scorch(X(12.2), Y(10.6), 1.1);
+scorch(X(17.2), Y(7.6), 1.6);
+blood(X(4.2), Y(9.4), 0.8);
+blood(X(14.8), Y(14.6), 0.9);
+for (let i = 0; i < 40; i++) shell(X(4.5) + rr(0, 180), Y(12) + rr(-60, 80));
+for (let i = 0; i < 25; i++) shell(X(15.5) + rr(-60, 120), Y(12) + rr(-40, 60));
+
+// Crates around the edges, back to front.
+for (const [cx, cy, s] of [[0, 4, 2], [1, 4, 1], [0, 5, 1], [19.6, 3.6, 2], [20.6, 3.6, 2], [20.6, 4.6, 1], [21.3, 9.4, 1], [0.4, 8.6, 1], [1.4, 9.6, 2]]) crate(cx, cy, s);
+barrel(X(2.9), Y(5.6));
+barrel(X(3.5), Y(6.1), '#2b3a2a');
+blood(X(12.6), Y(15.2), 1.6);
+character(X(12.6), Y(15.2), { head: 'Zombie', dir: 'SE', dead: true });
+character(X(10.6), Y(4.9), { head: 'Ninja', dir: 'S', gun: 'Rifle' });
+character(X(2.4), Y(10.4), { head: 'Mummy', dir: 'E', gun: 'Magnum' });
+bountyCrate(X(9.6), Y(13.6));
+character(X(5.4), Y(12.2), { head: 'Swat', dir: 'E', gun: 'Shotgun', fire: true });
+character(X(3.6), Y(14.4), { head: 'GI', dir: 'NE', gun: 'AK47', fire: true });
+character(X(15.6), Y(12.8), { head: 'Bond', bodyColor: 3, dir: 'W', gun: 'Pistol', fire: true, wanted: true });
+character(X(18.4), Y(14.6), { head: 'Devil', dir: 'NW', gun: 'AkimboUzis' });
+character(X(13.6), Y(6.2), { head: 'Croft', dir: 'SW', gun: 'M16' });
+for (const [cx, cy, s] of [[0, 17, 2], [1, 17, 1], [19.4, 17.2, 2], [20.4, 17.2, 1], [21.4, 16.2, 2]]) crate(cx, cy, s);
+
+// Night, with lamps, the fire and the gunfight lighting it.
+darkness([
+  [X(5.4), Y(11.6), 360, 0.9], [X(15.6), Y(12.4), 340, 0.9], [X(17.2), Y(7), 760, 1, 0.75],
+  [X(9.9), Y(13.2), 260, 0.8], [X(10.6), Y(4.4), 230, 0.55], [X(2.6), Y(14), 260, 0.6],
+  [X(18.6), Y(14.4), 260, 0.6], [X(12.6), Y(15), 220, 0.5], [X(2.6), Y(10.2), 220, 0.6], [X(13.6), Y(6), 220, 0.5],
+]);
+tracer(X(6.4), Y(11.7), X(14.6), Y(12.0), 3);
+tracer(X(14.9), Y(12.2), X(6.9), Y(11.4), 3, '255,210,170');
+tracer(X(4.1), Y(13.4), X(9.8), Y(9.7), 2);
+explosion(X(17.2), Y(7.4));
+glow(X(9.9), Y(13.3), 260, '255,170,60', 0.35);
+glow(X(6.6), Y(11.6), 170, '255,200,120', 0.45);
+glow(X(14.7), Y(12.2), 150, '255,200,120', 0.4);
+glow(X(15.6), Y(12.8), 220, '255,40,30', 0.25);
+finish();
+window.artDone = true;
+}
+paint().catch((error) => { document.querySelector('p').textContent = error.message + ' (build the game assets first, and open this page through a local server).'; window.artDone = error.message; });
+</script>
+</body>
+</html>
