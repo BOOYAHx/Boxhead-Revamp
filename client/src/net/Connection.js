@@ -67,6 +67,7 @@ export class Connection extends Emitter {
     this.peers = [];
     this.room = null;
     this.joiningRoom = null;
+    this.existingPickups = ''; // crates already on the map when we joined ("s", Game.existingPickupsString)
     this.roomGameType = 'A';
     this.authenticated = false;
     this.pingsSent = [];
@@ -158,6 +159,7 @@ export class Connection extends Emitter {
 
   joinRoom(name) {
     this.joiningRoom = name;
+    this.existingPickups = '';
     this.peers = [];
     this.sendRaw('03' + name);
   }
@@ -184,6 +186,7 @@ export class Connection extends Emitter {
    */
   createRoom(name, { gameType = 'A', isPrivate = false, useCustomMaps = false, maps = [0], lives = 0 } = {}) {
     this.joiningRoom = name;
+    this.existingPickups = '';
     this.peers = [];
     let message = '02' + gameType + (useCustomMaps ? '1' : '0') + (isPrivate ? '1' : '0') + name + ';';
     for (const index of maps) message += toAlphaUpper(index);
@@ -314,8 +317,11 @@ export class Connection extends Emitter {
         }
         return this.emit(ServerEvent.PLAYER_MESSAGE, { source: id, message: data.substr(4) });
       }
-      case 'r':
       case 's':
+        // Sent once, right after joining, possibly before the game screen listens.
+        this.existingPickups = data.substr(1);
+        return this.emit(ServerEvent.SERVER_MESSAGE, { message: data });
+      case 'r':
       case 'n':
       case 'o':
         return this.emit(ServerEvent.SERVER_MESSAGE, { message: data });

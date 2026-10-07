@@ -43,6 +43,10 @@ export class CharacterView {
     this.nameText = scene.add
       .text(0, 0, character.name, { fontFamily: 'Verdana, sans-serif', fontSize: '10px', color: nameColor, stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5, 1);
+    // PlayerCharacter.updateOverheads: other players show name and placing; we show neither.
+    this.placingText = scene.add
+      .text(0, 0, '', { fontFamily: 'Verdana, sans-serif', fontSize: '10px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 })
+      .setOrigin(0.5, 1);
     this.applyLook();
   }
 
@@ -94,7 +98,9 @@ export class CharacterView {
     const visible = ch.active;
     this.container.setVisible(visible);
     this.shadow.setVisible(visible);
-    this.nameText.setVisible(visible && !ch.dead);
+    const overhead = visible && !ch.dead && !ch.local;
+    this.nameText.setVisible(overhead);
+    this.placingText.setVisible(overhead);
     if (!visible) {
       this.updateHealthBar(0, 0);
       return;
@@ -148,11 +154,17 @@ export class CharacterView {
 
     this.container.setPosition(x, y);
     this.container.setDepth(ch.dead && anim.finished ? DEPTH_CORPSES : y / CELL_HEIGHT);
-    this.nameText.setPosition(x, y - OVERHEAD_Y - 5).setDepth(10000);
+    this.placingText.setPosition(x, y - OVERHEAD_Y - 5).setDepth(10000);
+    this.nameText.setPosition(x, y - OVERHEAD_Y - 17).setDepth(10000);
     this.updateHealthBar(x, y);
   }
 
+  setPlacing(text) {
+    this.placingText.setText(text);
+  }
+
   destroy() {
+    this.placingText.destroy();
     this.shadow.destroy();
     this.container.destroy();
     this.nameText.destroy();

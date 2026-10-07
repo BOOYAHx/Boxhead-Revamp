@@ -15,8 +15,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 1 | Offline: Warehouse map with the original graphics; walk around with the original speed, collisions and animations | done |
 | 2 | Connect through the bridge: log in, lobby, create/join rooms | done |
 | 3 | Two players in a room see each other move | done |
-| 4 | Shooting, damage, death and respawn (pistol) | **ready to test** |
-| 5 | Bounty crates, score, round timer, chat | |
+| 4 | Shooting, damage, death and respawn (pistol) | done |
+| 5 | Bounty crates, score, round timer, round summary, chat | **ready to test** |
 | 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | |
 | later | Shop and all weapons, deployables, team deathmatch / infected, customization screen, most wanted | |
 
@@ -151,7 +151,8 @@ shop). **Space** (or **J**) fires; hold it to keep firing every half second.
   half, red below a quarter). Both windows show the same health.
 * Walls stop bullets: hiding behind something tall keeps you safe.
 * At zero health the player falls over, both windows show "X killed Y" at
-  the top right, and the dead player sees "You will respawn in: 5…1".
+  the bottom left, and the dead player sees "You will respawn in: 5 seconds"
+  counting down.
 * After 5 seconds the dead player comes back with full health at the spawn
   point farthest from the other player, and the other window sees them there.
 * Offline practice lets you fire too (there is nobody to hit).
@@ -159,6 +160,30 @@ shop). **Space** (or **J**) fires; hold it to keep firing every half second.
 Hits are decided like in the Flash game: each player's own game checks
 whether an enemy shot hit *them* (allowing for the shooter's lag) and tells
 the server, so a browser player and a Flash player can shoot each other.
+
+### Step 5: bounty crates, score, rounds and chat
+
+Same setup; `git pull`, then Ctrl+F5 in both windows. The screen now has the
+original's layout: your money top right, your place ("1st", "2nd"…) top
+centre, bounty points and the time left under the money, messages bottom left.
+
+* Everyone starts the round with $10000. Killing a player drops bounty crates
+  ($250 brown, $500 red, $1000 gold) that hop out of the body; walk over one
+  to take it. The amount flies up to your money with a "ka-ching", and your
+  score and place go up on both screens.
+* Other players show their place ("1st"…) above their name. An arrow at the
+  edge of the screen points to the best-placed other player when they are
+  out of sight.
+* Hold **Tab** for the scoreboard (place, score, kills, deaths, bounty points).
+* **Enter** opens the chat line, Enter sends, Esc cancels. The other window
+  shows "Name: message" bottom left. Like the original: no ";" and no more
+  than 3 messages in 2 seconds, and messages containing your password are
+  not sent.
+* When the time runs out (10 minutes on your server) the round freezes and
+  the summary shows the Winner, The Hunter, The Professional, The Poacher and
+  Target Dummy with the final standings. After 30 seconds the next round
+  starts on the next map with everyone back at $10000; award winners get
+  their award money ($5000 or $2000) on top.
 
 The map list comes from the map service through the bridge, like the Flash
 client. If it can't be reached, the lobby says so and uses the bundled

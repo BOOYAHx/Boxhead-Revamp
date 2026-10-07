@@ -2,25 +2,31 @@
 //   offline: bundled map, local character only (graphics / movement check)
 //   online:  a game room on the server; the map comes from the room info
 
-import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
+import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, ROUND_START_TIME, SHADOW_ALPHA, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { byVector } from '../game/Direction.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
+import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
-import { parseWeaponStats, setWeaponStats, weaponName } from '../game/weapons.js';
+import { parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
 import { fetchMap } from '../net/MapService.js';
 import { cellPosToString, encodeFire, encodeHit, encodeMove, parseDeath, parseFire, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
+import { padInt } from '../util/strings.js';
 import { CharacterView } from '../render/CharacterView.js';
 import { Effects } from '../render/Effects.js';
-import { MapView } from '../render/MapView.js';
+import { Hud } from '../render/Hud.js';
+import { createSprite, showFrame } from '../render/assets.js';
+import { DEPTH_SHADOWS, MapView } from '../render/MapView.js';
 
 const HUD_DEPTH = 10001;
-const KILL_MESSAGE_TIME = 8000; // ms a kill message stays in the feed
-const KILL_MESSAGES = 5;
 const PING_REQUEST = '?'; // Game.M_PING_REQUEST / M_PING_RESPONSE, sent as private chat
 const PING_RESPONSE = '!';
+const MAX_FLOOD = 3; // chat messages per FLOOD_TIME before further ones are dropped
+const FLOOD_TIME = 2000;
+const MAX_CHAT_LENGTH = 120;
+const LEADER_COLOR = 0xffffff;
 const TEXT_STYLE = { fontFamily: 'Verdana, sans-serif', fontSize: '11px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.55)', padding: { x: 6, y: 3 } };
 
 export class GameScene extends Phaser.Scene {
@@ -32,48 +38,64 @@ export class GameScene extends Phaser.Scene {
     this.mode = data.mode || 'offline';
     this.app = data.app;
     this.room = data.room;
+    this.newRound = !!data.newRound; // stats in old handshakes belong to the previous round
     this.connection = this.mode === 'online' ? this.app.connection : null;
     this.map = null;
     this.loadingMap = false; // Phaser reuses the scene object for every game
     this.mapName = null;
     this.roundTime = -1;
+    this.gameOver = false;
+    this.participated = false;
     this.unsubscribe = [];
-    this.remotes = new Map(); // peer id -> { character, view }
-    this.inbox = []; // player messages wait here until the map is loaded (Game.messageInQueue)
+    this.remotes = new Map(); // peer id -> { id, character, view, ping, ... }
+    // Player messages wait here until the map is loaded (Game.messageInQueue).
+    // It carries over to the next round: peers that start it sooner announce
+    // their spawn while we are still on the summary.
+    this.inbox = data.inbox || [];
     this.lastSentMove = null;
     this.forcePositionUpdate = true;
     this.outQueue = []; // game messages sent after the next movement packet (Game.gameMessageOutQueue)
-    this.killMessages = [];
+    this.chatOutQueue = []; // chat bundle entries (Game.messageOutQueue)
+    this.chatInput = null; // text being typed, or null when the chat line is closed
+    this.floodCount = 0;
+    this.floodWarningGiven = false;
+    this.crates = new Map(); // crate index -> { crate, sprite, shadow }
+    this.claimedCrates = new Map(); // picked up by us, waiting for the server's confirmation
     this.lastPingCycle = 0;
     this.pingIndex = 0;
   }
 
   create() {
     setWeaponStats(parseWeaponStats(this.cache.text.get('constants') || ''));
-    this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,SPACE,J,M,C,T,H,ESC');
-    this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
+    this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,SPACE,J,M,C,T,H,ESC,TAB');
+    this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE,TAB');
     this.debug = this.add.graphics().setDepth(9000);
     this.showHits = false;
     this.accumulator = 0;
 
     this.status = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, '', { ...TEXT_STYLE, fontSize: '14px' }).setOrigin(0.5).setScrollFactor(0).setDepth(HUD_DEPTH);
-    this.coords = this.add.text(WINDOW_WIDTH - 8, WINDOW_HEIGHT - 8, '', { ...TEXT_STYLE, fontFamily: 'monospace' }).setOrigin(1, 1).setScrollFactor(0).setDepth(HUD_DEPTH);
-    this.info = this.add.text(8, 8, '', TEXT_STYLE).setScrollFactor(0).setDepth(HUD_DEPTH);
-    this.timer = this.add.text(WINDOW_WIDTH / 2, 8, '', { ...TEXT_STYLE, fontSize: '14px' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
-    this.warning = this.add.text(WINDOW_WIDTH / 2, 120, '', { ...TEXT_STYLE, fontSize: '16px', color: '#ffdd55' }).setOrigin(0.5).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
-    this.killFeed = this.add.text(WINDOW_WIDTH - 8, 8, '', { ...TEXT_STYLE, align: 'right' }).setOrigin(1, 0).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
+    this.coords = this.add.text(WINDOW_WIDTH - 8, WINDOW_HEIGHT - 8, '', { ...TEXT_STYLE, fontFamily: 'monospace' }).setOrigin(1, 1).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
     this.effects = new Effects(this);
+    this.hud = new Hud(this);
     const help =
       this.mode === 'offline'
         ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · M model · C colour · H head · T hit boxes · Esc menu'
-        : 'Arrows/WASD move · Space fire · Shift strafe · T hit boxes · Esc back to lobby';
-    this.add.text(8, WINDOW_HEIGHT - 8, help, TEXT_STYLE).setOrigin(0, 1).setScrollFactor(0).setDepth(HUD_DEPTH);
+        : 'Arrows/WASD move · Space fire · Shift strafe · Enter chat · Tab scores · Esc lobby';
+    // Not in the original: a short reminder of the keys that fades after a while.
+    this.help = this.add
+      .text(4, 4, help, { ...TEXT_STYLE, fontSize: '10px', backgroundColor: 'rgba(0,0,0,0.4)', wordWrap: { width: 260 } })
+      .setScrollFactor(0)
+      .setDepth(HUD_DEPTH)
+      .setAlpha(0.8);
+    this.tweens.add({ targets: this.help, alpha: 0, delay: 30000, duration: 2000 });
 
     this.events.once('shutdown', () => this.shutdown());
     // Browsers stop drawing hidden or fully covered windows. Keep the network
     // side running so other players still see us (and we keep their state).
     this.onVisibility = () => this.visibilityChanged();
     document.addEventListener('visibilitychange', this.onVisibility);
+    this.onKeyDown = (event) => this.chatKey(event);
+    window.addEventListener('keydown', this.onKeyDown);
     window.boxhead = { scene: this };
 
     if (this.mode === 'online') this.startOnline();
@@ -89,17 +111,14 @@ export class GameScene extends Phaser.Scene {
     on(ServerEvent.ROOM_INFO, (info) => this.receiveRoomInfo(info));
     on(ServerEvent.ROUND_TIME, ({ seconds }) => this.setRoundTime(seconds));
     on(ServerEvent.HANDSHAKE, ({ user }) => this.peerHandshake(user));
-    on(ServerEvent.PEER_JOINED, () => this.updateInfo());
+    on(ServerEvent.PEER_JOINED, () => this.updateScores());
     on(ServerEvent.PEER_DISCONNECTED, ({ id }) => this.removeRemote(id));
     on(ServerEvent.PLAYER_MESSAGE, (message) => this.inbox.push(message));
-    on(ServerEvent.MESSAGE, ({ source, message }) => {
-      // Peers measure their ping to us with "?" and expect "!" back (Game.receiveMessage).
-      if (message === PING_REQUEST) c.sendPrivate(PING_RESPONSE, source);
-      else if (message === PING_RESPONSE) this.remotes.get(source)?.pingReceived?.();
-    });
+    on(ServerEvent.SERVER_MESSAGE, ({ message }) => this.receiveServerMessage(message));
+    on(ServerEvent.MESSAGE, ({ source, message }) => this.receiveMessage(source, message));
     this.secondTimer = this.time.addEvent({ delay: 1000, loop: true, callback: () => this.second() });
+    this.floodTimer = this.time.addEvent({ delay: FLOOD_TIME, loop: true, callback: () => this.floodTick() });
     c.requestRoomInfo(this.room);
-    this.updateInfo();
   }
 
   async receiveRoomInfo(info) {
@@ -120,19 +139,36 @@ export class GameScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
     this.mapName = entry?.name || 'Warehouse';
     this.loadMap(map);
+    this.addCrates(this.connection.existingPickups); // crates already lying around
+    this.connection.existingPickups = '';
     this.connection.sendGameMessage('0k1'); // map loaded (BountyGame.loadMap)
     for (const user of this.connection.peers) if (user.handshake) this.ensureRemote(user);
     this.connection.sendGameMessage('8' + cellPosToString(this.player.pos)); // spawned (Game.respawnLocalCharacter)
     this.forcePositionUpdate = true;
-    this.updateInfo();
+    this.updateScores();
+  }
+
+  /** Game.receiveServerMessage / processServerMessage. */
+  receiveServerMessage(message) {
+    if (message.charAt(0) === 'R') this.endGame(message.substr(1)); // "0r<awards>": round over
+  }
+
+  /** Game.receiveMessage: pings and chat bundles (our own bundle comes back too; skip it). */
+  receiveMessage(source, message) {
+    const c = this.connection;
+    if (source === c.clientID) return;
+    if (message === PING_REQUEST) return c.sendPrivate(PING_RESPONSE, source);
+    if (message === PING_RESPONSE) return this.remotes.get(source)?.pingReceived?.();
+    const name = this.remotes.get(source)?.character.name || c.peers.find((p) => p.id === source)?.name || 'Someone';
+    for (const line of chatLines(message)) if (line) this.hud.addMessage(`${name}: ${line}`, { chat: true });
   }
 
   // --- other players ----------------------------------------------------------------
 
   peerHandshake(user) {
-    if (this.map) this.ensureRemote(user);
+    if (this.map) this.applyHandshakeStats(this.ensureRemote(user), user);
     this.forcePositionUpdate = true; // let the newcomer see where we are
-    this.updateInfo();
+    this.updateScores();
   }
 
   ensureRemote(user) {
@@ -141,6 +177,7 @@ export class GameScene extends Phaser.Scene {
       const character = new Character({ id: user.id, name: user.name });
       character.firePos = { x: 0, y: 0 };
       character.strafing = true;
+      character.stats = newStats();
       remote = { id: user.id, character, view: null, ping: 0, pings: [], lastPing: 0, pingSentAt: 0 };
       remote.pingReceived = () => {
         // Player.pingReceived: average of the last three round trips.
@@ -149,6 +186,7 @@ export class GameScene extends Phaser.Scene {
         remote.ping = remote.pings.reduce((a, b) => a + b, 0) / remote.pings.length;
       };
       this.remotes.set(user.id, remote);
+      if (!this.newRound) this.applyHandshakeStats(remote, user);
     }
     const ch = remote.character;
     ch.name = user.name;
@@ -157,8 +195,15 @@ export class GameScene extends Phaser.Scene {
     if (this.map) {
       remote.view?.destroy();
       remote.view = new CharacterView(this, ch, 'Pistol', '#ffe08a');
+      remote.view.setPlacing(ch.stats.placing ? placingString(ch.stats.placing) : '');
     }
     return remote;
+  }
+
+  /** The game handshake carries the player's round score, kills, deaths and bounty points. */
+  applyHandshakeStats(remote, user) {
+    const h = user.handshake;
+    if (h) Object.assign(remote.character.stats, { score: h.score, kills: h.kills, deaths: h.deaths, bountyPoints: h.bountyPoints });
   }
 
   removeRemote(id) {
@@ -167,7 +212,13 @@ export class GameScene extends Phaser.Scene {
       remote.view?.destroy();
       this.remotes.delete(id);
     }
-    this.updateInfo();
+    this.updateScores();
+  }
+
+  /** The player (local character or peer) with this slot id. */
+  characterByID(id) {
+    if (id === this.connection?.clientID) return this.player;
+    return this.remotes.get(id)?.character || null;
   }
 
   /** Game.processPlayerMessage for the messages handled so far. */
@@ -179,9 +230,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (source === c.clientID) {
-      // Our own health and position are decided locally; only the server's
-      // death announcement matters (it also arrives when we died ourselves).
+      // Our own health and position are decided locally; the server's death
+      // announcement (it also arrives when we died ourselves) and crate
+      // pickups still apply.
       if (message.charAt(0) === '7') this.characterKilled(this.player, parseDeath(message));
+      else if (message.charAt(0) === 'm') this.crateTaken(this.player, message);
       return;
     }
     const user = c.peers.find((p) => p.id === source);
@@ -209,6 +262,9 @@ export class GameScene extends Phaser.Scene {
         break;
       case '8':
         this.remoteRespawn(source, message.substr(1, 6));
+        break;
+      case 'm':
+        this.crateTaken(ch, message);
         break;
       default:
         break;
@@ -263,23 +319,34 @@ export class GameScene extends Phaser.Scene {
     if (!lost) return;
     this.effects.addBlood(p, lost);
     this.cameras.main.shake(200, 0.006); // ScreenShake(pos, 1.5, 200)
-    if (p.dead) this.localDeath(shooter, weapon.id);
+    if (p.dead) this.localDeath(shooter);
     if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, lost));
   }
 
   /** Game.characterDeath: kill message and the respawn countdown. */
-  localDeath(killer, weaponID) {
-    this.addKillMessage(killer, this.player, weaponID);
+  localDeath(killer) {
+    this.addKillMessage(killer, this.player);
+    this.hud.showWarning('You will respawn in: [seconds]', this.player.respawnTime);
     this.forcePositionUpdate = true;
   }
 
-  /** A death announced by the server: "M<victim>7<killer><weapon><crates>". */
-  characterKilled(victim, { killerID, weaponID }) {
-    if (!victim || victim.dead) return; // we already showed our own death
-    if (!victim.local) this.effects.addBlood(victim, victim.hp);
-    this.healthChanged(victim, victim.hp, () => victim.setHealth(0));
-    const killer = killerID === this.connection?.clientID ? this.player : this.remotes.get(killerID)?.character;
-    this.addKillMessage(killer, victim, weaponID);
+  /**
+   * A death announced by the server: "M<victim>7<killer><weapon><crates>".
+   * Counts the kill and death and drops the victim's bounty crates.
+   */
+  characterKilled(victim, { killerID, crates }) {
+    if (!victim) return;
+    const killer = this.characterByID(killerID);
+    if (!victim.dead) {
+      if (!victim.local) this.effects.addBlood(victim, victim.hp);
+      this.healthChanged(victim, victim.hp, () => victim.setHealth(0));
+      this.addKillMessage(killer, victim);
+      if (victim.local) this.hud.showWarning('You will respawn in: [seconds]', this.player.respawnTime);
+    }
+    victim.stats.deaths++;
+    if (killer && killer !== victim) killer.stats.kills++;
+    this.addCrates(crates.join(''), victim.pos);
+    this.updateScores();
   }
 
   /**
@@ -321,7 +388,7 @@ export class GameScene extends Phaser.Scene {
   respawnLocal() {
     const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
-    this.warning.setVisible(false);
+    this.hud.clearWarnings();
     this.effects.playSound('CharacterRespawn', this.player.pos);
     if (this.mode === 'online') {
       this.outQueue.push('8' + cellPosToString(this.player.pos));
@@ -334,20 +401,11 @@ export class GameScene extends Phaser.Scene {
     return chooseSpawn(this.map.spawns, enemies) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
   }
 
-  /** KillMessage: "X killed Y", "You" for the local player. */
-  addKillMessage(killer, victim, weaponID) {
+  /** KillMessage: "X killed Y", "You" for the local player; highlighted when we are involved. */
+  addKillMessage(killer, victim) {
     const name = (ch) => (!ch ? 'Someone' : ch.local ? 'You' : ch.name || 'Someone');
     const text = !killer || killer === victim ? `${name(victim)} killed ${victim.local ? 'yourself' : 'themself'}` : `${name(killer)} killed ${name(victim)}`;
-    this.killMessages.push({ text: `${text} (${weaponName(weaponID)})`, until: performance.now() + KILL_MESSAGE_TIME });
-    while (this.killMessages.length > KILL_MESSAGES) this.killMessages.shift();
-    this.drawKillFeed();
-  }
-
-  drawKillFeed() {
-    const now = performance.now();
-    this.killMessages = this.killMessages.filter((m) => m.until > now);
-    this.killFeed.setVisible(this.killMessages.length > 0);
-    this.killFeed.setText(this.killMessages.map((m) => m.text).join('\n'));
+    this.hud.addMessage(text, { local: !!(killer?.local || victim.local) });
   }
 
   /** Game.processRemotePlayers: ping one peer per second, each at most every 10 s. */
@@ -385,7 +443,7 @@ export class GameScene extends Phaser.Scene {
     ch.firePos.y = move.pos.y;
     if (!wasActive) {
       ch.active = true;
-      this.updateInfo();
+      this.updateScores();
     }
   }
 
@@ -397,12 +455,207 @@ export class GameScene extends Phaser.Scene {
     remote.character.firePos.x = remote.character.pos.x;
     remote.character.firePos.y = remote.character.pos.y;
     remote.character.strafing = true;
-    this.updateInfo();
+    this.updateScores();
+  }
+
+  // --- bounty crates ---------------------------------------------------------------
+
+  /** Game.createBountyItemsFromString: crates, hopping out of `from` when dropped by a death. */
+  addCrates(text, from = null) {
+    if (!text || !this.map) return;
+    const now = performance.now();
+    for (const data of parseCrates(text)) {
+      this.removeCrate(data.index);
+      this.claimedCrates.delete(data.index);
+      const crate = new BountyCrate(data, from, now);
+      const shadow = createSprite(this, 'BountyCrate_Shadow').setDepth(DEPTH_SHADOWS).setAlpha(SHADOW_ALPHA);
+      const sprite = createSprite(this, crate.sprite);
+      this.crates.set(data.index, { crate, sprite, shadow });
+    }
+  }
+
+  removeCrate(index) {
+    const entry = this.crates.get(index);
+    if (!entry) return null;
+    entry.sprite.destroy();
+    entry.shadow.destroy();
+    this.crates.delete(index);
+    return entry.crate;
+  }
+
+  /** Game.checkBountyCrates: walking over a crate claims it until the server confirms. */
+  checkBountyCrates() {
+    const p = this.player;
+    if (!p.active || p.dead || this.mode !== 'online') return;
+    for (const [index, { crate }] of this.crates) {
+      if (!crate.inRange(p)) continue;
+      this.removeCrate(index);
+      this.claimedCrates.set(index, crate);
+      this.outQueue.push('0m' + padInt(index, 3));
+    }
+  }
+
+  /** "0m<id><crate3><bountyPoints>": the server gave crate to `ch` (Game.pickupBountyItem). */
+  crateTaken(ch, message) {
+    const index = parseInt(message.substr(1, 3), 10);
+    const bountyPoints = parseInt(message.substr(4), 10) || 0;
+    const crate = this.removeCrate(index) || this.claimedCrates.get(index);
+    this.claimedCrates.delete(index);
+    if (!crate || !ch) return;
+    ch.stats.bountyPoints += bountyPoints;
+    ch.stats.score += crate.bounty;
+    if (ch.local) {
+      this.effects.playSound('Ka_ching', ch.pos);
+      ch.stats.money += crate.bounty; // Player.pickupMoney (no money premium)
+      const camera = this.cameras.main;
+      this.hud.addMoneyFloater(crate.bounty, crate.end.x * CELL_WIDTH - camera.scrollX, crate.end.y * CELL_HEIGHT - camera.scrollY - 20);
+    }
+    this.updateScores();
+  }
+
+  drawCrates() {
+    const now = performance.now();
+    for (const { crate, sprite, shadow } of this.crates.values()) {
+      crate.animate(now);
+      const x = Math.round(crate.x * CELL_WIDTH);
+      const y = Math.round(crate.y * CELL_HEIGHT);
+      showFrame(shadow, 'BountyCrate_Shadow', 0, x, y);
+      showFrame(sprite, crate.sprite, crate.frame, x, Math.round(y - crate.altitude));
+      sprite.setDepth(crate.y);
+    }
+  }
+
+  // --- scores, rounds and chat -------------------------------------------------------
+
+  /** Everyone in the room, for the leaderboard and summary. */
+  players() {
+    const list = [];
+    if (this.player) list.push({ id: this.connection?.clientID, name: this.player.name, stats: this.player.stats, local: true, active: this.player.active, character: this.player });
+    for (const r of this.remotes.values()) list.push({ id: r.id, name: r.character.name, stats: r.character.stats, local: false, active: r.character.active, character: r.character, view: r.view });
+    return list;
+  }
+
+  /** Game.updateScores / GUI.updateLeaderboard. */
+  updateScores() {
+    if (!this.player) return;
+    const board = rankPlayers(this.players());
+    for (const entry of board) entry.view?.setPlacing(placingString(entry.stats.placing));
+    const me = this.player.stats;
+    this.hud.setPlacing(this.player.active ? me.placing : 0);
+    this.hud.setMoney(me.money);
+    this.hud.setBountyPoints(me.bountyPoints);
+    // CharacterPointer: the best-placed other player.
+    const leader = board.length > 1 ? board.find((p) => !p.local) : null;
+    this.leader = leader ? { character: leader.character, name: leader.name, placing: placingString(leader.stats.placing), color: LEADER_COLOR } : null;
+    window.boxhead && (window.boxhead.remotes = this.remotes);
+  }
+
+  setRoundTime(seconds) {
+    if (!Number.isFinite(seconds)) return;
+    this.roundTime = seconds;
+    if (seconds > ROUND_END_TIME) this.participated = true;
+    if (!this.gameOver) this.hud.setTime(seconds - ROUND_END_TIME);
+  }
+
+  /** Game.second: local countdown, resynced with the server every 20 s; next round after the summary. */
+  second() {
+    if (this.roundTime < 0) return;
+    this.roundTime -= 1;
+    if (this.roundTime % 20 === 0) this.connection.requestRoundTime();
+    if (this.roundTime === ROUND_START_TIME) this.effects.playSound('GameStart', this.effects.focus);
+    if (this.gameOver) {
+      this.hud.setSummaryCountdown(this.roundTime);
+      // Start the next round once the server has (its "p" jumps back up).
+      // Starting on our own countdown can beat the server by a moment, and it
+      // ignores gameplay packets, like our spawn, until the new round begins.
+      if (this.roundTime > ROUND_END_TIME) this.newGame();
+      else if (this.roundTime <= 0) this.connection.requestRoundTime();
+      return;
+    }
+    this.hud.setTime(this.roundTime - ROUND_END_TIME);
+  }
+
+  /** Game.endGame: freeze the round and show the summary with the awards. */
+  endGame(awardIDs) {
+    if (this.gameOver || !this.player) return;
+    this.gameOver = true;
+    this.closeChat();
+    const everyone = this.players();
+    const shown = rankPlayers(everyone.map((p) => ({ ...p, active: p.local ? this.participated : true })));
+    const awards = roundAwards(awardIDs, everyone);
+    // GameSummary.displayAward: award money is added to the winner's next round.
+    for (const award of awards) if (award.player?.local) this.app.roundBonus = (this.app.roundBonus || 0) + award.bonus;
+    this.hud.showSummary(shown, awards);
+    this.hud.setSummaryCountdown(this.roundTime);
+    this.hud.clearWarnings();
+    this.effects.playSound('EndRound', this.effects.focus);
+  }
+
+  /** Game.newGame: start the next round from scratch with the room's next map. */
+  newGame() {
+    this.scene.restart({ mode: 'online', app: this.app, room: this.room, newRound: true, inbox: this.inbox });
+  }
+
+  /** Chat line: Enter opens it, Enter sends, Escape cancels (GUI input). */
+  chatKey(event) {
+    if (this.mode !== 'online' || !this.player || this.gameOver) return;
+    if (this.chatInput === null) {
+      if (event.key === 'Enter') {
+        this.chatInput = '';
+        this.hud.setInput('');
+        event.preventDefault();
+      }
+      return;
+    }
+    event.preventDefault();
+    if (event.key === 'Enter') {
+      this.sendChat(this.chatInput);
+      this.closeChat();
+    } else if (event.key === 'Escape') {
+      this.closeChat();
+      this.swallowEscape = true; // Escape closes the chat line, not the game
+    } else if (event.key === 'Backspace') {
+      this.chatInput = this.chatInput.slice(0, -1);
+    } else if (event.key.length === 1 && this.chatInput.length < MAX_CHAT_LENGTH) {
+      this.chatInput += cleanChat(event.key);
+    }
+    if (this.chatInput !== null) this.hud.setInput(this.chatInput);
+  }
+
+  closeChat() {
+    this.chatInput = null;
+    this.hud.setInput(null);
+  }
+
+  /** Game.handleKeyUp (Enter): flood control, never send the password, then queue the bundle entry. */
+  sendChat(text) {
+    text = text.trim();
+    if (!text || this.floodWarningGiven) return;
+    if (this.floodCount >= MAX_FLOOD) {
+      this.floodWarningGiven = true;
+      return;
+    }
+    const password = this.connection.password;
+    if (password && text.toLowerCase().includes(password.toLowerCase())) {
+      this.hud.addMessage(`${this.player.name}: You can not send chat messages containing your password`, { chat: true });
+      return;
+    }
+    this.floodCount++;
+    this.chatOutQueue.push(CHAT_PREFIX + text);
+    this.hud.addMessage(`${this.player.name}: ${text}`, { chat: true });
+  }
+
+  floodTick() {
+    if (this.floodCount > 0) {
+      this.floodCount--;
+      if (this.floodCount === 0) this.floodWarningGiven = false;
+    }
   }
 
   /**
    * Game.sendUpdate: tell peers about our movement when it changes, then send
-   * the queued game messages (shots, hits, respawns) right after it.
+   * the queued game messages (shots, hits, respawns, pickups) right after it,
+   * then the chat bundle.
    */
   sendUpdate() {
     const packet = encodeMove(this.player);
@@ -411,36 +664,11 @@ export class GameScene extends Phaser.Scene {
       this.lastSentMove = packet;
     }
     while (this.outQueue.length) this.connection.sendGameMessage(this.outQueue.shift());
+    if (this.chatOutQueue.length) {
+      this.connection.sendMessage(this.chatOutQueue.map((m) => m + CHAT_DELIM).join(''));
+      this.chatOutQueue = [];
+    }
     this.forcePositionUpdate = false;
-  }
-
-  setRoundTime(seconds) {
-    if (!Number.isFinite(seconds)) return;
-    this.roundTime = seconds;
-    this.timer.setVisible(true);
-    this.drawTimer();
-  }
-
-  /** Game.second: local countdown, resynced with the server every 20 s. */
-  second() {
-    if (this.roundTime < 0) return;
-    this.roundTime -= 1;
-    if (this.roundTime % 20 === 0) this.connection.requestRoundTime();
-    this.drawTimer();
-  }
-
-  drawTimer() {
-    const left = Math.max(0, this.roundTime - ROUND_END_TIME);
-    this.timer.setText(left > 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'Round over');
-  }
-
-  updateInfo() {
-    if (this.mode !== 'online') return;
-    const c = this.connection;
-    const peerName = (p) => (p.name || '…') + (this.map && !this.remotes.get(p.id)?.character.active ? ' (not seen yet)' : '');
-    const names = [c.localUser?.name || 'You', ...c.peers.map(peerName)];
-    window.boxhead && (window.boxhead.remotes = this.remotes);
-    this.info.setText([`${this.room}${this.mapName ? ' · ' + this.mapName : ''}`, `Players (${names.length}): ${names.join(', ')}`].join('\n'));
   }
 
   // --- map and local player ------------------------------------------------------
@@ -450,6 +678,8 @@ export class GameScene extends Phaser.Scene {
     this.mapView = new MapView(this, map);
     const user = this.connection?.localUser;
     this.player = new Character({ id: this.connection?.clientID, name: user?.name || 'You', local: true });
+    this.player.stats = newStats(this.app?.roundBonus || 0);
+    if (this.app) this.app.roundBonus = 0; // Player.newRound spends the bonus
     if (user) Object.assign(this.player.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
     const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
@@ -461,16 +691,28 @@ export class GameScene extends Phaser.Scene {
     camera.setRoundPixels(true);
     this.status.setText('');
     window.boxhead = { scene: this, player: this.player, map };
+    this.updateScores();
   }
 
   update(time, delta) {
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
-      this.app.leaveGame();
-      return;
+      if (this.swallowEscape) this.swallowEscape = false;
+      else if (this.chatInput === null) {
+        this.app.leaveGame();
+        return;
+      }
     }
+    this.hud.update();
     if (!this.map) return;
-    if (Phaser.Input.Keyboard.JustDown(this.keys.T)) this.showHits = !this.showHits;
+    if (this.chatInput === null && Phaser.Input.Keyboard.JustDown(this.keys.T)) {
+      this.showHits = !this.showHits;
+      this.coords.setVisible(this.showHits);
+    }
     if (this.mode === 'offline') this.handleCustomizeKeys();
+    if (this.gameOver) {
+      this.hud.showScoreboard(null);
+      return; // the round is frozen behind the summary (Game.process)
+    }
     this.accumulator += Math.min(delta, 250);
     while (this.accumulator >= PROCESS_INTERVAL) {
       this.tick();
@@ -483,11 +725,14 @@ export class GameScene extends Phaser.Scene {
       character.animator.advance(delta);
       view?.update(alpha);
     }
-    this.cameras.main.centerOn(this.playerView.container.x, this.playerView.container.y);
+    this.drawCrates();
+    const camera = this.cameras.main;
+    camera.centerOn(this.playerView.container.x, this.playerView.container.y);
     this.effects.focus = this.player.renderPos;
     this.effects.update();
-    if (this.killMessages.length) this.drawKillFeed();
-    if (this.player.dead) this.warning.setText(`You will respawn in: ${Math.max(0, Math.ceil(this.player.respawnTime / 1000))}`).setVisible(true);
+    this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
+    const tab = this.keys.TAB.isDown && this.mode === 'online';
+    this.hud.showScoreboard(`${this.room} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
     this.drawDebug();
     const p = this.player.pos;
     this.coords.setText(`x ${p.x.toFixed(2)}  y ${p.y.toFixed(2)}`);
@@ -495,18 +740,21 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * One 50 ms game tick: messages, input (LocalPlayer.processInput), firing
-   * and the respawn countdown (LocalCharacter.process), movement, weapons.
+   * and the respawn countdown (LocalCharacter.process), movement, weapons,
+   * crate pickups.
    */
   tick() {
     const k = this.keys;
     const p = this.player;
     while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
     if (!p.dead) {
-      const h = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
-      const v = (k.DOWN.isDown || k.S.isDown ? 1 : 0) - (k.UP.isDown || k.W.isDown ? 1 : 0);
+      const typing = this.chatInput !== null;
+      const down = (...keys) => !typing && keys.some((key) => key.isDown);
+      const h = (down(k.RIGHT, k.D) ? 1 : 0) - (down(k.LEFT, k.A) ? 1 : 0);
+      const v = (down(k.DOWN, k.S) ? 1 : 0) - (down(k.UP, k.W) ? 1 : 0);
       p.moveDir = byVector(h, v);
-      p.strafing = k.SHIFT.isDown;
-      p.firing = k.SPACE.isDown || k.J.isDown;
+      p.strafing = down(k.SHIFT);
+      p.firing = down(k.SPACE, k.J);
     }
     p.move(this.map);
     if (p.processTimers()) this.respawnLocal();
@@ -517,6 +765,7 @@ export class GameScene extends Phaser.Scene {
       character.processTimers();
       this.processWeapon(character);
     }
+    this.checkBountyCrates();
     if (this.mode === 'online') {
       if (p.active) this.sendUpdate();
       this.pingPeers();
@@ -563,23 +812,29 @@ export class GameScene extends Phaser.Scene {
     this.backgroundTimer = null;
     if (document.hidden && this.mode === 'online') {
       this.input.keyboard.resetKeys(); // keys released while hidden would otherwise stay down
+      this.closeChat();
       this.backgroundTimer = setInterval(() => {
-        if (this.map) this.tick();
+        if (this.map && !this.gameOver) this.tick();
       }, PROCESS_INTERVAL);
     }
   }
 
   shutdown() {
     document.removeEventListener('visibilitychange', this.onVisibility);
+    window.removeEventListener('keydown', this.onKeyDown);
     clearInterval(this.backgroundTimer);
     for (const off of this.unsubscribe) off();
     this.unsubscribe = [];
     this.secondTimer?.remove();
+    this.floodTimer?.remove();
     this.mapView?.destroy();
     this.playerView?.destroy();
     for (const { view } of this.remotes.values()) view?.destroy();
     this.remotes.clear();
+    for (const index of [...this.crates.keys()]) this.removeCrate(index);
     this.effects?.destroy();
+    this.hud?.destroy();
     this.map = null;
+    this.player = null;
   }
 }
