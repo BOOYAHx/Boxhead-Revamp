@@ -700,7 +700,6 @@ export class TextField extends DisplayObject {
     const family = def.fontFamily ? `"${def.fontFamily}", ` : '';
     Object.assign(box.style, {
       boxSizing: 'border-box',
-      display: 'block', // an inline input would sit on an invisible text baseline, a few pixels low
       width: '100%',
       // A one-line input is one line tall plus Flash's 2px gutter, so the text sits 2px from
       // the top like Flash's, instead of being centred in the whole box by the browser.
@@ -720,7 +719,10 @@ export class TextField extends DisplayObject {
       userSelect: def.noSelect || !this.input ? 'none' : 'text',
       pointerEvents: this.input ? 'auto' : 'none',
     });
-    if (this.input) box.style.caretColor = box.style.color;
+    if (this.input) {
+      box.style.caretColor = box.style.color;
+      box.style.display = 'block'; // an inline input would sit on an invisible text baseline, a few pixels low
+    }
     if (def.border) box.style.border = '1px solid #000';
     this.object.appendChild(box);
     this.el.appendChild(this.object);

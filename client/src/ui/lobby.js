@@ -190,7 +190,7 @@ export class LobbyScreen {
     const ok = win.child('_okButton');
     const cancel = win.child('_cancelButton');
     if (ok) ((ok.text = 'OK'), ok.onClick(() => this.saveCustomization()));
-    if (cancel) ((cancel.text = 'Cancel'), cancel.onClick(() => this.closeWindow()));
+    if (cancel) ((cancel.text = 'Cancel'), cancel.onClick(() => this.showBrowser())); // back to the game list, not an empty panel
 
     // The preview: the character drawn over the window where _characterArea is; drag it to turn him.
     const area = win.child('_characterArea');
@@ -257,8 +257,8 @@ export class LobbyScreen {
 
   /** onOkClick: keep the look and send it to the server (MMOchaLobby.submitCustomization). */
   saveCustomization() {
-    this.closeWindow();
     this.handlers.customize?.({ ...this.look });
+    this.showBrowser(); // back to the game list, not an empty panel
   }
 
   /** Join Random: a random game with room left (QuickMatchWindow searched the server). */
