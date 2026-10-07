@@ -1,19 +1,137 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Boxhead: Bounty Hunter</title>
-    <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="css/style.css" />
-  </head>
-  <body>
-    <main id="game"></main>
-    <div id="game-ui" hidden></div>
-    <div id="flash-ui" hidden></div>
-    <div id="overlay" hidden></div>
-    <script src="config.js"></script>
-    <script src="vendor/phaser.min.js"></script>
-    <script type="module" src="src/main.js"></script>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151326">
+  <meta name="description" content="Boxhead: Bounty Hunter returns to the browser. Enter the arena, sharpen your skills, and hunt the bounty in the HTML5 revamp.">
+  <title>Boxhead Revamp · The bounty is yours</title>
+  <link rel="icon" href="assets/site/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/site/BebasNeue-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/site/warehouse-hero.webp" as="image" fetchpriority="high">
+  <link rel="stylesheet" href="css/site.css">
+  <script src="src/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8M5 9v11h14V9M9 20v-7h6v7"/></symbol>
+    <symbol id="i-controller" viewBox="0 0 24 24"><path d="M7 7h10c2 0 3 2 3.5 4l1 6c.5 3-3 4-4.5 2l-2-3H9l-2 3c-1.5 2-5 1-4.5-2l1-6C4 9 5 7 7 7ZM6 11h5M8.5 8.5v5M16 11h.01M18 13h.01"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M10 13h.01M14 13h.01M18 13h.01M8 16h8"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M1 12h4m14 0h4"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m14 2-10 12h7l-1 8 10-12h-7Z"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="1"/><path d="M8 21h8m-4-4v4"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1-4-2-6-2m15 5v-3.5c0-1-.3-1.7-.8-2.2 2.8-.3 5.8-1.4 5.8-6.3 0-1.4-.5-2.5-1.3-3.4.1-.3.6-1.6-.1-3.3 0 0-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C4.5 3 3.4 3.3 3.4 3.3c-.7 1.7-.2 3-.1 3.3C2.5 7.5 2 8.6 2 10c0 4.9 3 6 5.8 6.3-.5.5-.8 1.2-.8 2.2V22" transform="translate(1 0) scale(.9)"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/></symbol>
+  </svg>
+
+  <header class="site-header" id="home">
+    <div class="header-inner">
+      <a class="brand" href="#home" aria-label="Boxhead Bounty Hunter homepage">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 60 60"><path d="m30 2 28 28-28 28L2 30Z" fill="#7163df"/><path d="M14 15h29v29H14Z" fill="#fff"/><path d="M21 25h5v5h-5Zm12 0h5v5h-5ZM24 36h11v3H24Z" fill="#191731"/><path d="M2 20h13M0 29h11M5 38h9" stroke="#35d1da" stroke-width="4" stroke-linecap="round"/></svg></span>
+        <span class="brand-type">BOXHEAD<span>BOUNTY HUNTER</span></span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="Open navigation" aria-controls="site-nav" aria-expanded="false"><span></span><span></span><span></span></button>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a class="nav-link is-active" href="#home" aria-current="location">Home</a>
+        <a class="nav-link" href="#the-game">The game</a>
+        <a class="nav-link" href="#how-to-play">How to play</a>
+        <a class="nav-link" href="#updates">Updates</a>
+        <a class="nav-repo" href="https://github.com/BOOYAHx/Boxhead-Revamp" target="_blank" rel="noopener noreferrer" aria-label="View Boxhead Revamp on GitHub (opens in a new tab)"><svg class="icon"><use href="#i-github"/></svg></a>
+        <a class="button button-cyan header-play" href="play.html">Play now <svg class="icon"><use href="#i-arrow"/></svg></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-art" aria-hidden="true"></div>
+      <nav class="hero-rail section-rail" aria-label="Explore the website">
+        <a href="#home" aria-label="Homepage"><svg class="icon"><use href="#i-home"/></svg></a>
+        <a href="#the-game" aria-label="Explore the game"><svg class="icon"><use href="#i-controller"/></svg></a>
+        <a href="#how-to-play" aria-label="Game controls"><svg class="icon"><use href="#i-keyboard"/></svg></a>
+      </nav>
+      <div class="hero-content">
+        <p class="hero-kicker">Welcome back to Boxhead</p>
+        <h1 id="hero-title">THE BOUNTY IS YOURS.</h1>
+        <p class="hero-description">Same square heads. Same fierce competition.<br>A new chapter for the classic browser shooter.</p>
+        <a class="button button-white hero-play" href="play.html"><svg class="icon"><use href="#i-play"/></svg> Enter the arena</a>
+        <p class="hero-note">HTML5 EDITION <span aria-hidden="true">/</span> BUILT FOR THE BROWSER</p>
+      </div>
+      <div class="hero-rail community-rail">
+        <a href="https://github.com/BOOYAHx/Boxhead-Revamp" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub (opens in a new tab)"><svg class="icon"><use href="#i-github"/></svg></a>
+        <a href="#how-to-play" aria-label="Learn the controls"><svg class="icon"><use href="#i-keyboard"/></svg></a>
+      </div>
+      <a class="scroll-cue" href="#the-game">Explore the revamp <span aria-hidden="true">↓</span></a>
+      <span class="hero-edition" aria-hidden="true">BOXHEAD / RELOADED FOR THE WEB</span>
+    </section>
+
+    <div class="feature-strip">
+      <div class="container feature-inner">
+        <div><svg class="icon"><use href="#i-monitor"/></svg><span>Play in your browser<small>No Flash. No Ruffle.</small></span></div>
+        <div><svg class="icon"><use href="#i-target"/></svg><span>The classic Boxhead feel<small>Original art &amp; familiar controls.</small></span></div>
+        <div><svg class="icon"><use href="#i-bolt"/></svg><span>A sharper way to hunt<small>Enhanced graphics &amp; effects.</small></span></div>
+      </div>
+    </div>
+
+    <section class="game-section section container" id="the-game" aria-labelledby="game-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">The game you remember</p><h2 id="game-title">THE ORIGINAL RUSH.<br><span>A NEW WAY TO PLAY.</span></h2></div>
+        <p>Outmaneuver your rivals. Collect their bounty. Climb the standings. Boxhead: Bounty Hunter is being rebuilt for modern browsers, one feature at a time.</p>
+      </div>
+      <div class="mode-grid">
+        <article class="mode-card mode-online">
+          <div class="card-top"><svg class="icon"><use href="#i-target"/></svg><span class="card-label">01 / Multiplayer</span></div>
+          <h3>HUNT THE BOUNTY.</h3>
+          <p>Log in, join a room, and take on other bounty hunters. Every pickup brings you closer to the top.</p>
+          <a class="text-link" href="play.html">Open the game <svg class="icon"><use href="#i-arrow"/></svg></a>
+          <span class="card-note">Online play requires a running game server.</span>
+        </article>
+        <article class="mode-card">
+          <div class="card-top"><svg class="icon"><use href="#i-controller"/></svg><span class="card-label">02 / Quickplay</span></div>
+          <h3>FIND YOUR FOOTING.</h3>
+          <p>Get comfortable with the movement, explore the Warehouse, and try your loadout in offline practice.</p>
+          <a class="text-link" href="play.html">Launch &amp; choose Quickplay <svg class="icon"><use href="#i-arrow"/></svg></a>
+          <span class="card-note">A little practice. A lot of firepower.</span>
+        </article>
+        <article class="mode-card">
+          <div class="card-top"><svg class="icon"><use href="#i-bolt"/></svg><span class="card-label">03 / The arsenal</span></div>
+          <h3>MAKE IT YOUR SHOT.</h3>
+          <p>From the dependable Pistol to the Minigun, visit the in-game shop to choose your weapons and upgrades.</p>
+          <a class="text-link" href="#how-to-play">Learn the controls <svg class="icon"><use href="#i-arrow"/></svg></a>
+          <span class="card-note">Open the shop with B. Switch with Q / E.</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="controls-section" id="how-to-play" aria-labelledby="controls-title">
+      <div class="container controls-inner">
+        <div class="controls-intro"><p class="eyebrow">Easy to learn. Hard to outrun.</p><h2 id="controls-title">KNOW YOUR<br><span>NEXT MOVE.</span></h2><p>A keyboard, quick reflexes, and a good piece of cover. That's all you need to get started.</p><p class="controls-tip"><svg class="icon"><use href="#i-target"/></svg> Hold Shift to move while keeping your aim.</p><a class="button button-cyan" href="play.html">Put it into practice <svg class="icon"><use href="#i-arrow"/></svg></a></div>
+        <dl class="control-list">
+          <div><dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or arrow keys</span></dd></div>
+          <div><dt>Fire</dt><dd><kbd class="key-wide">Space</kbd><span>or</span><kbd>J</kbd></dd></div>
+          <div><dt>Strafe</dt><dd><kbd class="key-wide">Shift</kbd></dd></div>
+          <div><dt>Switch weapon</dt><dd><kbd>Q</kbd><kbd>E</kbd><span>banks</span><kbd class="key-wide">1–8</kbd></dd></div>
+          <div><dt>Shop / refill</dt><dd><kbd>B</kbd><span>/</span><kbd>R</kbd></dd></div>
+          <div><dt>Scores / menu</dt><dd><kbd class="key-wide">Tab</kbd><span>/</span><kbd class="key-wide">Esc</kbd></dd></div>
+        </dl>
+      </div>
+      <p class="container controls-footnote">Default controls. Change your bindings in the game's Options menu. Best played on desktop with a keyboard.</p>
+    </section>
+
+    <section class="section container updates-section" id="updates" aria-labelledby="updates-title">
+      <div class="section-heading"><div><p class="eyebrow">Built one step at a time</p><h2 id="updates-title">THE REVAMP CONTINUES.</h2></div><a class="text-link" href="https://github.com/BOOYAHx/Boxhead-Revamp" target="_blank" rel="noopener noreferrer">Follow on GitHub <svg class="icon"><use href="#i-arrow"/></svg></a></div>
+      <div class="update-grid">
+        <article class="update-card"><span class="status-tag">In the current build</span><h3>BACK IN THE BROWSER.</h3><p>Native HTML5 rendering, the original map art, player movement, shooting, bounty pickups, rounds, and lobby chat.</p></article>
+        <article class="update-card"><span class="status-tag status-testing">Ready for testing</span><h3>MORE WAYS TO PLAY.</h3><p>The weapon shop, upgrades, custom controls, weapon banks, and optional high-resolution textures.</p></article>
+        <article class="update-card"><span class="status-tag status-next">On the horizon</span><h3>THE NEXT CHAPTER.</h3><p>More equipment, character customization, and additional game modes are still on the roadmap.</p></article>
+      </div>
+      <div class="closing-cta"><div><p class="eyebrow">Your next hunt starts here</p><h2>READY WHEN YOU ARE.</h2></div><a class="button button-white" href="play.html">Let's play <svg class="icon"><use href="#i-arrow"/></svg></a></div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="container footer-inner"><a class="footer-brand" href="#home">BOXHEAD<span>REVAMP</span></a><p>A fan-made browser revamp of Boxhead: Bounty Hunter.<br>Original game &amp; characters belong to their respective creators.</p><nav aria-label="Footer navigation"><a href="#how-to-play">Controls</a><a href="https://github.com/BOOYAHx/Boxhead-Revamp" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="#home">Back to top ↑</a></nav></div></footer>
+</body>
 </html>

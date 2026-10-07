@@ -6,6 +6,25 @@ Flash or Ruffle. The goal is that browser players connect to the **existing
 Python game server unchanged**: the client speaks the original network protocol
 through the existing WebSocket bridge (`BBHServer.py`).
 
+## Website and updates
+
+Run `python tools/serve.py` as usual, or double-click `Start-Website.cmd`, then
+open <http://localhost:8080/>. The homepage's **Play now** button opens the
+existing game. You can also open <http://localhost:8080/play.html> directly.
+
+Once an update is published to this repository, run this in your existing
+Boxhead-Revamp checkout:
+
+```sh
+git pull
+```
+
+Then refresh the browser with **Ctrl+F5**. The static client server can keep
+running. Your generated `client/assets/game/` files stay in place. Updates
+that require new assets extracted from the original SWFs will explicitly say
+when the asset build must be rerun. A fresh clone still needs the initial asset
+build below.
+
 ## Progress
 
 The port is built in small steps. Each one is tested before the next starts.
