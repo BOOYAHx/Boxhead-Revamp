@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#0a0909">
   <meta name="description" content="Boxhead: Bounty Hunter returns to the browser. Hunt the wanted player, grab the bounty, and climb the standings in the HTML5 revamp.">
   <title>Boxhead: Bounty Hunter · Revamp</title>
-  <link rel="icon" href="assets/site/favicon.svg" type="image/svg+xml">
-  <link rel="preload" href="assets/site/BebasNeue-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="icon" href="assets/site/favicon.png" type="image/png">
+  <link rel="preload" href="assets/site/Anton-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="preload" href="assets/site/arena-hero.webp" as="image" fetchpriority="high" media="(min-width: 701px)">
   <link rel="preload" href="assets/site/arena-hero-small.webp" as="image" fetchpriority="high" media="(max-width: 700px)">
   <link rel="stylesheet" href="css/site.css">
@@ -29,7 +29,6 @@
     <symbol id="i-crate" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><path d="M3 3l18 18M3 9h18M3 15h18"/></symbol>
     <symbol id="i-dollar" viewBox="0 0 24 24"><path d="M12 2v20M17 6.5C16 5 14.3 4.5 12 4.5c-3 0-5 1.4-5 3.6 0 5 10 2.4 10 7.6 0 2.2-2.2 3.8-5 3.8-2.6 0-4.5-.8-5.5-2.5"/></symbol>
     <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1-4-2-6-2m15 5v-3.5c0-1-.3-1.7-.8-2.2 2.8-.3 5.8-1.4 5.8-6.3 0-1.4-.5-2.5-1.3-3.4.1-.3.6-1.6-.1-3.3 0 0-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C4.5 3 3.4 3.3 3.4 3.3c-.7 1.7-.2 3-.1 3.3C2.5 7.5 2 8.6 2 10c0 4.9 3 6 5.8 6.3-.5.5-.8 1.2-.8 2.2V22" transform="translate(1 0) scale(.9)"/></symbol>
-    <symbol id="boxhead" viewBox="0 0 64 64"><path d="M10 6h44v12H10Z" fill="#fffaf0"/><path d="M10 18h44v34H10Z" fill="#efe6d2"/><path d="M10 6h44v46H10Z M10 18h44" fill="none" stroke="#0b0908" stroke-width="4"/><path d="M20 28h7v7h-7Zm17 0h7v7h-7ZM26 42h12v3H26Z" fill="#0b0908"/></symbol>
   </svg>
 
   <!-- Navigation animations: the page wipe between sections and the shutter into the game. -->
@@ -37,14 +36,14 @@
   <div class="shutter" aria-hidden="true">
     <div class="shutter-half shutter-top"></div>
     <div class="shutter-half shutter-bottom"></div>
-    <div class="shutter-badge"><svg><use href="#boxhead"/></svg><span class="badge-entering">Entering the arena</span><span class="badge-opening">Unlocking the warehouse</span></div>
+    <div class="shutter-badge"><img class="hunters" src="assets/site/hunters-logo.png" alt="" width="542" height="296"><span class="badge-entering">Entering the arena</span><span class="badge-opening">Unlocking the warehouse</span></div>
   </div>
   <div class="scroll-progress" aria-hidden="true"></div>
 
   <header class="site-header" id="top">
     <div class="header-inner">
       <a class="brand" href="#home" aria-label="Boxhead Bounty Hunter, back to the top">
-        <span class="brand-mark" aria-hidden="true"><svg><use href="#boxhead"/></svg></span>
+        <span class="brand-mark" aria-hidden="true"><img class="hunters" src="assets/site/hunters-logo.png" alt="" width="542" height="296"></span>
         <span class="brand-type">BOXHEAD<span>BOUNTY HUNTER</span></span>
       </a>
       <button class="menu-toggle" type="button" aria-label="Open navigation" aria-controls="site-nav" aria-expanded="false"><span></span><span></span><span></span></button>
@@ -173,7 +172,7 @@
       <div class="wanted-cta" data-reveal>
         <div class="wanted-poster" aria-hidden="true">
           <span class="wanted-word">WANTED</span>
-          <svg class="wanted-face"><use href="#boxhead"/></svg>
+          <img class="wanted-face" src="assets/site/hunters-logo.png" alt="" width="542" height="296">
           <span class="wanted-reward">$1,000,000</span>
         </div>
         <div>

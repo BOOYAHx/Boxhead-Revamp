@@ -41,6 +41,14 @@ Back button to return from the game to the homepage.
 
 ## What changed
 
+- **Logo:** Bond and Bambo from the Boxhead main menu art
+  (`client/assets/site/hunters-logo.png`, cut out of its white background).
+  It appears in the header, on the shutter badge and on the wanted poster.
+  The favicon is Bambo's head.
+- **Font:** Anton for all text. It is the closest free match to the heavy,
+  condensed lettering of the game's main menu. Headings get the menu's
+  scratched, worn look. The game's menu text is drawn artwork, not a font,
+  so it can't be reused directly.
 - **Boxhead after dark:** charcoal concrete, blood red and bounty gold, with
   hazard-tape dividers, crate cards in steel frames, keycap controls,
   case-file update cards with rubber stamps and a wanted poster.
@@ -69,5 +77,5 @@ Back button to return from the game to the homepage.
 
 ## Artwork
 
-The display font is Bebas Neue, distributed under the SIL Open Font License;
-its license is included in `client/assets/site/FONT-LICENSE.txt`.
+The font is Anton, distributed under the SIL Open Font License; its license is
+included in `client/assets/site/ANTON-LICENSE.txt`.
