@@ -215,7 +215,7 @@ export class EquipmentWorld {
   }
 
   explode(p) {
-    this.effect({ type: 'explosion', pos: { ...p.pos }, altitude: p.altitude, radius: p.radius });
+    this.effect({ type: 'explosion', pos: { ...p.pos }, altitude: p.altitude, radius: p.radius, weaponID: p.weaponID });
     for (const ch of this.characters()) {
       if (!ch.local || !ch.active || ch.dead || p.altitude > ch.height) continue;
       const damage = blastDamage(p.damage, Math.hypot(ch.pos.x - p.pos.x, ch.pos.y - p.pos.y), p.radius, p.inner);

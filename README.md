@@ -430,6 +430,19 @@ Repeat a bank key to cycle its items. Changing weapons, opening a menu/shop,
 typing chat, or leaving the window cancels a charged throw. Explosions have
 distance falloff, respect static cover and can hurt you.
 
+**Explosions** (`client/src/render/Explosions.js`) are laid out like the
+original: grenades, launcher rounds, C4 and mines burst into a main fireball
+with four smaller ones around it, a barrel throws out burning lumps, and an
+airstrike sets off twelve spokes of blasts out to five cells. Each blast has a
+white-hot flash that lights the floor, a shockwave ring and a skirt of dust, a
+churning fireball that cools from white to orange to red and turns into thick
+rising smoke, sparks, drifting embers, smoking (or burning) debris, and a
+scorch mark left on the floor. Each kind has its own size, sound and shake: C4
+is the biggest single blast, mines throw the most shrapnel, barrels burn
+longest, and an airstrike shakes the screen for 1.5 s. With Enhanced Graphics
+off they use half the particles; the smoke option turns off the smoke, and
+screen shake follows its option.
+
 Online placement waits for the server's `n` acknowledgement before consuming
 ammo. This uses the existing `4`, `n`, `o`, `r`, and `a<index>;` protocol; no
 backend is bundled or replaced. A server without deployable support will not

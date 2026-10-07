@@ -8,6 +8,7 @@ import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
 import { createSprite, hasSprite, showFrame } from './assets.js';
 import { DEPTH_SHADOWS } from './MapView.js';
+import { Explosions } from './Explosions.js';
 
 const TRACER_TIME = 80; // ms (TracerLine.TIME)
 const TRACER_COLOR = 0xffffff;
@@ -54,6 +55,7 @@ export class Effects {
     this.smokeFrames = fx.smoke || [];
     this.fireDisplays = fx.fire || [];
     this.sounds = new Set(); // playing sounds, stopped with the scene
+    this.explosions = new Explosions(scene, this);
   }
 
   /** The effects' clock (ms); tests may slow it down. */
@@ -65,11 +67,12 @@ export class Effects {
     return Preferences.enhanced;
   }
 
-  /** Lightweight blast sprites drawn in code; no new asset build required. */
+  /** Explosions (render/Explosions.js), plasma hits, debris, grenade bounces and mine clicks. */
   equipmentEffect(event) {
     const { type, pos } = event;
     if (type === 'bounce') { this.playSound('Grenade_Bounce', pos); return; }
     if (type === 'mine') { this.playSound('ClaymoreActivate', pos); return; }
+    if (type === 'explosion') { this.explosions.explode(pos, event.altitude || 0, event.weaponID); return; }
     const plasma = type === 'plasma';
     this.playSound(plasma ? 'PlasmaCannonHit' : event.radius >= 6 ? 'ExplosionHuge' : 'ExplosionGrenade', pos);
     const x = pos.x * CELL_WIDTH, y = pos.y * CELL_HEIGHT - (event.altitude || 0);
@@ -97,10 +100,6 @@ export class Effects {
         return true;
       },
     });
-    if (type === 'explosion' && Preferences.shake) {
-      const distance = Math.hypot(pos.x - this.focus.x, pos.y - this.focus.y);
-      if (distance < 10) this.scene.cameras.main.shake(180, 0.003 * (1 - distance / 10) / this.scene.cameras.main.zoom ** 2);
-    }
   }
 
   /** TracerLine: a thin line from the muzzle that fades out in 80 ms (white; the Railgun's purple). */
@@ -436,6 +435,7 @@ export class Effects {
       p.destroy();
       return false;
     });
+    this.explosions.update(now);
     const g = this.tracerGraphics;
     g.clear();
     this.tracers = this.tracers.filter((t) => t.end > now);
@@ -461,6 +461,7 @@ export class Effects {
     this.sounds.clear();
     for (const p of this.particles) p.destroy();
     this.particles = [];
+    this.explosions.destroy();
     this.tracerGraphics.destroy();
     for (const image of this.decals) image.destroy();
     this.decals = [];
