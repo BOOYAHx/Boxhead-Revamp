@@ -13,10 +13,11 @@ The port is built in small steps. Each one is tested before the next starts.
 | Step | What you can test | Status |
 | --- | --- | --- |
 | 1 | Offline: Warehouse map with the original graphics; walk around with the original speed, collisions and animations | done |
-| 2 | Connect through the bridge: log in, lobby, create/join rooms | **ready to test** |
-| 3 | Two players in a room see each other move | |
+| 2 | Connect through the bridge: log in, lobby, create/join rooms | done |
+| 3 | Two players in a room see each other move | **ready to test** |
 | 4 | Shooting, damage, death and respawn | |
 | 5 | Bounty crates, score, round timer, chat | |
+| 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | |
 | later | Shop and all weapons, deployables, team deathmatch / infected, customization screen, most wanted | |
 
 ## Repository layout
@@ -114,7 +115,15 @@ normal and one private window) with two accounts:
 * Host a game, join it from the other window: both show `Players (2)` and the
   round timer. Esc goes back to the lobby.
 
-Players can't see each other move yet; that is step 3.
+### Step 3: seeing each other move
+
+Same setup as step 2. With two players in one game:
+
+* Each player sees the other (yellow name) walk, turn, stop and get blocked
+  by walls, and the positions match once they stop.
+* Leaving the game (Esc) removes that player from the other screen.
+* Movement uses the Flash client's packets, so a browser player and a
+  Flash/Ruffle player in the same game should see each other too.
 
 The map list comes from the map service through the bridge, like the Flash
 client. If it can't be reached, the lobby says so and uses the bundled

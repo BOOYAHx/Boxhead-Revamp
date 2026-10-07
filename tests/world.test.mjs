@@ -83,3 +83,26 @@ test('HitRect ejects a circle sideways', () => {
   const push = rect.ejectCircle({ x: 4.3, y: 5, radius: 0.42 });
   assert.ok(push.x < 0 && push.y === 0);
 });
+
+test('movement packets round-trip like Game.sendUpdate', async () => {
+  const { encodeMove, parseMove, shouldSendMove, cellPosToString, stringToCellPos } = await import('../client/src/net/protocol.js');
+  const ch = new Character();
+  ch.respawn(12.345, 7.5);
+  ch.moveDir = E;
+  ch.dir = E;
+  ch.collided = true;
+  const packet = encodeMove(ch);
+  assert.equal(packet.text, '101234007507' + '6' + '1');
+  const move = parseMove(packet.text);
+  assert.deepEqual(move.pos, { x: 12.34, y: 7.5 });
+  assert.equal(move.moveDir, E);
+  assert.equal(move.dir, E);
+  assert.equal(move.blocked, true);
+  // Unchanged walking is not resent; a turn or a block is.
+  const walking = { ...packet, flags: 0 };
+  assert.equal(shouldSendMove(walking, walking, false), false);
+  assert.equal(shouldSendMove({ ...walking, dir: 2 }, walking, false), true);
+  assert.equal(shouldSendMove(packet, packet, false), true);
+  assert.equal(cellPosToString({ x: 5.5, y: 12.9 }), '005012');
+  assert.deepEqual(stringToCellPos('005012'), { x: 5, y: 12 });
+});

@@ -7,6 +7,7 @@ import { HitCircle, moveCharacter } from './world.js';
 import { CHARACTER_HEIGHT, FIRE_RADIUS, MAX_SPEED, MOVE_RADIUS, MAX_STORED_POSITIONS } from './constants.js';
 
 const ANIM_FPS = 20;
+const SMOOTH_TIME = 200; // ms to blend a corrected remote position (Mover.SMOOTH_TIME)
 const BODY_FRAMES = 42; // frames per direction on body/head sheets
 const WEAPON_FRAMES = 9; // frames per direction (and per weapon pose) on weapon sheets
 
@@ -80,6 +81,27 @@ export class Character {
     this.storedPositions = []; // local only: lag compensation (LocalCharacter.unlag)
     this.look = { gender: 'Male', headModel: 0, headColor: 0, bodyModel: 0, bodyColor: 0 };
     this.pose = 1; // weapon pose: 1 = one-handed (pistol)
+    this.renderPos = { x: 0, y: 0 }; // where it was last drawn, in cells
+    this.smoothing = null;
+  }
+
+  /**
+   * After a network correction moved `pos`, keep drawing from where the
+   * character was on screen and blend into the new position (Mover.applySmoothing).
+   */
+  applySmoothing(now) {
+    this.smoothing = { x: this.renderPos.x - this.pos.x, y: this.renderPos.y - this.pos.y, start: now };
+  }
+
+  /** Remaining smoothing offset (cells) at time `now`. */
+  smoothingOffset(now) {
+    if (!this.smoothing) return null;
+    const k = Math.max(0, Math.min(1, 1 - (now - this.smoothing.start) / SMOOTH_TIME));
+    if (k === 0) {
+      this.smoothing = null;
+      return null;
+    }
+    return { x: this.smoothing.x * k, y: this.smoothing.y * k };
   }
 
   get dead() {
@@ -129,6 +151,7 @@ export class Character {
     this.animator.name = null;
     this.animator.idle();
     this.storedPositions = [];
+    this.smoothing = null;
     this.active = true;
   }
 }

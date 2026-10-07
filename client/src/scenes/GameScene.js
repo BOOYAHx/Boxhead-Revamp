@@ -10,6 +10,7 @@ import { FALLBACK_MAPS } from '../game/maps.js';
 import { parseMap } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
 import { fetchMap } from '../net/MapService.js';
+import { cellPosToString, encodeMove, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
 import { CharacterView } from '../render/CharacterView.js';
 import { MapView } from '../render/MapView.js';
 
@@ -29,6 +30,10 @@ export class GameScene extends Phaser.Scene {
     this.map = null;
     this.roundTime = -1;
     this.unsubscribe = [];
+    this.remotes = new Map(); // peer id -> { character, view }
+    this.inbox = []; // player messages wait here until the map is loaded (Game.messageInQueue)
+    this.lastSentMove = null;
+    this.forcePositionUpdate = true;
   }
 
   create() {
@@ -63,9 +68,14 @@ export class GameScene extends Phaser.Scene {
     const on = (type, fn) => this.unsubscribe.push(c.on(type, fn));
     on(ServerEvent.ROOM_INFO, (info) => this.receiveRoomInfo(info));
     on(ServerEvent.ROUND_TIME, ({ seconds }) => this.setRoundTime(seconds));
-    on(ServerEvent.HANDSHAKE, () => this.updateInfo());
+    on(ServerEvent.HANDSHAKE, ({ user }) => this.peerHandshake(user));
     on(ServerEvent.PEER_JOINED, () => this.updateInfo());
-    on(ServerEvent.PEER_DISCONNECTED, () => this.updateInfo());
+    on(ServerEvent.PEER_DISCONNECTED, ({ id }) => this.removeRemote(id));
+    on(ServerEvent.PLAYER_MESSAGE, (message) => this.inbox.push(message));
+    on(ServerEvent.MESSAGE, ({ source, message }) => {
+      // Peers measure their ping to us with "?" and expect "!" back (Game.receiveMessage).
+      if (message === '?') c.sendPrivate('!', source);
+    });
     this.secondTimer = this.time.addEvent({ delay: 1000, loop: true, callback: () => this.second() });
     c.requestRoomInfo(this.room);
     this.updateInfo();
@@ -90,7 +100,117 @@ export class GameScene extends Phaser.Scene {
     this.mapName = entry?.name || 'Warehouse';
     this.loadMap(map);
     this.connection.sendGameMessage('0k1'); // map loaded (BountyGame.loadMap)
+    for (const user of this.connection.peers) if (user.handshake) this.ensureRemote(user);
+    this.connection.sendGameMessage('8' + cellPosToString(this.player.pos)); // spawned (Game.respawnLocalCharacter)
+    this.forcePositionUpdate = true;
     this.updateInfo();
+  }
+
+  // --- other players ----------------------------------------------------------------
+
+  peerHandshake(user) {
+    if (this.map) this.ensureRemote(user);
+    this.forcePositionUpdate = true; // let the newcomer see where we are
+    this.updateInfo();
+  }
+
+  ensureRemote(user) {
+    let remote = this.remotes.get(user.id);
+    if (!remote) {
+      const character = new Character({ id: user.id, name: user.name });
+      character.firePos = { x: 0, y: 0 };
+      character.strafing = true;
+      remote = { character, view: null };
+      this.remotes.set(user.id, remote);
+    }
+    const ch = remote.character;
+    ch.name = user.name;
+    Object.assign(ch.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
+    if (user.handshake && !ch.active) ch.hp = user.handshake.hp;
+    if (this.map) {
+      remote.view?.destroy();
+      remote.view = new CharacterView(this, ch, 'Pistol', '#ffe08a');
+    }
+    return remote;
+  }
+
+  removeRemote(id) {
+    const remote = this.remotes.get(id);
+    if (remote) {
+      remote.view?.destroy();
+      this.remotes.delete(id);
+    }
+    this.updateInfo();
+  }
+
+  /** Game.processPlayerMessage for the messages handled so far. */
+  handlePlayerMessage({ source, message, raw }) {
+    const c = this.connection;
+    // The server relays respawns as "8<id><cell>" without the usual "M" wrapper.
+    if (raw && raw.charAt(0) === '8') {
+      if (source !== c.clientID) this.remoteRespawn(source, raw.substr(4, 6));
+      return;
+    }
+    if (source === c.clientID) return; // our own state is decided locally
+    const user = c.peers.find((p) => p.id === source);
+    const remote = this.remotes.get(source) || (user ? this.ensureRemote(user) : null);
+    if (!remote) return;
+    const ch = remote.character;
+    switch (message.charAt(0)) {
+      case '1':
+        this.applyRemoteMove(ch, parseMove(message));
+        break;
+      case '6': {
+        const hp = parseInt(message.substr(1), 10);
+        if (hp > 0) ch.setHealth(hp);
+        break;
+      }
+      case '8':
+        this.remoteRespawn(source, message.substr(1, 6));
+        break;
+      default:
+        break;
+    }
+  }
+
+  applyRemoteMove(ch, move) {
+    const wasActive = ch.active;
+    ch.moving = !!move.moveDir;
+    ch.strafing = true;
+    // Snap to the reported position when the walk changes or the peer is
+    // blocked; otherwise keep extrapolating, exactly like the Flash client.
+    if (move.blocked || !move.moveDir || ch.moveDir !== move.moveDir || !wasActive) {
+      ch.pos.x = move.pos.x;
+      ch.pos.y = move.pos.y;
+      ch.prevPos.x = move.pos.x;
+      ch.prevPos.y = move.pos.y;
+      if (wasActive) ch.applySmoothing(performance.now());
+    }
+    ch.moveDir = move.moveDir;
+    ch.dir = move.dir;
+    ch.firePos.x = move.pos.x;
+    ch.firePos.y = move.pos.y;
+    if (!wasActive) {
+      ch.active = true;
+      this.updateInfo();
+    }
+  }
+
+  remoteRespawn(id, cellText) {
+    const remote = this.remotes.get(id);
+    if (!remote) return;
+    const cell = stringToCellPos(cellText);
+    remote.character.respawn(cell.x + 0.5, cell.y + 0.5);
+    remote.character.strafing = true;
+  }
+
+  /** Game.sendUpdate: tell peers about our movement when it changes. */
+  sendUpdate() {
+    const packet = encodeMove(this.player);
+    if (!shouldSendMove(packet, this.lastSentMove, this.forcePositionUpdate)) return;
+    this.connection.sendGameMessage(packet.text);
+    this.lastSentMove = packet;
+    this.forcePositionUpdate = false;
   }
 
   setRoundTime(seconds) {
@@ -117,6 +237,7 @@ export class GameScene extends Phaser.Scene {
     if (this.mode !== 'online') return;
     const c = this.connection;
     const names = [c.localUser?.name || 'You', ...c.peers.map((p) => p.name || '…')];
+    window.boxhead && (window.boxhead.remotes = this.remotes);
     this.info.setText([`${this.room}${this.mapName ? ' · ' + this.mapName : ''}`, `Players (${names.length}): ${names.join(', ')}`].join('\n'));
   }
 
@@ -154,7 +275,12 @@ export class GameScene extends Phaser.Scene {
       this.accumulator -= PROCESS_INTERVAL;
     }
     this.player.animator.advance(delta);
-    this.playerView.update(this.accumulator / PROCESS_INTERVAL);
+    const alpha = this.accumulator / PROCESS_INTERVAL;
+    this.playerView.update(alpha);
+    for (const { character, view } of this.remotes.values()) {
+      character.animator.advance(delta);
+      view?.update(alpha);
+    }
     this.cameras.main.centerOn(this.playerView.container.x, this.playerView.container.y);
     this.drawDebug();
     const p = this.player.pos;
@@ -166,9 +292,12 @@ export class GameScene extends Phaser.Scene {
     const k = this.keys;
     const h = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
     const v = (k.DOWN.isDown || k.S.isDown ? 1 : 0) - (k.UP.isDown || k.W.isDown ? 1 : 0);
+    while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
     this.player.moveDir = byVector(h, v);
     this.player.strafing = k.SHIFT.isDown;
     this.player.move(this.map);
+    for (const { character } of this.remotes.values()) if (character.active) character.move(this.map);
+    if (this.mode === 'online' && this.player.active) this.sendUpdate();
   }
 
   handleCustomizeKeys() {
@@ -212,6 +341,8 @@ export class GameScene extends Phaser.Scene {
     this.secondTimer?.remove();
     this.mapView?.destroy();
     this.playerView?.destroy();
+    for (const { view } of this.remotes.values()) view?.destroy();
+    this.remotes.clear();
     this.map = null;
   }
 }

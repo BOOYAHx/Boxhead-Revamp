@@ -17,7 +17,7 @@ function tone(color) {
 }
 
 export class CharacterView {
-  constructor(scene, character, weaponSprite = 'Pistol') {
+  constructor(scene, character, weaponSprite = 'Pistol', nameColor = '#ffffff') {
     this.scene = scene;
     this.character = character;
     this.weaponSprite = weaponSprite;
@@ -30,7 +30,7 @@ export class CharacterView {
     this.head = createSprite(scene, 'BondHead');
     this.container.add([this.bodyCustom, this.body, this.weapon, this.headCustom, this.head]);
     this.nameText = scene.add
-      .text(0, 0, character.name, { fontFamily: 'Verdana, sans-serif', fontSize: '10px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 })
+      .text(0, 0, character.name, { fontFamily: 'Verdana, sans-serif', fontSize: '10px', color: nameColor, stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5, 1);
     this.applyLook();
   }
@@ -53,8 +53,17 @@ export class CharacterView {
     this.nameText.setVisible(visible && !ch.dead);
     if (!visible) return;
 
-    const x = Math.round((ch.prevPos.x + (ch.pos.x - ch.prevPos.x) * alpha) * CELL_WIDTH);
-    const y = Math.round((ch.prevPos.y + (ch.pos.y - ch.prevPos.y) * alpha) * CELL_HEIGHT);
+    let cx = ch.prevPos.x + (ch.pos.x - ch.prevPos.x) * alpha;
+    let cy = ch.prevPos.y + (ch.pos.y - ch.prevPos.y) * alpha;
+    const smooth = ch.smoothingOffset(performance.now());
+    if (smooth) {
+      cx += smooth.x;
+      cy += smooth.y;
+    }
+    ch.renderPos.x = cx;
+    ch.renderPos.y = cy;
+    const x = Math.round(cx * CELL_WIDTH);
+    const y = Math.round(cy * CELL_HEIGHT);
     const anim = ch.animator;
     const bodyFrame = anim.bodyFrame(ch.dir, ch.pose);
     const { parts } = this;
