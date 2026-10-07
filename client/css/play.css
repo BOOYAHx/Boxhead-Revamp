@@ -1,0 +1,422 @@
+/* The game page (play.html) in the website's style: the same header, hazard
+   tape and charcoal, the game in a steel frame over the darkened arena, and a
+   strip of controls under it. css/style.css styles the game's own layers. */
+
+@font-face {
+  font-family: 'Anton';
+  src: url('../assets/site/Anton-Regular.ttf') format('truetype');
+  font-display: swap;
+}
+
+.play-page {
+  --bg: #0a0909;
+  --panel: #161311;
+  --line: #2d2722;
+  --text: #ece5d8;
+  --muted: #9c9285;
+  --blood: #c3241b;
+  --blood-hot: #e63a2c;
+  --gold: #e2a93b;
+  --hazard: #d9a521;
+  --steel: #5d6266;
+  --display: 'Anton', Impact, 'Arial Narrow', sans-serif;
+  --header: 64px;
+  --bar: 48px;
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 45%, #0a090980, #0a0909f2 75%),
+    url('../assets/site/arena-hero.webp') center / cover no-repeat,
+    var(--bg);
+  color: var(--text);
+  font-family: var(--display);
+  letter-spacing: 0.5px;
+}
+
+/* --- header (the website's, compact) --------------------------------------------- */
+.play-header {
+  flex: 0 0 var(--header);
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 24px;
+  background: linear-gradient(180deg, #0a0909f5, #0a0909d9);
+  border-bottom: 1px solid #ffffff10;
+  position: relative;
+  z-index: 5;
+}
+
+.play-header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.play-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.play-brand img {
+  width: 92px;
+  height: auto;
+  filter: drop-shadow(0 0 1px #ece5d8cc) drop-shadow(3px 3px 0 #c3241b88);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.play-brand:hover img {
+  transform: rotate(-4deg) scale(1.05);
+}
+
+.play-brand span {
+  font: 24px/1 var(--display);
+  letter-spacing: 2px;
+}
+
+.play-brand small {
+  display: block;
+  margin-top: 3px;
+  color: var(--blood-hot);
+  font-size: 10px;
+  letter-spacing: 3px;
+}
+
+.play-nav {
+  display: flex;
+  gap: clamp(14px, 2vw, 28px);
+  margin-left: auto;
+}
+
+.play-nav a {
+  position: relative;
+  padding: 8px 0;
+  color: #cfc6b8;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  transition: color 0.2s;
+}
+
+.play-nav a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 3px;
+  background: var(--blood-hot);
+  box-shadow: 0 0 10px var(--blood-hot);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.play-nav a:hover {
+  color: #fff;
+}
+
+.play-nav a:hover::after {
+  transform: scaleX(1);
+}
+
+.play-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--blood);
+  color: #fff !important;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  box-shadow: 0 8px 24px -10px #c3241baa;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.play-back:hover {
+  background: var(--blood-hot);
+  transform: translateY(-2px);
+}
+
+.play-header a:focus-visible,
+.play-fullscreen:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 4px;
+}
+
+.play-hazard {
+  flex: 0 0 8px;
+  background: repeating-linear-gradient(-45deg, var(--hazard) 0 14px, #121010 14px 28px);
+  box-shadow: 0 2px 0 #000;
+  position: relative;
+  z-index: 4;
+}
+
+/* --- the game in its frame: the silver window from boxhead.com ------------------------- */
+.play-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 62px 16px 12px; /* room above for the hunters peeking over the frame */
+}
+
+.play-frame {
+  position: relative;
+  padding: 21px 11px 12px;
+  border-radius: 14px 14px 10px 10px;
+  background:
+    linear-gradient(180deg, #ffffff 0, #f4f4f4 3px, #dedede 12px, #cacaca 18px, #c2c2c2 19px, #d7d7d7 100%);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -2px 3px #0000004d,
+    0 0 0 1px #6b6b6b,
+    0 24px 60px -18px #000,
+    0 0 50px -16px #c3241b55;
+}
+
+/* The dark rim around the game, inside the silver. */
+.play-frame::after {
+  content: '';
+  position: absolute;
+  inset: 19px 9px 10px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 2px #1d1d1d, inset 0 0 0 1px #000;
+  pointer-events: none;
+}
+
+/* The nameplate in the middle of the top bar. */
+.play-plate {
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  z-index: 2;
+  width: 132px;
+  height: 21px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  border-radius: 7px 7px 0 0;
+  background: linear-gradient(180deg, #ffffff, #e9e9e9 45%, #c9c9c9);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px #8a8a8a, 0 -2px 6px #00000040;
+  pointer-events: none;
+}
+
+.play-plate span {
+  position: relative;
+  z-index: 1;
+  font: 15px/1 var(--display);
+  letter-spacing: 2.5px;
+  color: #141414;
+  text-shadow: 0 1px 0 #ffffffb0;
+}
+
+/* Bond and Bambo leaning over the frame behind the plate. */
+.play-peek {
+  position: absolute;
+  left: 50%;
+  bottom: -11px; /* with the clip below, the hunters end at the plate's top edge, as if behind it */
+  width: 168px;
+  height: auto;
+  transform: translateX(-50%);
+  clip-path: inset(0 0 35% 0);
+  filter: drop-shadow(0 3px 4px #000a);
+  z-index: 0;
+}
+
+/* The 700 x 490 game, as large as fits between the header and the controls strip. */
+.play-stage {
+  position: relative;
+  width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 134px) * 700 / 490));
+  aspect-ratio: 700 / 490;
+  background: #000;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.play-stage:fullscreen {
+  width: min(100vw, calc(100vh * 700 / 490));
+  height: auto;
+  margin: auto;
+}
+
+.play-stage::backdrop {
+  background: #000;
+}
+
+/* --- the controls strip ------------------------------------------------------------------ */
+.play-bar {
+  flex: 0 0 auto;
+  min-height: var(--bar);
+  width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 134px) * 700 / 490 + 18px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 14px;
+  background: #110f0ee6;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blood);
+}
+
+.play-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.play-keys li {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.play-keys kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 21px;
+  padding: 0 4px;
+  background: linear-gradient(180deg, #2c2724, #1b1715);
+  border: 1px solid #45403b;
+  border-bottom-width: 3px;
+  border-radius: 3px;
+  color: var(--text);
+  font: 12px/1 var(--display);
+  letter-spacing: 0.5px;
+}
+
+.play-keys kbd.wide {
+  min-width: 34px;
+}
+
+.play-fullscreen {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  background: transparent;
+  color: var(--text);
+  border: 2px solid #ece5d855;
+  border-radius: 2px;
+  font: 14px/1 var(--display);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.play-fullscreen:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: transparent;
+}
+
+.play-fullscreen svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- arriving from the homepage: the shutters lift ------------------------------------------------ */
+.play-shutter {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.play-shutter span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50.5%;
+  background: repeating-linear-gradient(0deg, #1b1816 0 22px, #0f0d0c 22px 25px);
+  animation: shutter-lift 0.7s 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.play-shutter span:first-child {
+  top: 0;
+  border-bottom: 10px solid var(--hazard);
+  --away: -101%;
+}
+
+.play-shutter span:last-child {
+  bottom: 0;
+  border-top: 10px solid var(--hazard);
+  --away: 101%;
+}
+
+@keyframes shutter-lift {
+  to {
+    transform: translateY(var(--away));
+  }
+}
+
+/* --- small windows ------------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .play-nav {
+    display: none;
+  }
+
+  .play-back {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .play-page {
+    --header: 56px;
+  }
+
+  .play-header {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .play-brand img {
+    width: 64px;
+  }
+
+  .play-brand span {
+    font-size: 18px;
+  }
+
+  .play-keys {
+    display: none;
+  }
+
+  .play-bar {
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-shutter {
+    display: none;
+  }
+
+  .play-nav a::after,
+  .play-brand img,
+  .play-back {
+    transition: none;
+  }
+}

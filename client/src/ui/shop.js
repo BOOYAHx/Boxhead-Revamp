@@ -70,6 +70,8 @@ export class ShopScreen {
     this.equipmentPage = c.child('equipmentPage');
     this.premiumsPage = c.child('premiumsPage');
     this.moneyField = c.child('moneyField');
+    // One line: at some sizes the browser's glyphs come out a hair wider than Flash's and "$1000000" would wrap out of sight.
+    if (this.moneyField) this.moneyField.box.style.whiteSpace = 'pre';
     this.gameBeginField = c.child('gameBeginField');
     this.enterGame = c.child('enterGameButton');
     if (this.enterGame) {

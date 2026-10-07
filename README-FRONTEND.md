@@ -65,6 +65,13 @@ Back button to return from the game to the homepage.
   `tools/site/hero-art.html`. To repaint it, build the game assets, run
   `python -m http.server 8000` in the repository folder, and open
   `http://localhost:8000/tools/site/hero-art.html`.
+- **Game page (`client/play.html`, `css/play.css`):** the website's header,
+  links back to its sections and hazard tape. The game sits in the silver
+  boxhead.com window frame, with the BOXHEAD nameplate and Bond and Bambo
+  leaning over it, on the darkened arena background. Underneath is a strip
+  with the main keys and a Fullscreen button. The shutters lift when you
+  arrive from the homepage. The game fits between the header and the strip
+  at any window size.
 - **Navigation animations:**
   - The page opens like a shutter lifting.
   - Section links sweep a three-stripe wipe across the screen and jump.

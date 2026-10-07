@@ -30,7 +30,11 @@ export function softwareRendering() {
 /** The drawing scale for the current window size and options. */
 export function wantedScale() {
   if (!Preferences.enhanced) return 1;
-  const fit = Math.min(window.innerWidth / WINDOW_WIDTH, window.innerHeight / WINDOW_HEIGHT);
+  // The game's frame on the page (play.html), or the window.
+  const frame = document.getElementById('game');
+  const width = frame?.clientWidth || window.innerWidth;
+  const height = frame?.clientHeight || window.innerHeight;
+  const fit = Math.min(width / WINDOW_WIDTH, height / WINDOW_HEIGHT);
   const scale = fit * (window.devicePixelRatio || 1);
   return Math.max(1, Math.min(MAX_SCALE, Math.ceil(scale - 0.1)));
 }

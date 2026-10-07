@@ -710,7 +710,7 @@ export class TextField extends DisplayObject {
       lineHeight: `${this.lineHeight}px`,
       color: `rgba(${def.color[0]},${def.color[1]},${def.color[2]},${def.color[3] / 255})`,
       textAlign: ALIGN[def.align] || 'left',
-      whiteSpace: def.wordWrap ? 'pre-wrap' : 'pre',
+      whiteSpace: def.wordWrap && def.multiline ? 'pre-wrap' : 'pre', // a one-line Flash field never wraps
       overflow: 'hidden',
       background: 'transparent',
       border: 'none',
