@@ -55,6 +55,27 @@ def decompile_class(abc, class_name, out_dir):
     return os.path.join(out_dir, *class_name.split('.')) + '.as'
 
 
+# Vector particles drawn by the game (Smoke, Blood.prerender), as SVG per frame.
+FX_SYMBOLS = {
+    'smoke': 'boxhead.world.thing.particle.Smoke_SmokeGraphics',
+    'blood': 'boxhead.world.thing.particle.Blood_BloodMC',
+}
+
+
+def export_fx(swf_bytes, path):
+    library = swf_vector.Library(swf_bytes)
+    fx = {}
+    for name, class_name in FX_SYMBOLS.items():
+        symbol = swf_vector.symbol_frames(library, class_name)
+        if symbol:
+            fx[name] = symbol
+            print(f'  {name}: {len(symbol["frames"])} frames')
+        else:
+            print(f'  {name}: not found in BBH.swf', file=sys.stderr)
+    with open(path, 'w') as f:
+        json.dump(fx, f)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--bbh', required=True, help='the game SWF (BBH.swf)')
@@ -98,6 +119,12 @@ def main():
         print('Exporting the menu art')
         ui = swf_vector.export(embedded_lobby_swf(bbh), os.path.join(args.out, 'ui'), 'assets/game/ui/')
         print(f'  {len(ui.shapes)} shapes, {len(ui.sprites)} sprites, {len(ui.buttons)} buttons, {len(ui.fonts)} fonts')
+
+        with open(os.path.join(args.out, 'hd.json'), 'w') as f:
+            json.dump({}, f)  # upscaled sheets: none until tools/hd_sprites.py runs
+
+        print('Exporting particle shapes')
+        export_fx(bbh, os.path.join(args.out, 'fx.json'))
         with open(os.path.join(args.out, 'manifest.json'), 'w') as f:
             json.dump({'images': sorted(game_images), 'sounds': manifest['sounds']}, f, indent=1)
     print('Done:', args.out)

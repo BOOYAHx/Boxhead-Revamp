@@ -70,8 +70,13 @@ const WEAPON_INFO = {
     fireSounds: ['PistolFire01', 'PistolFire02', 'PistolFire03'],
     reloadSound: 'PistolReload',
     reloadSoundDelay: 200,
+    smokeSize: 2, // Pistol.smokeSize (cells)
+    shellVelocity: 10, // Pistol.getParticles: smokeAndShell(shot, 10)
   },
 };
+
+// Weapon defaults for the shot's particles (Weapon.smokeDistance, shellDistance, handMultiplier).
+const PARTICLE_DEFAULTS = { smokeSize: 3, smokeDistance: 0.85, shellDistance: 0.35, handMultiplier: 1, shellVelocity: 10 };
 
 const SIDE_DISTANCE = 0.25; // Weapon.sideDistance (handMultiplier 1)
 const BARREL_DISTANCE = 0.8; // Weapon.barrelDistance
@@ -81,7 +86,7 @@ export class Weapon {
   constructor(id = PISTOL_ID) {
     const stats = weaponStats[id] || DEFAULT_STATS;
     const info = WEAPON_INFO[id] || WEAPON_INFO[PISTOL_ID];
-    Object.assign(this, info);
+    Object.assign(this, PARTICLE_DEFAULTS, info);
     this.id = id;
     this.name = stats.name;
     this.damage = stats.damage;

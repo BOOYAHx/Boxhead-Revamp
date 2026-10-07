@@ -1,20 +1,32 @@
 // Boxhead: Bounty Hunter, browser edition.
 
 import { App } from './App.js';
-import { WINDOW_HEIGHT, WINDOW_WIDTH } from './game/constants.js';
+import { Preferences, isSaved, loadPreferences } from './game/preferences.js';
+import { Display, applyDisplay, canvasSize, sharpenText, softwareRendering, wantedScale } from './render/display.js';
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
 
+loadPreferences();
+// Enhanced Graphics starts off on computers drawing without a graphics card.
+if (!isSaved('enhanced') && softwareRendering()) Preferences.enhanced = false;
+Display.scale = wantedScale();
+sharpenText();
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: WINDOW_WIDTH,
-  height: WINDOW_HEIGHT,
+  ...canvasSize(Display.scale),
   backgroundColor: '#000000',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   render: { roundPixels: true, antialias: true },
   scene: [BootScene, MenuScene, GameScene],
+});
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => applyDisplay(game), 150);
 });
 
 const app = new App(game, { overlay: document.getElementById('overlay'), flashRoot: document.getElementById('flash-ui') });

@@ -6,7 +6,8 @@
 import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
 import { MODELS, tintFor } from '../game/bodyParts.js';
 import { createSprite, showFrame } from './assets.js';
-import { DEPTH_CORPSES, DEPTH_SHADOWS, shadowAlpha } from './MapView.js';
+import { DEPTH_CORPSES } from './MapView.js';
+import { snap } from './display.js';
 
 const FLASH_TINT = 0xff5040; // stands in for PlayerCharacter.FLASH_CT (red damage flash)
 const HEALTH_GREEN = 0x00ff00; // HealthBar: white bar tinted by health
@@ -19,7 +20,7 @@ export class CharacterView {
     this.scene = scene;
     this.character = character;
     this.weaponSprite = weaponSprite;
-    this.shadow = createSprite(scene, 'Character_Shadow').setDepth(DEPTH_SHADOWS).setAlpha(shadowAlpha());
+    this.shadow = scene.shadows.create('Character_Shadow');
     this.container = scene.add.container(0, 0);
     this.bodyCustom = createSprite(scene, 'BondBodyCustom');
     this.body = createSprite(scene, 'BondBody');
@@ -89,7 +90,7 @@ export class CharacterView {
     const ch = this.character;
     const visible = ch.active;
     this.container.setVisible(visible);
-    this.shadow.setVisible(visible);
+    this.scene.shadows.setVisible(this.shadow, visible);
     const overhead = visible && !ch.dead && !ch.local;
     this.nameText.setVisible(overhead);
     this.placingText.setVisible(overhead);
@@ -107,13 +108,13 @@ export class CharacterView {
     }
     ch.renderPos.x = cx;
     ch.renderPos.y = cy;
-    const x = Math.round(cx * CELL_WIDTH);
-    const y = Math.round(cy * CELL_HEIGHT);
+    const x = snap(cx * CELL_WIDTH);
+    const y = snap(cy * CELL_HEIGHT);
     const anim = ch.animator;
     const bodyFrame = anim.bodyFrame(ch.dir, ch.pose);
     const { parts } = this;
 
-    showFrame(this.shadow, 'Character_Shadow', bodyFrame, x, y);
+    this.scene.shadows.show(this.shadow, 'Character_Shadow', bodyFrame, x, y);
     showFrame(this.bodyCustom, parts.bodyCustom, bodyFrame, 0, 0);
     showFrame(this.body, parts.body, bodyFrame, 0, 0);
     showFrame(this.headCustom, parts.headCustom, bodyFrame, 0, 0);
@@ -157,7 +158,7 @@ export class CharacterView {
 
   destroy() {
     this.placingText.destroy();
-    this.shadow.destroy();
+    this.scene.shadows.remove(this.shadow);
     this.container.destroy();
     this.nameText.destroy();
     this.healthBorder.destroy();

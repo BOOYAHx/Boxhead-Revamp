@@ -1,7 +1,10 @@
 // Loads the generated assets (tools/build_assets.py) with a progress bar.
 
 import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
-import { ASSET_ROOT, loadSheets, registerFrames, setAtlas } from '../render/assets.js';
+import { Preferences } from '../game/preferences.js';
+import { ASSET_ROOT, hdScale, loadSheets, registerFrames, setAtlas, setHdSheets } from '../render/assets.js';
+import { applyFilters, fitCamera } from '../render/display.js';
+import { buildFxTextures } from '../render/fxTextures.js';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -15,7 +18,12 @@ export class BootScene extends Phaser.Scene {
     this.load.on('loaderror', (file) => this.fail(`Missing ${file.src}`));
   }
 
-  create() {
+  async create() {
+    fitCamera(this.cameras.main);
+    // Upscaled sprite sheets (tools/hd_sprites.py), used with Enhanced Graphics.
+    if (Preferences.enhanced) {
+      setHdSheets(await fetch(ASSET_ROOT + 'hd.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
+    }
     const atlas = this.cache.json.get('atlas');
     const manifest = this.cache.json.get('manifest');
     if (!atlas || !manifest) {
@@ -31,9 +39,16 @@ export class BootScene extends Phaser.Scene {
     this.add.rectangle(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 304, 16).setStrokeStyle(2, 0xffffff);
     const label = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 - 24, 'Loading Boxhead...', { fontFamily: 'Verdana', fontSize: '14px' }).setOrigin(0.5);
     this.load.on('progress', (value) => (bar.width = 300 * value));
-    this.load.once('complete', () => {
+    // Particle shapes (fx.json, from builds since the graphics step); optional.
+    const fx = fetch(ASSET_ROOT + 'fx.json', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    this.load.once('complete', async () => {
       if (this.failed) return;
       registerFrames(this.textures);
+      applyFilters(this.textures, (image) => hdScale(image) > 1);
+      label.setText('Preparing effects...');
+      this.registry.set('fx', await buildFxTextures(this, await fx));
       this.scene.start('menu');
       this.registry.get('app').start();
     });

@@ -6,10 +6,18 @@
 export const ASSET_ROOT = 'assets/game/';
 
 let atlas = null;
+let hd = {}; // sheet -> scale of its upscaled copy in sprites-hd/ (tools/hd_sprites.py)
 
 export function setAtlas(data) {
   atlas = data;
 }
+
+/** Use upscaled sheets (sprites-hd/hd.json: { sheet: 2 | 3 | 4 }). */
+export function setHdSheets(map) {
+  hd = map || {};
+}
+
+export const hdScale = (image) => hd[image] || 1;
 
 export function hasSprite(name) {
   return !!atlas && name in atlas;
@@ -21,7 +29,8 @@ export function frameInfo(name, index) {
   const frame = entry?.frames[index];
   if (!frame) return null;
   const [x, y, w, h, dx, dy] = frame;
-  return { image: entry.image, x, y, w, h, dx, dy };
+  // x, y, w, h are in original pixels; the loaded sheet is `scale` times larger.
+  return { image: entry.image, x, y, w, h, dx, dy, scale: hdScale(entry.image) };
 }
 
 export function frameCount(name) {
@@ -31,14 +40,15 @@ export function frameCount(name) {
 /** Queue every sheet referenced by the atlas on a Phaser loader. */
 export function loadSheets(loader) {
   const images = new Set(Object.values(atlas).map((entry) => entry.image));
-  for (const image of images) loader.image('sheet:' + image, ASSET_ROOT + 'sprites/' + image + '.png');
+  for (const image of images) loader.image('sheet:' + image, ASSET_ROOT + (hd[image] ? 'sprites-hd/' : 'sprites/') + image + '.png');
 }
 
 /** Register frames named "<entry>:<index>" on the loaded sheets. */
 export function registerFrames(textures) {
   for (const [name, entry] of Object.entries(atlas)) {
     const texture = textures.get('sheet:' + entry.image);
-    entry.frames.forEach(([x, y, w, h], index) => texture.add(`${name}:${index}`, 0, x, y, w, h));
+    const k = hdScale(entry.image);
+    entry.frames.forEach(([x, y, w, h], index) => texture.add(`${name}:${index}`, 0, x * k, y * k, w * k, h * k));
   }
 }
 
@@ -54,6 +64,7 @@ export function showFrame(sprite, name, index, x, y) {
     return sprite;
   }
   sprite.setTexture('sheet:' + entry.image, `${name}:${index}`);
+  sprite.setScale(1 / hdScale(entry.image));
   sprite.setPosition(x + frame[4], y + frame[5]);
   sprite.setVisible(true);
   return sprite;

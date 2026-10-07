@@ -19,7 +19,9 @@ import { CharacterView } from '../render/CharacterView.js';
 import { Effects } from '../render/Effects.js';
 import { Hud } from '../render/Hud.js';
 import { createSprite, showFrame } from '../render/assets.js';
-import { DEPTH_SHADOWS, MapView, shadowAlpha } from '../render/MapView.js';
+import { MapView } from '../render/MapView.js';
+import { ShadowLayer } from '../render/ShadowLayer.js';
+import { Display, fitCamera, snap } from '../render/display.js';
 
 const HUD_DEPTH = 10001;
 const PING_REQUEST = '?'; // Game.M_PING_REQUEST / M_PING_RESPONSE, sent as private chat
@@ -68,6 +70,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     setWeaponStats(parseWeaponStats(this.cache.text.get('constants') || ''));
+    fitCamera(this.cameras.main);
     this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,SPACE,J,M,C,T,H,ESC,TAB');
     this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE,TAB');
     this.debug = this.add.graphics().setDepth(9000);
@@ -76,6 +79,7 @@ export class GameScene extends Phaser.Scene {
 
     this.status = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, '', { ...TEXT_STYLE, fontSize: '14px' }).setOrigin(0.5).setScrollFactor(0).setDepth(HUD_DEPTH);
     this.coords = this.add.text(WINDOW_WIDTH - 8, WINDOW_HEIGHT - 8, '', { ...TEXT_STYLE, fontFamily: 'monospace' }).setOrigin(1, 1).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
+    this.shadows = new ShadowLayer(this);
     this.effects = new Effects(this);
     this.hud = new Hud(this);
     const help =
@@ -307,19 +311,21 @@ export class GameScene extends Phaser.Scene {
     const victim = this.player;
     const targets = shooter !== victim && victim.active && !victim.dead ? [victim] : [];
     const result = traceShot(this.map, shot.start, shot.angle, shot.altitude, shot.range, targets, shooter);
-    if (result.characters.length) this.localHurt(shooter, shooter.weapon);
+    if (result.characters.length) this.localHurt(shooter, shooter.weapon, shot.angle);
     shooter.weapon.queueEffects(shot, result.distance);
   }
 
   /** Character.hurt + Game.characterHurt for the local player. */
-  localHurt(shooter, weapon) {
+  localHurt(shooter, weapon, angle = null) {
     const p = this.player;
     const before = p.hp;
     let lost = 0;
     this.healthChanged(p, before, () => (lost = p.hurt(Math.min(p.hp, weapon.damage))));
     if (!lost) return;
-    this.effects.addBlood(p, lost);
-    if (Preferences.shake) this.cameras.main.shake(200, 0.006); // ScreenShake(pos, 1.5, 200)
+    this.effects.addBlood(p, lost, angle);
+    this.effects.hurtFlash(lost / 10);
+    // ScreenShake(pos, 1.5, 200); Phaser scales the shake by the zoom twice.
+    if (Preferences.shake) this.cameras.main.shake(200, 0.006 / (Display.scale * Display.scale));
     if (p.dead) this.localDeath(shooter);
     if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, lost));
   }
@@ -379,6 +385,7 @@ export class GameScene extends Phaser.Scene {
     const { effects, reloaded } = weapon.process(true);
     if (effects) {
       this.effects.addTracer(weapon.tracerLine(effects));
+      this.effects.addShotEffects(weapon, effects);
       const sounds = weapon.fireSounds;
       this.effects.playSound(sounds[Math.floor(Math.random() * sounds.length)], weapon.muzzle);
     }
@@ -469,7 +476,7 @@ export class GameScene extends Phaser.Scene {
       this.removeCrate(data.index);
       this.claimedCrates.delete(data.index);
       const crate = new BountyCrate(data, from, now);
-      const shadow = createSprite(this, 'BountyCrate_Shadow').setDepth(DEPTH_SHADOWS).setAlpha(shadowAlpha());
+      const shadow = this.shadows.create('BountyCrate_Shadow');
       const sprite = createSprite(this, crate.sprite);
       this.crates.set(data.index, { crate, sprite, shadow });
     }
@@ -479,7 +486,7 @@ export class GameScene extends Phaser.Scene {
     const entry = this.crates.get(index);
     if (!entry) return null;
     entry.sprite.destroy();
-    entry.shadow.destroy();
+    this.shadows.remove(entry.shadow);
     this.crates.delete(index);
     return entry.crate;
   }
@@ -518,10 +525,10 @@ export class GameScene extends Phaser.Scene {
     const now = performance.now();
     for (const { crate, sprite, shadow } of this.crates.values()) {
       crate.animate(now);
-      const x = Math.round(crate.x * CELL_WIDTH);
-      const y = Math.round(crate.y * CELL_HEIGHT);
-      showFrame(shadow, 'BountyCrate_Shadow', 0, x, y);
-      showFrame(sprite, crate.sprite, crate.frame, x, Math.round(y - crate.altitude));
+      const x = snap(crate.x * CELL_WIDTH);
+      const y = snap(crate.y * CELL_HEIGHT);
+      this.shadows.show(shadow, 'BountyCrate_Shadow', 0, x, y);
+      showFrame(sprite, crate.sprite, crate.frame, x, snap(y - crate.altitude));
       sprite.setDepth(crate.y);
     }
   }
@@ -686,10 +693,9 @@ export class GameScene extends Phaser.Scene {
     this.player.respawn(spawn.x, spawn.y);
     this.playerView = new CharacterView(this, this.player);
 
-    const camera = this.cameras.main;
     const { borderRect } = map;
-    camera.setBounds(borderRect.x * CELL_WIDTH, borderRect.y * CELL_HEIGHT, borderRect.width * CELL_WIDTH, borderRect.height * CELL_HEIGHT);
-    camera.setRoundPixels(true);
+    this.cameraBounds = { x: borderRect.x * CELL_WIDTH, y: borderRect.y * CELL_HEIGHT, width: borderRect.width * CELL_WIDTH, height: borderRect.height * CELL_HEIGHT };
+    this.cameras.main.setRoundPixels(true);
     this.status.setText('');
     window.boxhead = { scene: this, player: this.player, map };
     this.updateScores();
@@ -728,7 +734,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.drawCrates();
     const camera = this.cameras.main;
-    camera.centerOn(this.playerView.container.x, this.playerView.container.y);
+    this.placeCamera(this.playerView.container.x, this.playerView.container.y);
+    this.shadows.render();
     this.effects.focus = this.player.renderPos;
     this.effects.update();
     this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
@@ -737,6 +744,14 @@ export class GameScene extends Phaser.Scene {
     this.drawDebug();
     const p = this.player.pos;
     this.coords.setText(`x ${p.x.toFixed(2)}  y ${p.y.toFixed(2)}`);
+  }
+
+  /** Camera.centerOn kept inside the map border (the camera's origin is its top-left corner). */
+  placeCamera(x, y) {
+    const b = this.cameraBounds;
+    const sx = Math.max(b.x, Math.min(x - WINDOW_WIDTH / 2, b.x + b.width - WINDOW_WIDTH));
+    const sy = Math.max(b.y, Math.min(y - WINDOW_HEIGHT / 2, b.y + b.height - WINDOW_HEIGHT));
+    this.cameras.main.setScroll(sx, sy);
   }
 
   /**
@@ -837,6 +852,7 @@ export class GameScene extends Phaser.Scene {
     for (const index of [...this.crates.keys()]) this.removeCrate(index);
     this.effects?.destroy();
     this.hud?.destroy();
+    this.shadows?.destroy();
     this.map = null;
     this.player = null;
   }

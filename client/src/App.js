@@ -5,9 +5,10 @@
 // menus (ui/Screens.js) are used instead.
 
 import { BRIDGE_URL, SERVER_NAME } from './config.js';
-import { loadPreferences, Preferences } from './game/preferences.js';
+import { Preferences } from './game/preferences.js';
 import { Connection, ServerEvent } from './net/Connection.js';
 import { fetchMapList } from './net/MapService.js';
+import { applyDisplay } from './render/display.js';
 import { drawPortrait } from './render/portrait.js';
 import { FlashMenus } from './ui/menus.js';
 import { Screens } from './ui/Screens.js';
@@ -31,7 +32,6 @@ export class App {
   constructor(game, { overlay, flashRoot = null }) {
     this.game = game;
     this.connection = new Connection();
-    loadPreferences();
     this.handlers = {
       connect: () => this.connectToServer(),
       cancelConnect: () => this.showMainMenu(),
@@ -391,5 +391,6 @@ export class App {
   /** Options: the master volume here; the game reads the other options as it draws. */
   applyPreferences() {
     this.game.sound.volume = Preferences.volume;
+    applyDisplay(this.game);
   }
 }

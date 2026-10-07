@@ -28,24 +28,26 @@ export function drawPortrait(textures, look, { width = 48, height = 59, x = 30, 
     const frame = frameInfo(name, index);
     const source = frame && textures.get('sheet:' + frame.image)?.getSourceImage();
     if (!source) return;
+    // Source rectangle on the loaded sheet (upscaled sheets are `scale` times larger).
+    const k = frame.scale;
     let image = source;
-    let [sx, sy] = [frame.x, frame.y];
+    let [sx, sy, sw, sh] = [frame.x * k, frame.y * k, frame.w * k, frame.h * k];
     if (tint !== null) {
       // Multiply the layer by its colour, keeping its own transparency (Phaser's tint).
       image = document.createElement('canvas');
-      image.width = frame.w;
-      image.height = frame.h;
+      image.width = sw;
+      image.height = sh;
       const t = image.getContext('2d');
-      t.drawImage(source, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+      t.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
       t.globalCompositeOperation = 'multiply';
       t.fillStyle = '#' + tint.toString(16).padStart(6, '0');
-      t.fillRect(0, 0, frame.w, frame.h);
+      t.fillRect(0, 0, sw, sh);
       t.globalCompositeOperation = 'destination-in';
-      t.drawImage(source, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+      t.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
       [sx, sy] = [0, 0];
     }
     ctx.globalAlpha = alpha;
-    ctx.drawImage(image, sx, sy, frame.w, frame.h, x + frame.dx, y + frame.dy, frame.w, frame.h);
+    ctx.drawImage(image, sx, sy, sw, sh, x + frame.dx, y + frame.dy, frame.w, frame.h);
     ctx.globalAlpha = 1;
   };
   draw('Character_Shadow', bodyFrame, { alpha: SHADOW_ALPHA });

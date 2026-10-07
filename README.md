@@ -17,7 +17,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 3 | Two players in a room see each other move | done |
 | 4 | Shooting, damage, death and respawn (pistol) | done |
 | 5 | Bounty crates, score, round timer, round summary, chat | done |
-| 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | **ready to test** |
+| 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | done |
+| 7 | Graphics: "Enhanced Graphics" (sharper picture, soft shadows, light and sparks) or "Classic" | **ready to test** |
 | later | Shop and all weapons, deployables, team deathmatch / infected, customization screen, controls and weapon-bank setup, in-game menu | |
 
 ## Repository layout
@@ -241,6 +242,44 @@ Then Ctrl+F5 in both windows; the servers keep running. (Without the new
 `client/config.js` can also set the server name shown in the menus
 (`serverName`) and where the Most Wanted list comes from (`mostWantedUrl`).
 
+### Step 7: graphics
+
+Rebuild the assets once more (it adds the original smoke and blood shapes,
+`fx.json`), then Ctrl+F5:
+
+```sh
+git pull
+python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants constants.xml
+```
+
+Options now has **Enhanced Graphics** (on by default; off by default on
+computers that draw without a graphics card, where it would be slow).
+Everyone still sees exactly the same 700x490 area of the map.
+
+* **Classic** looks like the Flash game: drawn at 700x490 and stretched.
+  New in both modes, from the original game: the smoke puff from the barrel
+  (the Smoke option), ejected shell casings that stay on the floor (Shell
+  Casings), the original blood splats, and shadows that no longer get darker
+  where two overlap.
+* **Enhanced** draws at a whole multiple (2x, 3x…) of the original at or above
+  your screen's resolution: sharp text, health bars and lines, crisp sprite
+  edges, smoother movement (half-pixel steps or finer), soft shadows, a warm
+  light from muzzle flashes, glowing tracers, sparks and dust where bullets
+  hit walls, blood spray, and a red flash at the screen edge when you're hurt.
+
+If the game feels slow, untick Enhanced Graphics.
+
+**Higher-resolution art (optional).** The sprites are the original small
+bitmaps; Enhanced can use upscaled copies instead:
+
+1. Upscale the PNG files in `client/assets/game/sprites/` 2x, 3x or 4x with
+   an AI image upscaler (for example the free Upscayl app).
+2. Save them with the same names in `client/assets/game/sprites-hd/`.
+3. Run `python tools/hd_sprites.py`, then Ctrl+F5.
+
+It checks the sizes, restores transparency if the upscaler dropped it, and
+lists the sheets it will use. Run it again after rebuilding the assets.
+
 ## Running the unit tests
 
 ```sh
@@ -260,6 +299,7 @@ on port 8081) and the Python game server to be running.
 * `tools/swf_vector.py` — exports a SWF's vector shapes, sprites, buttons,
   text fields and fonts as SVG + JSON (the menus' art; `client/src/ui/flash.js`
   draws it back as a small Flash display list).
+* `tools/hd_sprites.py` — registers upscaled sprite sheets (see step 7).
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound
   (MP3/WAV) from a SWF, including embedded SWFs.
 * `tools/abc_decompile.py` — a small ActionScript 3 bytecode decompiler that

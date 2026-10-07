@@ -1008,6 +1008,47 @@ def export_fonts(library, out_dir, url_prefix):
     return families, faces
 
 
+def symbol_frames(library, class_name):
+    """A vector MovieClip as standalone SVG images, one per frame, for drawing into
+    bitmaps (the game's particles). Single-child sprites are followed down, keeping
+    their blur filter and alpha. Returns {frames, bounds, blur, alpha} or None."""
+    cid = library.classes.get(class_name)
+    blur, alpha = 0.0, 1.0
+    while cid in library.sprites:
+        frames = library.sprites[cid]['frames']
+        if len(frames) == 1 and len(frames[0]) == 1 and frames[0][0].get('id') in library.sprites:
+            place = frames[0][0]
+            for f in place.get('filters') or []:
+                if f['type'] == 'blur':
+                    blur = max(blur, f['blurX'], f['blurY'])
+            if place.get('cxform'):
+                alpha *= place['cxform'][0][3]
+            cid = place['id']
+            continue
+        break
+    if cid not in library.sprites:
+        return None
+    writer = SvgWriter({})
+    shapes = []
+    for frame in library.sprites[cid]['frames']:
+        ids = [p['id'] for p in frame if p.get('id') in library.shapes]
+        if not ids:
+            continue
+        b = [min(library.shapes[i]['bounds'][k] for i in ids) if k < 2 else max(library.shapes[i]['bounds'][k] for i in ids) for k in range(4)]
+        body = ''.join(writer.shape_body(library.shapes[i]) for i in ids)
+        shapes.append((b, body))
+    if not shapes:
+        return None
+    x0 = min(b[0] for b, _ in shapes)
+    y0 = min(b[1] for b, _ in shapes)
+    x1 = max(b[2] for b, _ in shapes)
+    y1 = max(b[3] for b, _ in shapes)
+    w, h = x1 - x0, y1 - y0
+    svgs = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{num(w)}" height="{num(h)}" viewBox="{num(x0)} {num(y0)} {num(w)} {num(h)}">'
+            + ''.join(writer.defs) + body + '</svg>' for _, body in shapes]
+    return {'frames': svgs, 'bounds': [x0, y0, x1, y1], 'blur': blur, 'alpha': alpha}
+
+
 def export(data, out_dir, url_prefix='assets/game/ui/'):
     library = Library(data)
     bitmap_urls = library.export_bitmaps(os.path.join(out_dir, 'bitmaps'), url_prefix + 'bitmaps/')

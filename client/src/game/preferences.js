@@ -15,6 +15,7 @@ const DEFAULTS = Object.freeze({
   footsteps: FOOTSTEPS.ON,
   autoShop: true,
   autoReload: false, // added by the patched game (boxhead.options.AutoReload)
+  enhanced: true, // browser edition: sharper picture and extra effects ("Classic" when off)
 });
 
 export const Preferences = { ...DEFAULTS };
@@ -29,6 +30,15 @@ export function loadPreferences(storage = globalThis.localStorage) {
     // Unreadable or blocked storage: keep the defaults.
   }
   return Preferences;
+}
+
+/** Whether the player has saved a value for this option. */
+export function isSaved(key, storage = globalThis.localStorage) {
+  try {
+    return key in JSON.parse(storage?.getItem(KEY) || '{}');
+  } catch {
+    return false;
+  }
 }
 
 export function savePreferences(storage = globalThis.localStorage) {
