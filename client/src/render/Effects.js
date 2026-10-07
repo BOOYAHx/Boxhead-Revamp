@@ -2,9 +2,9 @@
 // ground (Blood, Map.addBlood), muzzle smoke (Smoke), ejected shell casings
 // (ShellCasing) and positional sounds (AreaSound). With "Enhanced Graphics"
 // on there are also light from muzzle flashes, glowing tracers, sparks where
-// bullets hit walls, blood spray and a red screen edge when you are hurt.
+// bullets hit walls, and blood spray.
 
-import { CELL_HEIGHT, CELL_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
+import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
 import { createSprite, hasSprite, showFrame } from './assets.js';
 import { DEPTH_SHADOWS } from './MapView.js';
@@ -15,7 +15,6 @@ const TRACER_ALPHA = 0.4;
 const TRACER_WIDTH = 0.7;
 const DEPTH_TRACERS = 9500;
 const DEPTH_LIGHT = 9400;
-const DEPTH_SCREEN = 9990; // under the HUD
 
 const BLOOD_DAMAGE_PER_SPLAT = 5; // Blood.DAMAGE_PER_SPLAT
 const BLOOD_COLOR = 0x900204; // Blood.COLOR
@@ -48,9 +47,6 @@ export class Effects {
     const fx = scene.registry.get('fx') || {};
     this.bloodKeys = fx.blood?.length ? fx.blood : makeBloodTextures(scene);
     this.smokeFrames = fx.smoke || [];
-    this.vignette = scene.textures.exists('fx:vignette')
-      ? scene.add.image(0, 0, 'fx:vignette').setOrigin(0, 0).setDisplaySize(WINDOW_WIDTH, WINDOW_HEIGHT).setScrollFactor(0).setDepth(DEPTH_SCREEN).setAlpha(0)
-      : null;
   }
 
   /** The effects' clock (ms); tests may slow it down. */
@@ -261,14 +257,6 @@ export class Effects {
     }
   }
 
-  /** Enhanced: the screen edge flashes red when the local player is hurt. */
-  hurtFlash(strength = 1) {
-    if (!this.enhanced || !this.vignette) return;
-    this.scene.tweens.killTweensOf(this.vignette);
-    this.vignette.setAlpha(Math.min(0.9, 0.45 + 0.35 * strength));
-    this.scene.tweens.add({ targets: this.vignette, alpha: 0, duration: 450, ease: 'Quad.easeOut' });
-  }
-
   fade(images, duration, alphas) {
     const born = this.now();
     this.particles.push({
@@ -329,7 +317,6 @@ export class Effects {
     this.tracerGraphics.destroy();
     for (const image of this.decals) image.destroy();
     this.decals = [];
-    this.vignette?.destroy();
   }
 }
 

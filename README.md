@@ -265,7 +265,7 @@ Everyone still sees exactly the same 700x490 area of the map.
   your screen's resolution: sharp text, health bars and lines, crisp sprite
   edges, smoother movement (half-pixel steps or finer), soft shadows, a warm
   light from muzzle flashes, glowing tracers, sparks and dust where bullets
-  hit walls, blood spray, and a red flash at the screen edge when you're hurt.
+  hit walls, and blood spray.
 
 If the game feels slow, untick Enhanced Graphics.
 

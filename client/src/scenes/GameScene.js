@@ -323,7 +323,6 @@ export class GameScene extends Phaser.Scene {
     this.healthChanged(p, before, () => (lost = p.hurt(Math.min(p.hp, weapon.damage))));
     if (!lost) return;
     this.effects.addBlood(p, lost, angle);
-    this.effects.hurtFlash(lost / 10);
     // ScreenShake(pos, 1.5, 200); Phaser scales the shake by the zoom twice.
     if (Preferences.shake) this.cameras.main.shake(200, 0.006 / (Display.scale * Display.scale));
     if (p.dead) this.localDeath(shooter);

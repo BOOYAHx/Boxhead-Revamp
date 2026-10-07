@@ -1,7 +1,7 @@
 // Particle textures made once at start-up: the original's vector smoke and
 // blood shapes (fx.json from the asset build) drawn into bitmaps the way
 // Smoke and Blood.prerender did, plus a few soft shapes for the enhanced
-// effects (glow, spark, red screen edge).
+// effects (glow, spark).
 
 const BLOOD_COLOR = [0x90, 0x02, 0x04]; // Blood.COLOR
 const BLOOD_ALPHA = 0.1; // Blood.ALPHA
@@ -116,20 +116,6 @@ function radialTexture(scene, key, size, stops) {
   canvas.refresh();
 }
 
-/** The red screen edge shown when hurt. */
-function vignetteTexture(scene, key, width, height) {
-  if (scene.textures.exists(key)) return;
-  const canvas = scene.textures.createCanvas(key, width, height);
-  const ctx = canvas.getContext();
-  const r = Math.hypot(width, height) / 2;
-  const gradient = ctx.createRadialGradient(width / 2, height / 2, r * 0.45, width / 2, height / 2, r);
-  gradient.addColorStop(0, 'rgba(200,0,0,0)');
-  gradient.addColorStop(1, 'rgba(200,0,0,0.85)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
-  canvas.refresh();
-}
-
 /** Build everything; returns { blood: [keys], smoke: [frames] } (empty lists when fx.json is missing). */
 export async function buildFxTextures(scene, fx) {
   radialTexture(scene, 'fx:glow', 128, [
@@ -142,7 +128,6 @@ export async function buildFxTextures(scene, fx) {
     [0.5, 'rgba(255,255,255,0.8)'],
     [1, 'rgba(255,255,255,0)'],
   ]);
-  vignetteTexture(scene, 'fx:vignette', 350, 245);
   const result = { blood: [], smoke: [] };
   try {
     if (fx?.blood) result.blood = await bloodTextures(scene, fx.blood);
