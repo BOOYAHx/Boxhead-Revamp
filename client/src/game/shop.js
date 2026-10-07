@@ -57,12 +57,22 @@ const RELOADABLE = [
 
 /** One row of the shop: a weapon instance that becomes the player's when bought. */
 export class ShopItem {
-  constructor(name, id, equipment) {
+  constructor(name, id, equipment, free = false) {
     this.name = name;
     this.id = id;
     this.equipment = equipment;
+    this.free = free && !equipment; // free guns: the gun, its ammo and its upgrades cost nothing
     this.owned = id === PISTOL_ID;
-    this.weapon = new Weapon(id);
+    this.weapon = this.newWeapon();
+  }
+
+  newWeapon() {
+    const weapon = new Weapon(this.id);
+    if (this.free) {
+      weapon.price = { cost: 0, ammoCost: Math.min(0, weapon.price.ammoCost) }; // -1 stays "no ammo for sale"
+      for (const upgrade of weapon.upgrades) if (upgrade) upgrade.cost = 0;
+    }
+    return weapon;
   }
 
   /** Not sold yet in this version (shown faded, like the original's blocked items). */
@@ -101,9 +111,13 @@ export class ShopItem {
 const denied = (sound = 'CantAfford') => ({ ok: false, sound });
 
 export class ShopState {
-  /** wallet: where the money is kept (the player's stats), or a starting amount. */
-  constructor(wallet = 0) {
+  /**
+   * wallet: where the money is kept (the player's stats), or a starting amount.
+   * freeGuns: every gun, its ammo and upgrades cost nothing (config.js freeGuns).
+   */
+  constructor(wallet = 0, { freeGuns = false } = {}) {
     this.wallet = typeof wallet === 'number' ? { money: wallet } : wallet;
+    this.freeGuns = freeGuns;
     this.reset();
   }
 
@@ -117,7 +131,7 @@ export class ShopState {
 
   /** Shop.reset at every round: only the Pistol, fresh weapons, no receipts. */
   reset() {
-    this.weapons = WEAPON_ROWS.map(([name, id]) => new ShopItem(name, id, false));
+    this.weapons = WEAPON_ROWS.map(([name, id]) => new ShopItem(name, id, false, this.freeGuns));
     this.equipment = EQUIPMENT_ROWS.map(([name, id]) => new ShopItem(name, id, true));
     this.receipts = new Map(); // weapon id -> { price, upgrade1, upgrade2, deadline, used }
     this.lastRefund = -Infinity;
@@ -144,13 +158,13 @@ export class ShopState {
     if (item.blocked) return denied();
     if (!item.equipment && item.owned && item.weapon.ammo) return this.buyAmmo(id, true);
     const cost = item.fillCost;
-    if (cost <= 0) return { ok: false, sound: null };
+    if (cost <= 0 && item.owned) return { ok: false, sound: null };
     if (this.money < cost) return denied();
     const wasOwned = item.owned;
     this.money -= cost;
     if (!wasOwned) {
       item.owned = true;
-      if (!item.equipment) this.receipts.set(id, { price: cost, upgrade1: 0, upgrade2: 0, deadline: now + REFUND_TIME, used: false });
+      if (!item.equipment && cost > 0) this.receipts.set(id, { price: cost, upgrade1: 0, upgrade2: 0, deadline: now + REFUND_TIME, used: false });
     } else if (item.weapon.ammo) {
       item.weapon.ammo.add(item.weapon.ammo.buyCount);
     }
@@ -215,7 +229,7 @@ export class ShopState {
     receipt.used = true;
     const old = item.weapon;
     item.owned = false;
-    item.weapon = new Weapon(id);
+    item.weapon = item.newWeapon();
     if (old.ammo && item.weapon.ammo) item.weapon.ammo.setCount(Math.min(old.ammo.count, item.weapon.ammo.max));
     this.money += receipt.price + receipt.upgrade1 + receipt.upgrade2;
     return { ok: true, sound: 'ClickLong', action: REFUND_ACTION, event: 'refund', weapon: old };

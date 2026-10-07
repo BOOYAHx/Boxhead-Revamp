@@ -10,4 +10,7 @@ window.BOXHEAD_CONFIG = {
   mostWantedUrl: null,
   // Server name shown in the menus. Default: Squaresville
   serverName: null,
+  // true: every gun, its ammo and its upgrades are free in the shop.
+  // (Each player's page decides, so set it here on the website for everyone.)
+  freeGuns: true,
 };

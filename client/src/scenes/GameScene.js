@@ -11,6 +11,7 @@ import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, p
 import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
 import { ShopState } from '../game/shop.js';
+import { FREE_GUNS } from '../config.js';
 import { PISTOL_ID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
@@ -969,7 +970,7 @@ export class GameScene extends Phaser.Scene {
     this.player.respawn(spawn.x, spawn.y);
     this.playerView = new CharacterView(this, this.player);
     // The round starts in the shop (BountyGame.showInitUI); we spawn when it closes.
-    this.shop = new ShopState(this.player.stats);
+    this.shop = new ShopState(this.player.stats, { freeGuns: FREE_GUNS });
     const lib = this.app?.menus?.lib;
     const root = document.getElementById('game-ui');
     if (lib && root) {

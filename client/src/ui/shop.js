@@ -322,10 +322,10 @@ export class ShopScreen {
       } else {
         buy.gotoAndStop('FullAmmo');
       }
-      buy.child('costField').text = cost > 0 ? '$' + cost : '';
+      buy.child('costField').text = cost > 0 ? '$' + cost : item.owned ? '' : 'Free';
       buy.child('selectionOverlay').visible = this.keySelection === KeySel.WEAPON;
       const button = buy.child('button');
-      if (button) button.el.style.cursor = cost > 0 && money >= cost ? 'pointer' : 'default';
+      if (button) button.el.style.cursor = !item.owned && !item.blocked && money >= cost ? 'pointer' : 'default';
     } else {
       this.ammoPanel.update();
     }
@@ -340,7 +340,7 @@ export class ShopScreen {
     display.gotoAndStop(upgrade.owned ? 'Owned' : weaponOwned && money >= upgrade.cost && !blocked ? 'Buy' : 'CannotBuy');
     display.child('upgradeField').text = 'Upgrade ' + n;
     display.child('descriptionField').text = upgradeDescription(upgrade.type);
-    display.child('costField').text = upgrade.owned ? 'Purchased!' : '$' + upgrade.cost;
+    display.child('costField').text = upgrade.owned ? 'Purchased!' : upgrade.cost > 0 ? '$' + upgrade.cost : 'Free';
     for (const f of ['upgradeField', 'descriptionField', 'costField']) display.child(f).alpha = upgrade.owned ? 0.5 : 1;
     const focus = this.ammoPanel.visible ? this.ammoPanel.focus === n + 1 : this.keySelection === n + 1;
     display.child('selectionOverlay').visible = focus;
@@ -536,9 +536,10 @@ class AmmoPanel {
     const missing = item.missing;
     const pack = item.packSize;
     const cost = weapon.price.ammoCost;
+    const price = (amount) => (amount > 0 ? '$' + amount : 'Free');
     const texts = [
-      ['Buy ' + pack + ' Ammo', missing > 0 ? '$' + pack * cost : 'Ammo Full', missing >= pack && cost >= 0 && money >= pack * cost],
-      ['Full Ammo', missing > 0 ? '$' + missing * cost : 'Ammo Full', missing > 0 && cost >= 0 && money >= missing * cost],
+      ['Buy ' + pack + ' Ammo', missing > 0 ? price(pack * cost) : 'Ammo Full', missing >= pack && cost >= 0 && money >= pack * cost],
+      ['Full Ammo', missing > 0 ? price(missing * cost) : 'Ammo Full', missing > 0 && cost >= 0 && money >= missing * cost],
     ];
     this.buttons.forEach((b, i) => {
       const [caption, price, enabled] = texts[i];

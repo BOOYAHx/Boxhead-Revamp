@@ -12,3 +12,5 @@ export const API_URL = params.get('api') || user.apiUrl || `${secure ? 'https' :
 export const MOST_WANTED_URL = params.get('mostwanted') || user.mostWantedUrl || API_URL.replace(/api\/?$/, 'assets/mostwanted.xml');
 // Name shown on the server select screen and in the lobby welcome line.
 export const SERVER_NAME = user.serverName || 'Squaresville';
+// Guns, ammo and upgrades cost nothing in the shop.
+export const FREE_GUNS = !!user.freeGuns;

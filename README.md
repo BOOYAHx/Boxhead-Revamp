@@ -371,6 +371,13 @@ python tools/upscale_textures.py
 node --test tests/*.test.mjs
 ```
 
+## Free guns
+
+`client/config.js` has `freeGuns: true`: every gun, its ammo and its upgrades
+cost nothing in the shop (it shows "Free"), so money only counts for the score.
+Equipment keeps its price. Set it to `false` for the original prices. Each
+player's page decides, so on a website set it in the uploaded `config.js`.
+
 ## Deploying
 
 The client is plain static files: copy `client/` (including the generated

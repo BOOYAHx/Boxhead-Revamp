@@ -179,6 +179,21 @@ test('shop: equipment and the explosive guns are not on sale yet', () => {
   assert.equal(shop.money, 100000);
 });
 
+test('free guns: guns, ammo and upgrades cost nothing, equipment is unchanged', () => {
+  const shop = new ShopState(0, { freeGuns: true });
+  const ak = shop.buy(WeaponID.AK47, 0);
+  assert.deepEqual([ak.ok, ak.event, shop.money], [true, 'buy', 0]);
+  ak.weapon.ammo.setCount(1);
+  assert.deepEqual([shop.buy(WeaponID.AK47).ok, ak.weapon.ammo.count], [true, 100]);
+  shop.buy(WeaponID.SHOTGUN);
+  assert.equal(shop.buyUpgrade(WeaponID.SHOTGUN, 2).ok, true);
+  assert.deepEqual(shop.refundable(0), []); // nothing paid, nothing to refund
+  assert.equal(shop.buy(WeaponID.GRENADES).ok, false);
+  assert.equal(shop.money, 0);
+  shop.reset();
+  assert.equal(shop.buy(WeaponID.MAGNUM).ok, true);
+});
+
 test('auto reload buys a full gun when one round is left', () => {
   const shop = new ShopState(10000);
   const uzis = shop.buy(WeaponID.AKIMBO_UZIS).weapon;
