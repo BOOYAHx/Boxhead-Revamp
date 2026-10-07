@@ -1,9 +1,11 @@
 // The original art drawn over the game: the weapon slider at the top left
 // (boxhead.ui.weaponSlider.WeaponSlider), the "Shop" button under it
-// (OpenShopButton) and the shop itself. A transparent Flash stage laid over
-// the game canvas.
+// (OpenShopButton), the shop itself and the Esc menu (IngameMenuScreen with
+// its options and "are you sure?" screens). A transparent Flash stage laid
+// over the game canvas.
 
 import { Stage } from './flash.js';
+import { createOptionsScreen } from './menus.js';
 import { ShopScreen } from './shop.js';
 
 const SPACING = 50; // WeaponSliderDisplay.SPACING
@@ -14,7 +16,10 @@ const AMMO_TICK = 'assets/game/images/WeaponSliderDisplay_AMMO_TICK.png';
 const TICK_WIDTH = 2;
 
 export class GameUi {
-  /** handlers: selectWeapon(weapon), openShop(), and the ShopScreen handlers. */
+  /**
+   * handlers: selectWeapon(weapon), openShop(), quit() (leave the game),
+   * preferencesChanged(), and the ShopScreen handlers.
+   */
   constructor(root, lib, shopState, handlers) {
     this.root = root;
     this.lib = lib;
@@ -34,9 +39,89 @@ export class GameUi {
       handlers.openShop();
     });
     this.stage.addChild(this.shopButton);
-    this.shop = new ShopScreen(lib, shopState, handlers);
+    this.shop = shopState ? new ShopScreen(lib, shopState, handlers) : null;
     this.shopOpen = false;
+    this.menu = null; // the Esc menu while it is open
+    this.menuScreen = null; // what it shows: the menu, the options or the quit check
     this.setHudVisible(false);
+  }
+
+  get menuOpen() {
+    return !!this.menu;
+  }
+
+  /** Main.toggleIngameMenu (Esc). */
+  toggleMenu() {
+    if (this.menu) this.closeMenu();
+    else this.openMenu();
+  }
+
+  /** IngameMenuScreen: options, quit, close. The game carries on behind it. */
+  openMenu() {
+    if (this.menu) return;
+    const menu = (this.menu = this.lib.create('boxhead.ui.screen.IngameMenuScreen'));
+    const actions = {
+      optionsButton: ['options', () => this.showOptions()],
+      quitButton: ['quit', () => this.confirmQuit()],
+      closeButton: ['close', () => this.closeMenu()],
+    };
+    for (const [name, [text, action]] of Object.entries(actions)) {
+      const button = menu.child(name);
+      if (!button) continue;
+      button.text = text;
+      button.onClick(action);
+    }
+    this.stage.addChild(menu);
+    this.menuScreen = menu;
+  }
+
+  closeMenu() {
+    if (!this.menu) return;
+    for (const screen of new Set([this.menuScreen, this.menu])) {
+      this.stage.removeChild(screen);
+      screen.destroy();
+    }
+    this.menu = null;
+    this.menuScreen = null;
+  }
+
+  /** Screen.showSubscreen: the menu hides while the subscreen is up. */
+  showSubscreen(screen) {
+    this.menu.visible = false;
+    this.menuScreen = this.stage.addChild(screen);
+  }
+
+  /** Screen.subscreenClose: back to the menu. */
+  closeSubscreen() {
+    if (!this.menu || this.menuScreen === this.menu) return;
+    this.stage.removeChild(this.menuScreen);
+    this.menuScreen.destroy();
+    this.menuScreen = this.menu;
+    this.menu.visible = true;
+  }
+
+  showOptions() {
+    this.showSubscreen(
+      createOptionsScreen(this.lib, {
+        changed: () => this.handlers.preferencesChanged(),
+        close: () => this.closeSubscreen(),
+      }),
+    );
+  }
+
+  /** ConfirmQuitScreen: "quit" leaves the game, "cancel" goes back. */
+  confirmQuit() {
+    const screen = this.lib.create('boxhead.ui.screen.ConfirmQuitScreen');
+    const quit = screen.child('quitButton');
+    quit.text = 'quit';
+    quit.onClick(() => {
+      this.closeMenu();
+      this.handlers.quit();
+    });
+    const cancel = screen.child('closeButton');
+    cancel.text = 'cancel';
+    cancel.onClick(() => this.closeSubscreen());
+    this.showSubscreen(screen);
   }
 
   /** ShopGame.guiShouldBeVisible: the slider and the shop button hide while shopping. */
@@ -46,7 +131,7 @@ export class GameUi {
   }
 
   openShop() {
-    if (this.shopOpen) return;
+    if (this.shopOpen || !this.shop) return;
     this.shopOpen = true;
     this.stage.addChild(this.shop.clip);
     this.shop.refresh();
@@ -62,7 +147,8 @@ export class GameUi {
   }
 
   destroy() {
-    this.shop.destroy();
+    this.closeMenu();
+    this.shop?.destroy();
     this.stage.clear();
     this.root.replaceChildren();
     this.root.hidden = true;

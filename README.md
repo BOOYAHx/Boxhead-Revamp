@@ -20,7 +20,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | done |
 | 7 | Graphics: "Enhanced Graphics" (sharper picture, soft shadows, light and sparks) or "Classic" | done |
 | 8 | The shop and every gun: Dual Uzis, Shotgun, Rifle, Flamer, AK47, Minigun, Magnum (ammo, upgrades, refunds, weapon switching) | **ready to test** |
-| later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen, controls and weapon-bank setup, in-game menu | |
+| 9 | The in-game menu (Esc): options, quit (with "leave game?"), close | **ready to test** |
+| later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen, controls and weapon-bank setup | |
 
 ## Repository layout
 
@@ -121,7 +122,7 @@ normal and one private window) with two accounts:
 * Create an account, log in; wrong passwords are refused.
 * The lobby lists the players online and the open games; lobby chat reaches
   the other window (and Flash players in the lobby).
-* Host a game, join it from the other window. Esc goes back to the lobby.
+* Host a game, join it from the other window. Esc, then quit, goes back to the lobby.
 
 (Since step 6 these screens are the original menus, see below.)
 
@@ -142,7 +143,7 @@ Same setup as step 2. With two players in one game:
 
 * Each player sees the other (yellow name) walk, turn, stop and get blocked
   by walls, and the positions match once they stop.
-* Leaving the game (Esc) removes that player from the other screen.
+* Leaving the game (Esc, quit) removes that player from the other screen.
 * Movement uses the Flash client's packets, so a browser player and a
   Flash/Ruffle player in the same game should see each other too.
 
@@ -219,7 +220,7 @@ Then Ctrl+F5 in both windows; the servers keep running. (Without the new
   login box. **Register** asks for the password twice and logs you straight
   in; "Remember me?" keeps your name for next time. Wrong passwords and
   unknown accounts are reported in red under the box; Cancel goes back.
-* **QUICKPLAY** starts offline practice; Esc returns to the main menu.
+* **QUICKPLAY** starts offline practice; Esc, then quit, returns to the main menu.
 * **HOW TO PLAY:** four slides, click to go through them.
 * **OPTIONS:** volume, shadows, blood, screen shake and Show FPS work in game
   and are remembered by the browser. Open shop on death, shell casings,
@@ -303,6 +304,16 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
   down to its last round.
 - Grenades, the Grenade Launcher, the Plasma Cannon and the equipment page are
   shown faded: they come in the next step.
+
+### Step 9: the in-game menu
+
+- **Esc** in a game opens the original menu: **options**, **quit** and
+  **close**. The round carries on behind it (you stand still), like the
+  original. Esc again, or close, puts it away.
+- **options** is the same Options screen as the main menu; changes apply at once.
+- **quit** asks "leave game?" first; quitting goes back to the lobby (or to the
+  main menu from offline practice).
+- Esc still closes the chat line or the shop first when one is open.
 
 ## Running the unit tests
 

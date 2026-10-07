@@ -95,7 +95,7 @@ export class GameScene extends Phaser.Scene {
     const help =
       this.mode === 'offline'
         ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · B shop · R refill · M model · C colour · H head · T hit boxes · Esc menu'
-        : 'Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · B shop · R refill · Enter chat · Tab scores · Esc lobby';
+        : 'Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · B shop · R refill · Enter chat · Tab scores · Esc menu';
     // Not in the original: a short reminder of the keys that fades after a while.
     this.help = this.add
       .text(4, 4, help, { ...TEXT_STYLE, fontSize: '10px', backgroundColor: 'rgba(0,0,0,0.4)', wordWrap: { width: 260 } })
@@ -110,6 +110,7 @@ export class GameScene extends Phaser.Scene {
     this.onVisibility = () => this.visibilityChanged();
     document.addEventListener('visibilitychange', this.onVisibility);
     this.onKeyDown = (event) => {
+      if (this.ui?.menuOpen) return; // the Esc menu has the keyboard
       // ShopGame.process: B / N open and close the shop.
       if (this.ui && this.chatInput === null && !this.gameOver && !event.repeat && (event.code === 'KeyB' || event.code === 'KeyN')) {
         if (this.ui.shopOpen) this.closeShop();
@@ -123,13 +124,13 @@ export class GameScene extends Phaser.Scene {
       this.chatKey(event);
     };
     this.onKeyUp = (event) => {
-      if (!this.ui?.shopOpen) return;
-      this.ui.shop.keyUp(event);
-      // ShopGame.handleKeyUp: Escape closes the shop.
-      if (event.code === 'Escape') {
-        this.swallowEscape = true;
-        this.closeShop();
-      }
+      if (!this.ui) return;
+      if (this.ui.shopOpen) this.ui.shop.keyUp(event);
+      if (event.code !== 'Escape') return;
+      // Game.handleKeyUp: Escape closes the chat line, then the shop; otherwise it toggles the menu.
+      if (this.swallowEscape) this.swallowEscape = false;
+      else if (this.ui.shopOpen && !this.ui.menuOpen) this.closeShop();
+      else if (this.chatInput === null) this.ui.toggleMenu();
     };
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
@@ -550,7 +551,7 @@ export class GameScene extends Phaser.Scene {
   // --- shop (ShopGame) -----------------------------------------------------------------
 
   openShop() {
-    if (!this.ui || this.ui.shopOpen || this.gameOver) return;
+    if (!this.ui || this.ui.shopOpen || this.ui.menuOpen || this.gameOver) return;
     this.autoShopTime = 0;
     const p = this.player;
     p.moveDir = null;
@@ -620,7 +621,15 @@ export class GameScene extends Phaser.Scene {
     if (this.roundTime >= 0) this.ui.shop.setCountDown(Math.max(0, Math.trunc(this.roundTime - ROUND_START_TIME)));
   }
 
-  /** The shop's handlers (what buying does to the game). */
+  /** Options changed from the Esc menu: volume and display, and what the game draws. */
+  preferencesChanged() {
+    this.app?.applyPreferences();
+    this.shadows.texture.setVisible(Preferences.shadows);
+    this.shadows.dirty = true;
+    this.hud.fps.setVisible(Preferences.showFPS);
+  }
+
+  /** The shop's and menu's handlers. */
   shopHandlers() {
     return {
       playSound: (name) => this.app?.playSound(name),
@@ -628,6 +637,8 @@ export class GameScene extends Phaser.Scene {
       close: () => this.closeShop(),
       now: () => performance.now(),
       openShop: () => this.openShop(),
+      quit: () => this.app?.leaveGame(),
+      preferencesChanged: () => this.preferencesChanged(),
       selectWeapon: (weapon) => {
         if (this.player.selectWeapon(weapon)) this.weaponChanged(this.player, true);
       },
@@ -852,7 +863,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Chat line: Enter opens it, Enter sends, Escape cancels (GUI input). */
   chatKey(event) {
-    if (this.mode !== 'online' || !this.player || this.gameOver) return;
+    if (this.mode !== 'online' || !this.player || this.gameOver || this.ui?.menuOpen) return;
     if (this.chatInput === null) {
       if (event.key === 'Enter') {
         this.chatInput = '';
@@ -967,8 +978,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
-      if (this.swallowEscape || this.ui?.shopOpen) this.swallowEscape = false;
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ESC) && !this.ui) {
+      if (this.swallowEscape) this.swallowEscape = false;
       else if (this.chatInput === null) {
         this.app.leaveGame();
         return;
@@ -1034,12 +1045,13 @@ export class GameScene extends Phaser.Scene {
       this.autoShopTime = 0;
       this.openShop();
     }
-    if (this.ui?.shopOpen) {
+    const captured = !!(this.ui?.shopOpen || this.ui?.menuOpen); // Game.captureInput: the character stands still
+    if (this.ui?.shopOpen) this.ui.shop.updateRespawnTime(Math.max(0, Math.ceil(p.respawnTime / 1000)), p.active, p.dead);
+    if (captured) {
       p.moveDir = null;
       p.firing = false;
-      this.ui.shop.updateRespawnTime(Math.max(0, Math.ceil(p.respawnTime / 1000)), p.active, p.dead);
     } else if (this.chatInput === null && p.active) this.handleWeaponKeys();
-    if (!p.dead && !this.ui?.shopOpen) {
+    if (!p.dead && !captured) {
       const typing = this.chatInput !== null;
       const down = (...keys) => !typing && keys.some((key) => key.isDown);
       const h = (down(k.RIGHT, k.D) ? 1 : 0) - (down(k.LEFT, k.A) ? 1 : 0);

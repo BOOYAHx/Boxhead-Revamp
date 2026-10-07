@@ -378,70 +378,12 @@ export class FlashMenus {
   options() {
     this.ensureMainMenu();
     this.buttonsPanel.visible = false;
-    const screen = (this.subscreen = this.add('boxhead.ui.screen.OptionsScreen'));
-    const ticks = {
-      autoShopTickBox: ['Open shop on death', 'autoShop'],
-      shadowTickBox: ['Shadows', 'shadows'],
-      bloodTickBox: ['Blood', 'blood'],
-      shellsTickBox: ['Shell Casings', 'shells'],
-      smokeTickBox: ['Smoke', 'smoke'],
-      shakeTickBox: ['Screen Shake', 'shake'],
-      showFPSTickBox: ['Show FPS', 'showFPS'],
-    };
-    const volume = screen.child('volumeSlider');
-    const footsteps = screen.child('footstepsSelector');
-    // The patched game's AutoReload.attach: an "Auto Reload" tick box where the
-    // footsteps selector was, which moves down a row with the buttons below it.
-    // "Enhanced Graphics" (this edition's sharper picture and effects) is added the same way.
-    const fps = screen.child('showFPSTickBox');
-    const row = footsteps.y - fps.y > 0 ? footsteps.y - fps.y : 24;
-    const extras = [['autoReload', 'Auto Reload'], ['enhanced', 'Enhanced Graphics']].map(([key, label]) => {
-      const tick = this.lib.create('MMOcha.lobby.OptionTickBox');
-      tick.matrix = [...fps.matrix];
-      tick.y = footsteps.y;
-      for (const name of ['footstepsSelector', 'controlsButton', 'weaponsButton']) screen.child(name).y += row;
-      screen.addChild(tick);
-      return { key, label, tick };
-    });
-    const display = () => {
-      volume.displayOptions('Volume', Preferences.volume);
-      for (const [name, [label, key]] of Object.entries(ticks)) screen.child(name)?.displayOption(label, Preferences[key]);
-      for (const { key, label, tick } of extras) tick.displayOption(label, Preferences[key]);
-      footsteps.displayOptions('Footstep Sounds', [FOOTSTEPS.OFF, FOOTSTEPS.PLAYER, FOOTSTEPS.ON], Preferences.footsteps);
-    };
-    display();
-    const changed = () => {
-      Preferences.volume = volume.value;
-      for (const [name, [, key]] of Object.entries(ticks)) Preferences[key] = !!screen.child(name)?.ticked;
-      for (const { key, tick } of extras) Preferences[key] = tick.ticked;
-      Preferences.footsteps = footsteps.selectedOption;
-      savePreferences();
-      this.handlers.preferencesChanged?.();
-    };
-    volume.on('change', changed);
-    footsteps.on('change', changed);
-    for (const { tick } of extras) tick.on('change', changed);
-    for (const name of Object.keys(ticks)) screen.child(name)?.on('change', changed);
-    // Key and weapon-bank configuration come with the in-game menus.
-    for (const [name, text] of [['controlsButton', 'configure controls'], ['weaponsButton', 'configure weapon banks']]) {
-      const button = screen.child(name);
-      button.text = text;
-      button.align('left');
-      button.disable();
-    }
-    const reset = screen.child('resetButton');
-    reset.text = 'reset';
-    reset.align('left');
-    reset.onClick(() => {
-      resetPreferences();
-      savePreferences();
-      display();
-      this.handlers.preferencesChanged?.();
-    });
-    const close = screen.child('closeButton');
-    close.text = 'close';
-    close.align('right');
-    close.onClick(() => this.closeSubscreen());
+    this.subscreen = this.stage.addChild(
+      createOptionsScreen(this.lib, {
+        changed: () => this.handlers.preferencesChanged?.(),
+        close: () => this.closeSubscreen(),
+      }),
+    );
   }
 
   // --- lobby ------------------------------------------------------------------------------
@@ -492,4 +434,76 @@ export class FlashMenus {
   lobbyNotice(message) {
     this.lobby?.addChat('', message, 'notice');
   }
+}
+
+/**
+ * OptionsScreen (from the main menu and the in-game menu): the game options,
+ * saved in the browser. changed() after every change, close() for "close".
+ */
+export function createOptionsScreen(lib, { changed: onChange, close: onClose }) {
+  const screen = lib.create('boxhead.ui.screen.OptionsScreen');
+  const ticks = {
+    autoShopTickBox: ['Open shop on death', 'autoShop'],
+    shadowTickBox: ['Shadows', 'shadows'],
+    bloodTickBox: ['Blood', 'blood'],
+    shellsTickBox: ['Shell Casings', 'shells'],
+    smokeTickBox: ['Smoke', 'smoke'],
+    shakeTickBox: ['Screen Shake', 'shake'],
+    showFPSTickBox: ['Show FPS', 'showFPS'],
+  };
+  const volume = screen.child('volumeSlider');
+  const footsteps = screen.child('footstepsSelector');
+  // The patched game's AutoReload.attach: an "Auto Reload" tick box where the
+  // footsteps selector was, which moves down a row with the buttons below it.
+  // "Enhanced Graphics" (this edition's sharper picture and effects) is added the same way.
+  const fps = screen.child('showFPSTickBox');
+  const row = footsteps.y - fps.y > 0 ? footsteps.y - fps.y : 24;
+  const extras = [['autoReload', 'Auto Reload'], ['enhanced', 'Enhanced Graphics']].map(([key, label]) => {
+    const tick = lib.create('MMOcha.lobby.OptionTickBox');
+    tick.matrix = [...fps.matrix];
+    tick.y = footsteps.y;
+    for (const name of ['footstepsSelector', 'controlsButton', 'weaponsButton']) screen.child(name).y += row;
+    screen.addChild(tick);
+    return { key, label, tick };
+  });
+  const display = () => {
+    volume.displayOptions('Volume', Preferences.volume);
+    for (const [name, [label, key]] of Object.entries(ticks)) screen.child(name)?.displayOption(label, Preferences[key]);
+    for (const { key, label, tick } of extras) tick.displayOption(label, Preferences[key]);
+    footsteps.displayOptions('Footstep Sounds', [FOOTSTEPS.OFF, FOOTSTEPS.PLAYER, FOOTSTEPS.ON], Preferences.footsteps);
+  };
+  display();
+  const changed = () => {
+    Preferences.volume = volume.value;
+    for (const [name, [, key]] of Object.entries(ticks)) Preferences[key] = !!screen.child(name)?.ticked;
+    for (const { key, tick } of extras) Preferences[key] = tick.ticked;
+    Preferences.footsteps = footsteps.selectedOption;
+    savePreferences();
+    onChange();
+  };
+  volume.on('change', changed);
+  footsteps.on('change', changed);
+  for (const { tick } of extras) tick.on('change', changed);
+  for (const name of Object.keys(ticks)) screen.child(name)?.on('change', changed);
+  // Key and weapon-bank configuration are not ported yet.
+  for (const [name, text] of [['controlsButton', 'configure controls'], ['weaponsButton', 'configure weapon banks']]) {
+    const button = screen.child(name);
+    button.text = text;
+    button.align('left');
+    button.disable();
+  }
+  const reset = screen.child('resetButton');
+  reset.text = 'reset';
+  reset.align('left');
+  reset.onClick(() => {
+    resetPreferences();
+    savePreferences();
+    display();
+    onChange();
+  });
+  const close = screen.child('closeButton');
+  close.text = 'close';
+  close.align('right');
+  close.onClick(() => onClose());
+  return screen;
 }
