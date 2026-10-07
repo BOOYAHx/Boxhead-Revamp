@@ -531,6 +531,7 @@ function repairWarehouse(mapString) {
 // --- movement --------------------------------------------------------------------
 
 const round = (v) => Math.trunc(v * POSITION_RESOLUTION) / POSITION_RESOLUTION;
+const EJECT_EXTRA = 1 / 2048; // StoredNumber.MIN_VALUE
 
 /**
  * One tick of Character.move: step along moveDir, then resolve collisions
@@ -559,13 +560,15 @@ export function moveCharacter(map, ch, speed) {
   const collided = hits.length > 0;
   let blocked = hits.length > 1;
   if (hits.length === 1) {
+    // Push out a little further (StoredNumber.MIN_VALUE) and round away from
+    // the obstacle, so the character ends up clear of it and slides round.
     const push = hits[0];
     const length = Math.hypot(push.x, push.y);
-    const scale = length ? (length + 1e-9) / length : 1;
+    const scale = length ? (length + EJECT_EXTRA) / length : 1;
     const px = push.x * scale;
     const py = push.y * scale;
-    ch.pos.x += px < 0 ? Math.ceil(px * POSITION_RESOLUTION) / POSITION_RESOLUTION : Math.floor(px * POSITION_RESOLUTION) / POSITION_RESOLUTION;
-    ch.pos.y += py < 0 ? Math.ceil(py * POSITION_RESOLUTION) / POSITION_RESOLUTION : Math.floor(py * POSITION_RESOLUTION) / POSITION_RESOLUTION;
+    ch.pos.x += px < 0 ? Math.floor(px * POSITION_RESOLUTION) / POSITION_RESOLUTION : Math.ceil(px * POSITION_RESOLUTION) / POSITION_RESOLUTION;
+    ch.pos.y += py < 0 ? Math.floor(py * POSITION_RESOLUTION) / POSITION_RESOLUTION : Math.ceil(py * POSITION_RESOLUTION) / POSITION_RESOLUTION;
     hits = collisions();
     if (hits.length > 0) blocked = true;
   }

@@ -106,3 +106,22 @@ test('movement packets round-trip like Game.sendUpdate', async () => {
   assert.equal(cellPosToString({ x: 5.5, y: 12.9 }), '005012');
   assert.deepEqual(stringToCellPos('005012'), { x: 5, y: 12 });
 });
+
+test('characters slide round trees instead of sticking to them (ejection rounds away)', async () => {
+  const { Character } = await import('../client/src/game/Character.js');
+  const { DIRECTIONS } = await import('../client/src/game/Direction.js');
+  const { HitCircle, moveCharacter } = await import('../client/src/game/world.js');
+  const tree = new HitCircle({ x: 15, y: 10.6 }, 1);
+  const map = { obstaclesNear: () => [tree], borderHits: [] };
+  const ch = new Character({ local: true });
+  ch.respawn(10, 10);
+  ch.moveDir = DIRECTIONS[6]; // east, a little above the tree's centre
+  let stuck = 0;
+  for (let t = 0; t < 80; t++) {
+    const x = ch.pos.x;
+    moveCharacter(map, ch, ch.speed);
+    if (ch.pos.x === x) stuck++;
+  }
+  assert.equal(stuck, 0);
+  assert.ok(ch.pos.x > 20);
+});
