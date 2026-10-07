@@ -28,6 +28,8 @@ export class GameScene extends Phaser.Scene {
     this.room = data.room;
     this.connection = this.mode === 'online' ? this.app.connection : null;
     this.map = null;
+    this.loadingMap = false; // Phaser reuses the scene object for every game
+    this.mapName = null;
     this.roundTime = -1;
     this.unsubscribe = [];
     this.remotes = new Map(); // peer id -> { character, view }
