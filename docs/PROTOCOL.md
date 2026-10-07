@@ -72,6 +72,7 @@ Positions are cells × 100, five digits per axis (`x5 y5`); a cell is
 | `1<x5><y5><moveDir1><dir1><flags1>` | `M<id>1...` | movement: moveDir 0 = standing, else direction + 1; flag bit 0 = blocked |
 | `4<angle3><param>` | `M<id>4...` | fired the current weapon at an angle in degrees |
 | `6<attacker3><weapon2><damage2>` | — | **you** were hit (victim-side hit detection) |
+| `o<index2><attacker3><damage2>` | — | the owner reports damage to a deployable |
 | `8<cellX3><cellY3>` | `8<id><cell>` | respawned at a cell |
 | `0q<weapon2>` | `M<id>0q<weapon2>` | switched weapon |
 | `0m<crate3>` | `0m<id><crate3><bountyPoints>` | picked up a bounty crate |
@@ -85,6 +86,8 @@ Server-authoritative results:
 | `M<id>7<killer3><weapon2><crates>` | player died; `<crates>` = 14-character crate entries |
 | `n<owner3><kind1><index2><cellX3><cellY3>` | deployable placed |
 | `o<index2><hp2>` | deployable damaged (`00` = destroyed) |
+| `o<index2><killer3>` | original server's alternative destruction form |
+| `r<records>` | complete deployable snapshot: 14-character records |
 
 A crate entry is `<type1><index3><x5><y5>` (type 0 = $250, 1 = $500, 2 = $1000).
 
@@ -99,6 +102,35 @@ The rewind uses the shooter's ping, which every client measures to every
 other player by sending the private chat message `?` (`00<id>9<encrypted ?>`)
 and timing the `!` that comes back (average of the last three, one player
 pinged per second, each at most every 10 seconds).
+
+### Equipment
+
+Grenades (weapon 6) and the Grenade Launcher (20) fire on key release.
+Their fire parameter encodes horizontal speed multiplied by 100. Plasma (21)
+and airstrike beacons (18) use parameter 0. Projectiles advance at 20 Hz;
+their continuing movement is not rewound with the victim's ping. Explosions
+can hurt the shooter. Plasma crosses characters, damages each once, and
+stops at static cover without radial damage.
+
+Deployable kinds: 0 barrel (weapon 7), 1 barricade (8), 2 C4 (17), 3 mine
+(19). The original protocol reserves 4/5 for turrets; this client does not
+sell or simulate them yet. Fire requests placement in the player's current
+cell. The `n` acknowledgement spends local ammo; a rejected/unacknowledged
+placement does not. Duplicate acknowledgements do not spend more ammo.
+
+Snapshot records are `<owner3><kind1><index2><cellX3><cellY3><hp2>`.
+Placements and HP updates are buffered while the map loads. Disconnects
+remove the owner's objects without triggering their explosions.
+
+Only the owner reports deployable damage. C4 is detonated by a second fire
+press; mines activate when an enemy approaches, send `a<index>;` inside a
+chat bundle, then detonate after one second. Both send one point of damage
+with the owner's attacker ID. The confirmed `o` destruction triggers the
+blast on each client, preventing duplicate explosions. The short `00`
+destruction form has no killer ID; the owner uses its remembered attacker
+for a barrel, while other clients fall back to the barrel's owner.
+
+The spy satellite is a local camera mode and sends no extra protocol packet.
 
 ### Chat encryption
 

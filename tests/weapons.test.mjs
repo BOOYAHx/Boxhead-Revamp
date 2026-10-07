@@ -172,11 +172,12 @@ test('shop: buy a gun, fill it up, upgrade it, refund it within a minute', () =>
   assert.equal(shop.refund(WeaponID.AK47, 31000).ok, false);
 });
 
-test('shop: equipment and the explosive guns are not on sale yet', () => {
+test('shop: equipment and the explosive guns are available', () => {
   const shop = new ShopState(100000);
-  assert.deepEqual([shop.buy(WeaponID.GRENADES).ok, shop.buy(WeaponID.GRENADES).sound], [false, 'CantAfford']);
-  assert.equal(shop.buy(WeaponID.GRENADE_LAUNCHER).ok, false);
-  assert.equal(shop.money, 100000);
+  assert.equal(shop.buy(WeaponID.GRENADES).ok, true);
+  assert.equal(shop.buy(WeaponID.GRENADE_LAUNCHER).ok, true);
+  assert.equal(shop.buy(WeaponID.PLASMA).ok, true);
+  assert.ok(shop.money < 100000, 'equipment still costs money');
 });
 
 test('free guns: guns, ammo and upgrades cost nothing, equipment is unchanged', () => {

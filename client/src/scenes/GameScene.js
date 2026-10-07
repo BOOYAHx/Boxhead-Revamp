@@ -12,7 +12,9 @@ import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
 import { ShopState } from '../game/shop.js';
 import { FREE_GUNS } from '../config.js';
-import { PISTOL_ID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
+import { PISTOL_ID, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
+import { EquipmentWorld } from '../game/equipment.js';
+import { EquipmentView } from '../render/EquipmentView.js';
 import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
@@ -79,6 +81,10 @@ export class GameScene extends Phaser.Scene {
     this.autoSelectWeapon = null;
     this.loops = new Map(); // weapon -> playing loop sound
     this.reloadSounds = []; // the local player's pending reload / change sounds
+    this.equipment = null;
+    this.equipmentView = null;
+    this.spy = null;
+    this.equipmentActivations = [];
   }
 
   create() {
@@ -139,6 +145,8 @@ export class GameScene extends Phaser.Scene {
     };
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
+    this.onBlur = () => { for (const w of this.player?.weapons || []) w.charge = 0; };
+    window.addEventListener('blur', this.onBlur);
     window.boxhead = { scene: this };
 
     if (this.mode === 'online') this.startOnline();
@@ -206,6 +214,7 @@ export class GameScene extends Phaser.Scene {
     if (source === c.clientID) return;
     if (message === PING_REQUEST) return c.sendPrivate(PING_RESPONSE, source);
     if (message === PING_RESPONSE) return this.remotes.get(source)?.pingReceived?.();
+    for (const part of message.split(CHAT_DELIM)) if (/^a\d{1,2}$/.test(part)) this.equipmentActivations.push({ index: +part.slice(1), source });
     const name = this.remotes.get(source)?.character.name || c.peers.find((p) => p.id === source)?.name || 'Someone';
     for (const line of chatLines(message)) if (line) this.hud.addMessage(`${name}: ${line}`, { chat: true });
   }
@@ -256,6 +265,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   removeRemote(id) {
+    this.equipment?.removeOwner(id);
     const remote = this.remotes.get(id);
     if (remote) {
       remote.view?.destroy();
@@ -351,8 +361,23 @@ export class GameScene extends Phaser.Scene {
   fireLocal() {
     const p = this.player;
     const w = p.weapon;
-    w.useFireAmmo();
-    const param = w.fireParam();
+    if (w.id === WeaponID.SPY) {
+      this.spy = this.spy ? null : { ...p.pos };
+      w.timeSinceFire = 0;
+      return;
+    }
+    if (w.id === WeaponID.C4 && w.chargePack) {
+      w.timeSinceFire = 0;
+      this.equipment.detonate(w.chargePack);
+      return;
+    }
+    if (w.kind === 'planter') {
+      if (!this.equipment.canPlace(p)) return;
+      // Online ammo is spent only when the server confirms placement.
+      if (this.mode === 'online') w.placementPending = 40;
+      else if (!this.equipment.placeOffline(p, w)) return;
+    } else w.useFireAmmo();
+    const param = w.fireParam(Math.random, p.speed);
     const shot = w.shoot(p, w.fireAngle(p), param);
     this.executeShot(p, shot);
     if (w.ammo) {
@@ -368,12 +393,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  deployablePlaced(d) {
+    if (d.ownerID === this.player.id) {
+      if (d.weapon.hasAmmo) d.weapon.useFireAmmo();
+      d.weapon.placementPending = 0;
+      if (!d.weapon.available) this.hud.showWarning('OUT OF AMMO!', 2000);
+      this.ui?.shop.refresh();
+    }
+    this.effects.playSound(d.kind === 2 ? 'ChargePackPlant' : d.kind === 3 ? 'ClaymorePlant' : 'BarrelPlace', d.pos);
+  }
+
   /**
    * MatchPerformance.remoteShot: replay a peer's shot from where they last
    * said they were, against our position as it was `ping` ms ago.
    */
   remoteShot(remote, { angle, param }) {
     const shooter = remote.character;
+    if (shooter.weapon.kind !== 'gun') {
+      this.executeShot(shooter, shooter.weapon.shoot(shooter, angle, param));
+      return;
+    }
     this.player.unlag(remote.ping);
     try {
       this.executeShot(shooter, shooter.weapon.shoot(shooter, angle, param));
@@ -389,11 +428,16 @@ export class GameScene extends Phaser.Scene {
   executeShot(shooter, shot) {
     const victim = this.player;
     const weapon = shooter.weapon;
+    if (weapon.kind !== 'gun') this.equipment.fire(shooter, weapon, shot);
     const distances = shot.tracers.map((t) => {
       const targets = shooter !== victim && victim.active && !victim.dead ? [victim] : [];
-      const result = traceShot(this.map, t.start, t.angle, t.altitude, t.range, targets, shooter);
+      const result = traceShot(this.map, t.start, t.angle, t.altitude, t.range, targets, shooter, { penetrates: weapon.penetrates });
       // Every ray (shotgun pellet, flame) that reaches us does the full damage.
       if (result.characters.length) this.localHurt(shooter, weapon, t.angle);
+      for (const hit of result.deployables) {
+        if (!weapon.penetrates && result.characters.length && result.characters[0].distance < hit.distance) break;
+        this.equipment.damage(hit.target, shooter, weapon.damage);
+      }
       return result.distance;
     });
     weapon.queueEffects(shot, distances);
@@ -402,6 +446,7 @@ export class GameScene extends Phaser.Scene {
   /** Character.hurt + Game.characterHurt for the local player. */
   localHurt(shooter, weapon, angle = null) {
     const p = this.player;
+    if (!p.active || p.dead) return;
     const before = p.hp;
     let lost = 0;
     this.healthChanged(p, before, () => (lost = p.hurt(Math.min(p.hp, weapon.damage))));
@@ -415,6 +460,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Game.characterDeath: kill message and the respawn countdown. */
   localDeath(killer) {
+    this.spy = null;
+    this.player.weapon.charge = 0;
     this.addKillMessage(killer, this.player);
     this.hud.showWarning('You will respawn in: [seconds]', this.player.respawnTime);
     this.forcePositionUpdate = true;
@@ -481,6 +528,12 @@ export class GameScene extends Phaser.Scene {
         if (next) this.weaponChanged(ch, true);
       }
     }
+    // A delayed placement/destruction acknowledgement can empty equipment
+    // after its reload tick has already passed (notably the last C4 pack).
+    if (ch.local && ch.weapon.isLoaded && !ch.weapon.available) {
+      const next = ch.checkAutoSwitch();
+      if (next) this.weaponChanged(ch, true);
+    }
   }
 
   /** Weapon.executeEffects. */
@@ -534,6 +587,7 @@ export class GameScene extends Phaser.Scene {
       if (ch.local) this.playReloadSound(weapon, change ? this.effects.soundLength(change) : 0);
     }
     if (!ch.local) return;
+    this.spy = null;
     if (this.mode === 'online') this.outQueue.push('0q' + padInt(weapon.id, 2));
     this.ui?.slider.update(weapon);
   }
@@ -855,6 +909,9 @@ export class GameScene extends Phaser.Scene {
   endGame(awardIDs) {
     if (this.gameOver || !this.player) return;
     this.gameOver = true;
+    this.spy = null;
+    this.equipmentActivations = [];
+    if (this.connection) this.connection.equipmentMessages = [];
     this.closeChat();
     if (this.ui?.shopOpen) this.ui.closeShop();
     this.ui?.setHudVisible(false);
@@ -969,6 +1026,17 @@ export class GameScene extends Phaser.Scene {
     const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
     this.playerView = new CharacterView(this, this.player);
+    this.equipment = new EquipmentWorld(map, {
+      localID: this.player.id,
+      online: this.mode === 'online',
+      characters: () => [this.player, ...[...this.remotes.values()].map((r) => r.character)],
+      hurt: (owner, weapon, angle) => this.localHurt(owner, weapon, angle),
+      send: (message) => this.outQueue.push(message),
+      activate: (message) => { if (this.mode === 'online') this.chatOutQueue.push(message); },
+      effect: (event) => this.effects.equipmentEffect(event),
+      placed: (d) => this.deployablePlaced(d),
+    });
+    this.equipmentView = new EquipmentView(this, this.equipment);
     // The round starts in the shop (BountyGame.showInitUI); we spawn when it closes.
     this.shop = new ShopState(this.player.stats, { freeGuns: FREE_GUNS });
     const lib = this.app?.menus?.lib;
@@ -1029,8 +1097,9 @@ export class GameScene extends Phaser.Scene {
       view?.update(alpha);
     }
     this.drawCrates();
+    this.equipmentView.update(alpha, this.player, this.spy);
     const camera = this.cameras.main;
-    this.placeCamera(this.playerView.container.x, this.playerView.container.y);
+    this.placeCamera(this.spy ? this.spy.x * CELL_WIDTH : this.playerView.container.x, this.spy ? this.spy.y * CELL_HEIGHT : this.playerView.container.y);
     this.shadows.render();
     this.effects.focus = this.player.renderPos;
     this.effects.update();
@@ -1060,14 +1129,20 @@ export class GameScene extends Phaser.Scene {
     const p = this.player;
     const ks = this.keyState;
     while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
+    // Drain after peer messages so owners and purchases exist before placements.
+    if (this.connection) while (this.connection.equipmentMessages.length) this.equipment.serverMessage(this.connection.equipmentMessages.shift());
+    for (const { index, source } of this.equipmentActivations) this.equipment.activateMine(index, source);
+    this.equipmentActivations = [];
     // ShopGame.process: death opens the shop after 3 s.
     if (Preferences.autoShop && this.autoShopTime && performance.now() >= this.autoShopTime) {
       this.autoShopTime = 0;
       this.openShop();
     }
     const captured = !!(this.ui?.shopOpen || this.ui?.menuOpen); // Game.captureInput: the character stands still
+    if (p.dead) this.spy = null;
     if (this.ui?.shopOpen) this.ui.shop.updateRespawnTime(Math.max(0, Math.ceil(p.respawnTime / 1000)), p.active, p.dead);
     if (captured) {
+      this.spy = null;
       p.moveDir = null;
       p.firing = false;
     } else if (this.chatInput === null && p.active) {
@@ -1089,11 +1164,17 @@ export class GameScene extends Phaser.Scene {
       }
       if (!typing && ks.newPress('spin')) p.dir = DIRECTIONS[(p.dir.index + 4) % 8]; // Character.spin: turn round
       p.firing = down('fire');
+      if (this.spy) {
+        const b = this.map.borderRect;
+        this.spy.x = Math.max(b.x, Math.min(b.x + b.width, this.spy.x + (dir?.dx || 0) * 0.8));
+        this.spy.y = Math.max(b.y, Math.min(b.y + b.height, this.spy.y + (dir?.dy || 0) * 0.8));
+        p.moveDir = null;
+      }
     }
     if (p.active) p.move(this.map);
     if (p.active && p.processTimers()) {
       if (!this.ui?.shopOpen) this.respawnLocal(); // the shop holds the respawn back
-    } else if (p.active && !p.dead && p.firing && p.weapon.canFire()) this.fireLocal();
+    } else if (p.weapon.fireInput(p.firing, ks.newPress('fire'), p.active && !p.dead && !captured && this.chatInput === null)) this.fireLocal();
     this.processWeapons(p);
     // AutoReload: a gun down to its last round is filled up.
     if (Preferences.autoReload && this.ui && !this.ui.shopOpen && !this.gameOver && p.active && !p.dead) {
@@ -1109,6 +1190,7 @@ export class GameScene extends Phaser.Scene {
       character.processTimers();
       this.processWeapons(character);
     }
+    this.equipment.tick();
     this.checkBountyCrates();
     if (this.mode === 'online') {
       if (p.active) this.sendUpdate();
@@ -1153,6 +1235,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   visibilityChanged() {
+    this.onBlur();
     clearInterval(this.backgroundTimer);
     this.backgroundTimer = null;
     if (document.hidden && this.mode === 'online') {
@@ -1171,6 +1254,7 @@ export class GameScene extends Phaser.Scene {
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onBlur);
     this.keyState?.destroy();
     this.ui?.destroy();
     this.ui = null;
@@ -1181,6 +1265,8 @@ export class GameScene extends Phaser.Scene {
     this.secondTimer?.remove();
     this.floodTimer?.remove();
     this.mapView?.destroy();
+    this.equipmentView?.destroy();
+    this.equipment = null;
     this.playerView?.destroy();
     for (const { view } of this.remotes.values()) view?.destroy();
     this.remotes.clear();

@@ -187,6 +187,7 @@ export class Character {
   selectWeapon(weapon) {
     if (!weapon || weapon === this.weapon) return false;
     this.refillTarget = null;
+    if (this.weapon) this.weapon.charge = 0;
     this.weapon = weapon;
     this.animSpeed = weapon.moveSpeed;
     return true;

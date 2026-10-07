@@ -68,6 +68,7 @@ export class Connection extends Emitter {
     this.room = null;
     this.joiningRoom = null;
     this.existingPickups = ''; // crates already on the map when we joined ("s", Game.existingPickupsString)
+    this.equipmentMessages = []; // placements can arrive before the map/scene is ready
     this.roomGameType = 'A';
     this.authenticated = false;
     this.pingsSent = [];
@@ -113,6 +114,7 @@ export class Connection extends Emitter {
   }
 
   endSession() {
+    this.equipmentMessages = [];
     this.clientID = null;
     this.authenticated = false;
     this.peers = [];
@@ -158,6 +160,7 @@ export class Connection extends Emitter {
   }
 
   joinRoom(name) {
+    this.equipmentMessages = [];
     this.joiningRoom = name;
     this.existingPickups = '';
     this.peers = [];
@@ -185,6 +188,7 @@ export class Connection extends Emitter {
    * maps: indexes into the bounty map list, played in order.
    */
   createRoom(name, { gameType = 'A', isPrivate = false, useCustomMaps = false, maps = [0], lives = 0 } = {}) {
+    this.equipmentMessages = [];
     this.joiningRoom = name;
     this.existingPickups = '';
     this.peers = [];
@@ -324,6 +328,7 @@ export class Connection extends Emitter {
       case 'r':
       case 'n':
       case 'o':
+        this.equipmentMessages.push(data);
         return this.emit(ServerEvent.SERVER_MESSAGE, { message: data });
       case 'p':
         return this.emit(ServerEvent.ROUND_TIME, { seconds: parseInt(data.substr(1), 10) });

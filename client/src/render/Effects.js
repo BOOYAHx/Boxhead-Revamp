@@ -65,6 +65,44 @@ export class Effects {
     return Preferences.enhanced;
   }
 
+  /** Lightweight blast sprites drawn in code; no new asset build required. */
+  equipmentEffect(event) {
+    const { type, pos } = event;
+    if (type === 'bounce') { this.playSound('Grenade_Bounce', pos); return; }
+    if (type === 'mine') { this.playSound('ClaymoreActivate', pos); return; }
+    const plasma = type === 'plasma';
+    this.playSound(plasma ? 'PlasmaCannonHit' : event.radius >= 6 ? 'ExplosionHuge' : 'ExplosionGrenade', pos);
+    const x = pos.x * CELL_WIDTH, y = pos.y * CELL_HEIGHT - (event.altitude || 0);
+    const graphic = this.scene.add.graphics().setDepth(9501);
+    const start = this.now(), life = plasma ? 280 : 650;
+    const radius = plasma ? 25 : type === 'debris' ? 25 : 28 + (event.radius || 3) * 8;
+    const enhanced = this.enhanced;
+    this.particles.push({
+      destroy: () => graphic.destroy(),
+      update: (now) => {
+        const t = (now - start) / life;
+        if (t >= 1) return false;
+        graphic.clear();
+        const r = radius * (0.2 + Math.sqrt(t));
+        if (enhanced) {
+          graphic.fillStyle(plasma ? 0x67dfff : 0xff9d42, (1 - t) * 0.12).fillEllipse(x, y, r * 3, r * 2);
+          graphic.lineStyle(2, plasma ? 0x91efff : 0xffcd8a, (1 - t) * 0.7).strokeEllipse(x, y, r * 2, r * 1.4);
+        }
+        for (let i = 0; i < 7; i++) {
+          const a = i * Math.PI * 2 / 7;
+          graphic.fillStyle(plasma ? 0x58caf1 : t < 0.3 ? 0xffa43c : 0x4f4c48, (1 - t) * 0.8);
+          graphic.fillCircle(x + Math.cos(a) * r * 0.45, y + Math.sin(a) * r * 0.3 - t * 15, r * 0.3);
+        }
+        graphic.fillStyle(plasma ? 0xd9ffff : 0xffefb0, Math.max(0, 1 - t * 3)).fillCircle(x, y, r * 0.38);
+        return true;
+      },
+    });
+    if (type === 'explosion' && Preferences.shake) {
+      const distance = Math.hypot(pos.x - this.focus.x, pos.y - this.focus.y);
+      if (distance < 10) this.scene.cameras.main.shake(180, 0.003 * (1 - distance / 10) / this.scene.cameras.main.zoom ** 2);
+    }
+  }
+
   /** TracerLine: a thin line from the muzzle that fades out in 80 ms (white; the Railgun's purple). */
   addTracer(line) {
     if (line.length <= 0) return;

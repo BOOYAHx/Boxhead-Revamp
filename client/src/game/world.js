@@ -357,6 +357,7 @@ export class GameMap {
     this.cells = new Array(width * height);
     for (let i = 0; i < this.cells.length; i++) this.cells[i] = { x: i % width, y: Math.floor(i / width), texture: 0, prop: null };
     this.props = [];
+    this.deployables = new Map();
     this.spawns = [];
     this.decals = [];
     this.backgroundColor = DEFAULT_BG_COLOR;
@@ -398,7 +399,7 @@ export class GameMap {
   }
 
   /** Solid hit shapes near a rectangle (in cells). */
-  obstaclesNear(left, top, right, bottom) {
+  obstaclesNear(left, top, right, bottom, character = null) {
     const props = new Set();
     for (let y = Math.floor(top); y <= Math.floor(bottom); y++) {
       for (let x = Math.floor(left); x <= Math.floor(right); x++) {
@@ -408,6 +409,15 @@ export class GameMap {
     }
     const shapes = [...this.borderHits];
     for (const prop of props) for (let h = prop.hit; h; h = h.next) shapes.push(h);
+    for (const d of this.deployables.values()) {
+      if (!d.solid) continue;
+      // A newly placed obstacle lets characters already inside walk out once.
+      if (d.escape.has(character)) {
+        if (d.hit.ejectCircle(character.moveHit)) continue;
+        d.escape.delete(character);
+      }
+      if (d.pos.x + d.hit.radius >= left && d.pos.x - d.hit.radius <= right && d.pos.y + d.hit.radius >= top && d.pos.y - d.hit.radius <= bottom) shapes.push(d.hit);
+    }
     return shapes;
   }
 }
@@ -553,6 +563,7 @@ export function moveCharacter(map, ch, speed) {
     Math.min(start.y, ch.pos.y) - r - 1,
     Math.max(start.x, ch.pos.x) + r + 1,
     Math.max(start.y, ch.pos.y) + r + 1,
+    ch,
   );
   const collisions = () => shapes.map((s) => s.ejectCircle(ch.moveHit)).filter(Boolean);
 
@@ -600,11 +611,13 @@ export function moveCharacter(map, ch, speed) {
  * as tall as the bullet blocks it, then collect characters closer than that.
  * Returns { distance, characters: [{ target, distance }] }.
  */
-export function traceShot(map, start, angle, altitude, maxRange, characters, shooter) {
+export function traceShot(map, start, angle, altitude, maxRange, characters, shooter, { ignoreDeployables = false, penetrates = false } = {}) {
   const dx = Math.cos(angle);
   const dy = Math.sin(angle);
   let distance = maxRange;
   let blocked = false;
+  let obstacle = null;
+  let shape = null;
   const seen = new Set();
   // Sample the ray finely enough to visit every cell it crosses.
   const stepLength = 0.25;
@@ -622,10 +635,22 @@ export function traceShot(map, start, angle, altitude, maxRange, characters, sho
       const hit = h.traceLine(start, angle, dx, dy);
       if (hit && hit.distance < distance) {
         distance = hit.distance;
+        obstacle = prop;
+        shape = h;
         blocked = true;
       }
     }
   }
+  const deployables = [];
+  if (!ignoreDeployables) for (const target of map.deployables.values()) {
+    if (!target.solid || altitude > target.height) continue;
+    // Permit the planter to fire while walking out of a newly placed object.
+    if (target.escape.has(shooter) && target.hit.ejectCircle(shooter.moveHit)) continue;
+    const hit = target.hit.traceLine(start, angle, dx, dy);
+    if (hit && hit.distance < distance) deployables.push({ target, distance: hit.distance });
+  }
+  deployables.sort((a, b) => a.distance - b.distance);
+  if (!penetrates && deployables.length) distance = deployables[0].distance;
   const hits = [];
   for (const target of characters) {
     if (target === shooter || altitude > target.height) continue;
@@ -633,7 +658,7 @@ export function traceShot(map, start, angle, altitude, maxRange, characters, sho
     if (hit && hit.distance < distance) hits.push({ target, distance: hit.distance });
   }
   hits.sort((a, b) => a.distance - b.distance);
-  return { distance, characters: hits };
+  return { distance, characters: hits, deployables: penetrates ? deployables : deployables.slice(0, 1), obstacle, shape };
 }
 
 /**

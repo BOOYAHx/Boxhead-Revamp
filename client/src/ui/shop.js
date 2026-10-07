@@ -261,7 +261,7 @@ export class ShopScreen {
     if (this.tab === 'weapons') this.updateWeaponInfo();
     if (this.tab === 'equipment') this.updateEquipmentInfo();
     const blocked = this.tab !== 'refund' && this.selected?.item.blocked;
-    this.setNotice(blocked ? 'Explosives, the Plasma Cannon and equipment are not in this version yet.' : '');
+    this.setNotice(blocked ? 'This item is not available in this version.' : '');
     if (this.tab === 'refund') this.refundPage.refresh();
   }
 

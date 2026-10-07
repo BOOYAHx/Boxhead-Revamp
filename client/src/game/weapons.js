@@ -191,8 +191,8 @@ export function saveBanks(storage = globalThis.localStorage) {
   }
 }
 
-/** Weapons this version can fire (the explosives and gadgets come later). */
-export const isImplemented = (id) => !!INFO[id] && (INFO[id].kind || 'gun') === 'gun';
+/** Turrets are not sold by the original shop or supported by the current server. */
+export const isImplemented = (id) => !!INFO[id] && id !== WeaponID.TURRET_MG && id !== WeaponID.TURRET_MORTAR;
 
 // --- stats (constants.xml) ---------------------------------------------------------------------
 
@@ -355,6 +355,9 @@ export class Weapon {
     if (id === WeaponID.PLASMA) this.display = 'PlasmaCannon';
     this.particleWait = 0; // flamer
     this.loopPlaying = false;
+    this.charge = 0;
+    this.chargePack = null;
+    this.placementPending = 0;
   }
 
   get fireDelay() {
@@ -385,7 +388,7 @@ export class Weapon {
 
   /** Can be selected (WeaponInfo.available). */
   get available() {
-    return this.hasAmmo;
+    return this.hasAmmo || !!this.chargePack;
   }
 
   get isLoaded() {
@@ -398,7 +401,24 @@ export class Weapon {
   }
 
   canFire() {
-    return this.hasAmmo && this.isLoaded;
+    return !this.placementPending && ((this.id === WeaponID.C4 && !!this.chargePack) || (this.hasAmmo && this.isLoaded));
+  }
+
+  get charged() {
+    return this.kind === 'thrown' || this.id === WeaponID.GRENADE_LAUNCHER;
+  }
+
+  /** Release-to-throw; opening a menu, dying or changing weapons cancels charging. */
+  fireInput(down, pressed, enabled = true) {
+    if (!enabled) { this.charge = 0; return false; }
+    if (this.charged) {
+      if (down) {
+        if (this.canFire()) this.charge = Math.min(25, this.charge + 1);
+        return false;
+      }
+      return this.charge > 0 && this.canFire();
+    }
+    return this.canFire() && (this.kind === 'gadget' || this.id === WeaponID.C4 ? pressed : down);
   }
 
   get flashVisible() {
@@ -439,7 +459,9 @@ export class Weapon {
   }
 
   /** getFireParam: sent after the angle in the shot packet. */
-  fireParam(random = Math.random) {
+  fireParam(random = Math.random, speed = 0) {
+    if (this.id === WeaponID.GRENADES) return Math.trunc((speed + Math.min(0.5, 0.2 + 0.02 * this.charge) * this.range / 5) * 100);
+    if (this.id === WeaponID.GRENADE_LAUNCHER) return Math.trunc((speed + Math.min(0.9, 0.4 + 0.02 * this.charge) * this.range / 10) * 100);
     if (this.akimbo) return 1 - this.fireHand;
     if (this.pellets) return shotgunCode(random);
     return 0;
@@ -452,12 +474,13 @@ export class Weapon {
   /**
    * Weapon.shoot: a shot from the shoulder at `angle`. Remote shots call this
    * too, with the angle and param the shooter sent. Returns the shot with its
-   * tracers (bullet rays); weapons that are not guns yet have none.
+   * tracers (bullet rays); projectiles and equipment use EquipmentWorld.
    */
   shoot(ch, angle, param = 0, random = Math.random) {
     if (this.akimbo) this.fireHand = param ? 1 : 0;
     this.updatePosition(ch);
     this.timeSinceFire = 0;
+    this.charge = 0;
     if (this.lights) this.lightTime = this.flashTime - 1;
     const start = { x: this.shoulder.x, y: this.shoulder.y };
     const ray = (a, range = this.range) => ({ start, angle: a, altitude: this.barrelAltitude, range });
@@ -492,7 +515,8 @@ export class Weapon {
    * whether the weapon just reloaded, and whether its loop sound should stop.
    */
   process(current = true) {
-    if (!current) this.effectsQueue.length = 0;
+    if (!current) { this.effectsQueue.length = 0; this.charge = 0; }
+    if (this.placementPending > 0) this.placementPending--;
     this.timeSinceFire++;
     this.timeSinceEffects++;
     if (this.particleWait > 0) this.particleWait--;

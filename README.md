@@ -42,7 +42,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 9 | The in-game menu (Esc): options, quit (with "leave game?"), close | **ready to test** |
 | 10 | Controls and weapon-bank setup (Options → configure controls / configure weapon banks), Auto Run and Spin keys | **ready to test** |
 | 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command) | **ready to test** |
-| later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen | |
+| 12 | Grenades, Grenade Launcher, Plasma Cannon, C4, mines, airstrikes, barrels, barricades and spy satellite | **ready to playtest** |
+| later | Turrets, team deathmatch / infected, customization screen | |
 
 ## Repository layout
 
@@ -319,7 +320,7 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
   respawn when you close it. "Auto Reload" in Options refills a gun when it is
   down to its last round.
 - Grenades, the Grenade Launcher, the Plasma Cannon and the equipment page are
-  shown faded: they come in the next step.
+  available. See Step 12 below for their controls.
 
 ### Step 9: the in-game menu
 
@@ -403,6 +404,43 @@ The client is plain static files: copy `client/` (including the generated
 `assets/game/`) to the website. Players get updates the next time they reload
 the page. From step 2 the page also needs `BBHServer.py` (the WebSocket bridge
 on port 8081) and the Python game server to be running.
+
+### Step 12: explosives and equipment
+
+Update with `git pull`, then **Ctrl+F5**. This step adds no packages or asset
+build: it uses the existing atlas/sounds and draws the new blast effects in
+JavaScript. Prices, ammo, damage and upgrades still come from your local
+`constants.xml`; free-guns mode applies to the launcher and plasma, while
+equipment keeps its purchase prices.
+
+Open **B → Equipment** to buy items; use **Q/E** or the number banks to select
+them. The controls below refer to the fire binding (Space by default).
+
+| Item | Default bank | Use |
+| --- | --- | --- |
+| Grenades / Grenade Launcher | 4 | Hold fire for distance, release to throw/fire. Grenades bounce and have a 1.5 s fuse; launcher rounds explode on impact. |
+| Plasma Cannon | 3 | Hold fire. Moving bolts hit each target once and stop at walls. |
+| C4 | 5 | Press fire to plant; press again to detonate, including when that was your last charge. |
+| Mines | 5 | Fire to plant. Enemies trigger a one-second warning before the explosion. |
+| Airstrikes | 5 | Hold and release fire to drop a beacon; the strike arrives after 2.5 s. |
+| Barrels / Barricades | 6 | Fire to place in an empty cell. Walk out of the new object; it then blocks movement and bullets. Barrels explode and can chain together. |
+| Spy Satellite | 8 | Press fire to enter/leave the camera; movement keys pan while your character stands still and remains vulnerable. |
+
+Repeat a bank key to cycle its items. Changing weapons, opening a menu/shop,
+typing chat, or leaving the window cancels a charged throw. Explosions have
+distance falloff, respect static cover and can hurt you.
+
+Online placement waits for the server's `n` acknowledgement before consuming
+ammo. This uses the existing `4`, `n`, `o`, `r`, and `a<index>;` protocol; no
+backend is bundled or replaced. A server without deployable support will not
+confirm placements. Turrets remain a later step because they are absent from
+the current shop and require additional server support.
+
+Validation: automated physics, collision, input, ammo, snapshot and scene
+tests, including simulated two-client plasma hit reporting. Browser rendering
+and a live room on your Python server still need a playtest. A useful first
+check is to place a barricade, walk out, fire at it, then try C4 and mines with
+a second player. Run the logic checks with `node --test tests/*.test.mjs`.
 
 ## Tools
 
