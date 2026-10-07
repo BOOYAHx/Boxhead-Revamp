@@ -12,8 +12,8 @@ The port is built in small steps. Each one is tested before the next starts.
 
 | Step | What you can test | Status |
 | --- | --- | --- |
-| 1 | Offline: Warehouse map with the original graphics; walk around with the original speed, collisions and animations | **ready to test** |
-| 2 | Connect through the bridge: log in, lobby, create/join rooms | next |
+| 1 | Offline: Warehouse map with the original graphics; walk around with the original speed, collisions and animations | done |
+| 2 | Connect through the bridge: log in, lobby, create/join rooms | **ready to test** |
 | 3 | Two players in a room see each other move | |
 | 4 | Shooting, damage, death and respawn | |
 | 5 | Bounty crates, score, round timer, chat | |
@@ -75,6 +75,53 @@ Things to check:
 The Warehouse floor is a stand-in: only its obstacle layout ships inside the
 SWF. From step 2 on, maps come from the map service through `BBHServer.py`,
 exactly like the Flash client.
+
+## Testing step 2 (online: login, lobby, rooms)
+
+You need three windows (PowerShell on Windows), each left open:
+
+1. **Game server**, in the folder with your server file:
+
+   ```sh
+   python bbh-server-hunter-fix_2.py
+   ```
+
+   It prints `[*] Listening on port 6123...`
+
+2. **WebSocket bridge**, in the folder with `BBHServer.py`. Your game server
+   listens on 6123 but the bridge defaults to 6124, so pass the port.
+   `--bridge-only` leaves port 8080 free for the browser client:
+
+   ```sh
+   python BBHServer.py --bridge-only --game-port 6123
+   ```
+
+   It prints `[BRIDGE] ws://127.0.0.1:8081/ -> 127.0.0.1:6123`
+
+3. **Browser client**, in this repository's `client` folder:
+
+   ```sh
+   python -m http.server 8080
+   ```
+
+Open <http://localhost:8080/> (the bridge only accepts pages from
+`localhost:8080` or `127.0.0.1:8080`). Test in two browser windows (or one
+normal and one private window) with two accounts:
+
+* Create an account, log in; wrong passwords are refused.
+* The lobby lists the players online and the open games; lobby chat reaches
+  the other window (and Flash players in the lobby).
+* Host a game, join it from the other window: both show `Players (2)` and the
+  round timer. Esc goes back to the lobby.
+
+Players can't see each other move yet; that is step 3.
+
+The map list comes from the map service through the bridge, like the Flash
+client. If it can't be reached, the lobby says so and uses the bundled
+Warehouse.
+
+If the game server runs elsewhere, edit `client/config.js` (bridge and map
+service addresses).
 
 ## Running the unit tests
 

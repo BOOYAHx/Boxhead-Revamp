@@ -34,8 +34,8 @@ export class BootScene extends Phaser.Scene {
     this.load.once('complete', () => {
       if (this.failed) return;
       registerFrames(this.textures);
-      label.setText('Ready');
-      this.scene.start('game', this.registry.get('launch') || {});
+      this.scene.start('menu');
+      this.registry.get('app').start();
     });
     this.load.start();
   }

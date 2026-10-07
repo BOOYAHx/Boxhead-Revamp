@@ -270,8 +270,10 @@ export class Connection extends Emitter {
         return this.emit(ServerEvent.AUTHENTICATE, { id, user });
       }
       case 'U': {
+        // Like the Flash client, only peers are updated: the server also sends
+        // our own handshake, in the game-room layout even inside the lobby.
         const id = data.substr(1, 3);
-        const user = id === this.clientID ? this.localUser : this.peers.find((p) => p.id === id);
+        const user = this.peers.find((p) => p.id === id);
         if (!user) return;
         if (this.room === '_') updateUserFromLobbyHandshake(user, data.substr(4));
         else updateUserFromGameHandshake(user, data.substr(4));
