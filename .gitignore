@@ -4,3 +4,6 @@ client/assets/game/
 __pycache__/
 *.pyc
 node_modules/
+
+# Real-ESRGAN, downloaded by tools/upscale_textures.py
+tools/.realesrgan/

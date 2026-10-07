@@ -50,10 +50,10 @@ export function fractalNoise(width, height, base = 4, octaves = 3, random = Math
  * Blood.prerender: noise, with the frame drawn over it (a black sheet with the
  * splat cut out), becomes the alpha of a blood-coloured bitmap at 10%.
  */
-async function bloodTextures(scene, blood) {
+async function bloodTextures(scene, blood, res) {
   const [x0, y0, x1, y1] = blood.bounds;
-  const width = Math.round(x1 - x0);
-  const height = Math.round(y1 - y0);
+  const width = Math.round((x1 - x0) * res);
+  const height = Math.round((y1 - y0) * res);
   const keys = [];
   for (const [index, markup] of blood.frames.entries()) {
     const image = await loadSvg(markup);
@@ -61,7 +61,7 @@ async function bloodTextures(scene, blood) {
     if (scene.textures.exists(key)) scene.textures.remove(key);
     const canvas = scene.textures.createCanvas(key, width, height);
     const ctx = canvas.getContext();
-    const noise = fractalNoise(width, height);
+    const noise = fractalNoise(width, height, 4 * res);
     const data = ctx.createImageData(width, height);
     for (let i = 0; i < noise.length; i++) {
       const v = Math.round(noise[i] * 255);
@@ -82,12 +82,12 @@ async function bloodTextures(scene, blood) {
 }
 
 /** Smoke graphics: the soft white streak, blurred, one texture per frame. */
-async function smokeTextures(scene, smoke) {
+async function smokeTextures(scene, smoke, res) {
   const [x0, y0, x1, y1] = smoke.bounds;
   const sigma = blurDeviation(smoke.blur);
   const pad = Math.ceil(sigma * 3);
-  const width = Math.ceil(x1 - x0) + pad * 2;
-  const height = Math.ceil(y1 - y0) + pad * 2;
+  const width = (Math.ceil(x1 - x0) + pad * 2) * res;
+  const height = (Math.ceil(y1 - y0) + pad * 2) * res;
   const frames = [];
   for (const [index, markup] of smoke.frames.entries()) {
     const image = await loadSvg(markup);
@@ -95,12 +95,12 @@ async function smokeTextures(scene, smoke) {
     if (scene.textures.exists(key)) scene.textures.remove(key);
     const canvas = scene.textures.createCanvas(key, width, height);
     const ctx = canvas.getContext();
-    ctx.filter = `blur(${sigma}px)`;
+    ctx.filter = `blur(${sigma * res}px)`;
     ctx.globalAlpha = smoke.alpha;
-    ctx.drawImage(image, pad, pad, x1 - x0, y1 - y0);
+    ctx.drawImage(image, pad * res, pad * res, (x1 - x0) * res, (y1 - y0) * res);
     canvas.refresh();
-    // The shape's own origin (0, 0) inside the padded texture.
-    frames.push({ key, originX: (pad - x0) / width, originY: (pad - y0) / height, pad: pad - x0, graphicWidth: x1 - x0, height });
+    // The shape's own origin (0, 0) inside the padded texture; sizes in game pixels, `res` texture pixels each.
+    frames.push({ key, originX: ((pad - x0) * res) / width, originY: ((pad - y0) * res) / height, pad: pad - x0, graphicWidth: x1 - x0, height: height / res, res });
   }
   return frames;
 }
@@ -202,8 +202,8 @@ function tintedBlobs(image, colors) {
 }
 
 /** One FireRenderer run: its frames as canvases with the top-left offset of each. */
-function renderFire(size, blobs, rect, offset, random) {
-  const scale = 0.014 + 0.002 * size;
+function renderFire(size, blobs, rect, offset, random, res) {
+  const scale = (0.014 + 0.002 * size) * res;
   const lastFrame = blobs.length - 1;
   const layers = [];
   const frames = [];
@@ -264,7 +264,7 @@ function renderFire(size, blobs, rect, offset, random) {
  * Fire.displays: [size][variant] -> frames { key, frame, dx, dy } on one
  * packed texture "fx:fire".
  */
-async function fireTextures(scene, fire, random = Math.random) {
+async function fireTextures(scene, fire, res, random = Math.random) {
   const image = await new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
@@ -274,7 +274,7 @@ async function fireTextures(scene, fire, random = Math.random) {
   const blobs = tintedBlobs(image, fire.colors);
   const runs = [];
   for (let size = 0; size < FIRE_SIZES; size++) {
-    runs.push(Array.from({ length: FIRE_VARIANTS }, () => renderFire(size, blobs, fire.rect, fire.offset, random)));
+    runs.push(Array.from({ length: FIRE_VARIANTS }, () => renderFire(size, blobs, fire.rect, fire.offset, random, res)));
   }
   // Pack every frame onto one canvas, a shelf per run.
   const all = runs.flat();
@@ -305,15 +305,18 @@ async function fireTextures(scene, fire, random = Math.random) {
       ctx.drawImage(f.canvas, f.px, f.py);
       const name = 'f' + n++;
       texture.add(name, 0, f.px, f.py, f.canvas.width, f.canvas.height);
-      return { key, frame: name, dx: f.x, dy: f.y };
+      return { key, frame: name, dx: f.x / res, dy: f.y / res, res };
     }),
   );
   texture.refresh();
   return Array.from({ length: FIRE_SIZES }, (_, size) => displays.slice(size * FIRE_VARIANTS, (size + 1) * FIRE_VARIANTS));
 }
 
-/** Build everything; returns { blood: [keys], smoke: [frames], fire: [size][variant][frames] } (empty when fx.json lacks them). */
-export async function buildFxTextures(scene, fx) {
+/**
+ * Build everything at `res` texture pixels per game pixel (the drawing scale,
+ * so they stay sharp with Enhanced Graphics); returns { blood: [keys], smoke: [frames], fire: [size][variant][frames] } (empty when fx.json lacks them). */
+export async function buildFxTextures(scene, fx, res = 1) {
+  res = Math.max(1, Math.round(res));
   radialTexture(scene, 'fx:glow', 128, [
     [0, 'rgba(255,255,255,1)'],
     [0.25, 'rgba(255,255,255,0.45)'],
@@ -324,11 +327,11 @@ export async function buildFxTextures(scene, fx) {
     [0.5, 'rgba(255,255,255,0.8)'],
     [1, 'rgba(255,255,255,0)'],
   ]);
-  const result = { blood: [], smoke: [], fire: [] };
+  const result = { blood: [], smoke: [], fire: [], bloodRes: res };
   try {
-    if (fx?.blood) result.blood = await bloodTextures(scene, fx.blood);
-    if (fx?.smoke) result.smoke = await smokeTextures(scene, fx.smoke);
-    if (fx?.fire) result.fire = await fireTextures(scene, fx.fire);
+    if (fx?.blood) result.blood = await bloodTextures(scene, fx.blood, res);
+    if (fx?.smoke) result.smoke = await smokeTextures(scene, fx.smoke, res);
+    if (fx?.fire) result.fire = await fireTextures(scene, fx.fire, res);
   } catch (error) {
     console.warn('Particle shapes could not be drawn:', error);
   }

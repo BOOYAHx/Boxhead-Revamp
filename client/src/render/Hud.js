@@ -7,6 +7,7 @@
 import { CELL_HEIGHT, CELL_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { placingString } from '../game/bounty.js';
 import { Preferences } from '../game/preferences.js';
+import { hdImageScale } from './assets.js';
 
 const DEPTH = 10001;
 const FONT = 'Verdana, sans-serif';
@@ -33,7 +34,7 @@ export class Hud {
     this.money = text(WINDOW_WIDTH - 4, 0, 22, { fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
     this.placing = text(WINDOW_WIDTH / 2, 0, 22, { fontStyle: 'bold' }).setOrigin(0.5, 0).setAlpha(0.85);
     this.bounty = text(WINDOW_WIDTH - 4, 42, 12, { color: BOUNTY_COLOR, fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
-    this.bountyIcon = scene.add.image(0, 44, 'img:GUI_BountyPointsIcon').setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH);
+    this.bountyIcon = scene.add.image(0, 44, 'img:GUI_BountyPointsIcon').setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH).setScale(1 / hdImageScale('GUI_BountyPointsIcon'));
     this.time = text(WINDOW_WIDTH - 4, 62, 12, { fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
     this.fps = text(WINDOW_WIDTH - 5, 82, 11).setOrigin(1, 0).setAlpha(0.8).setVisible(Preferences.showFPS);
     this.fpsUpdated = 0;

@@ -5,7 +5,7 @@
 
 import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
 import { MODELS, tintFor } from '../game/bodyParts.js';
-import { createSprite, showFrame } from './assets.js';
+import { createSprite, hdImageScale, showFrame } from './assets.js';
 import { DEPTH_CORPSES } from './MapView.js';
 import { snap } from './display.js';
 
@@ -29,8 +29,8 @@ export class CharacterView {
     this.head = createSprite(scene, 'BondHead');
     this.flash = createSprite(scene, 'MuzzleFlashSmall1').setVisible(false);
     this.container.add([this.backpack, this.bodyCustom, this.body, this.weapon, this.headCustom, this.head, this.flash]);
-    this.healthBorder = scene.add.image(0, 0, 'img:HealthBar_BarBorder').setOrigin(0, 0).setDepth(10000);
-    this.healthBar = scene.add.image(0, 0, 'img:HealthBar_Bar').setOrigin(0, 0).setDepth(10000);
+    this.healthBorder = scene.add.image(0, 0, 'img:HealthBar_BarBorder').setOrigin(0, 0).setDepth(10000).setScale(1 / hdImageScale('HealthBar_BarBorder'));
+    this.healthBar = scene.add.image(0, 0, 'img:HealthBar_Bar').setOrigin(0, 0).setDepth(10000).setScale(1 / hdImageScale('HealthBar_Bar'));
     this.shownHealth = -1;
     this.flashing = false;
     this.nameText = scene.add

@@ -7,7 +7,7 @@
 
 import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
-import { hdScale } from './assets.js';
+import { isHdTexture } from './assets.js';
 
 const MAX_SCALE = 4; // caps the canvas at 2800x1960
 
@@ -43,7 +43,7 @@ export function applyFilters(textures, isHd = () => false) {
   const crisp = Display.scale > 1;
   for (const key of textures.getTextureKeys()) {
     if (!key.startsWith('sheet:') && !key.startsWith('img:')) continue;
-    const smooth = !crisp || isHd(key.slice(6));
+    const smooth = !crisp || isHd(key);
     textures.get(key).setFilter(smooth ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST);
   }
 }
@@ -84,7 +84,7 @@ export function applyDisplay(game) {
   Display.scale = scale;
   const { width, height } = canvasSize(scale);
   game.scale.resize(width, height);
-  applyFilters(game.textures, (image) => hdScale(image) > 1);
+  applyFilters(game.textures, isHdTexture);
   for (const scene of game.scene.getScenes(false)) {
     if (!scene.sys.settings.active && !scene.sys.settings.visible) continue;
     fitCamera(scene.cameras.main);

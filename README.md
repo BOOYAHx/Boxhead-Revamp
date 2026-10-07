@@ -22,7 +22,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 8 | The shop and every gun: Dual Uzis, Shotgun, Rifle, Flamer, AK47, Minigun, Magnum (ammo, upgrades, refunds, weapon switching) | **ready to test** |
 | 9 | The in-game menu (Esc): options, quit (with "leave game?"), close | **ready to test** |
 | 10 | Controls and weapon-bank setup (Options → configure controls / configure weapon banks), Auto Run and Spin keys | **ready to test** |
-| later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen, controls and weapon-bank setup | |
+| 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command), sharper smoke, blood and fire | **ready to test** |
+| later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen | |
 
 ## Repository layout
 
@@ -272,16 +273,7 @@ Everyone still sees exactly the same 700x490 area of the map.
 
 If the game feels slow, untick Enhanced Graphics.
 
-**Higher-resolution art (optional).** The sprites are the original small
-bitmaps; Enhanced can use upscaled copies instead:
-
-1. Upscale the PNG files in `client/assets/game/sprites/` 2x, 3x or 4x with
-   an AI image upscaler (for example the free Upscayl app).
-2. Save them with the same names in `client/assets/game/sprites-hd/`.
-3. Run `python tools/hd_sprites.py`, then Ctrl+F5.
-
-It checks the sizes, restores transparency if the upscaler dropped it, and
-lists the sheets it will use. Run it again after rebuilding the assets.
+**Higher-resolution art.** See step 11.
 
 ### Step 8: the shop and the guns
 
@@ -332,6 +324,33 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
 - One fix to the original: its Controls screen put the next-weapon key on the
   "Previous Weapon" row; the rows now match what the keys do.
 
+### Step 11: high-resolution textures
+
+The original art is small bitmaps. One command makes 4x copies of every
+sprite sheet (characters, weapons, props, effects) and ground texture with
+the Real-ESRGAN AI upscaler:
+
+```
+python tools/upscale_textures.py
+```
+
+* It downloads Real-ESRGAN once (about 45 MB, into `tools/.realesrgan/`) and
+  uses your graphics card (NVIDIA, AMD or Intel with Vulkan); it takes a few
+  minutes. Then press Ctrl+F5 with **Enhanced Graphics** on in Options.
+* The bigger your game window, the sharper it gets (up to 4x the original).
+* `--model fast` is quicker and a little softer; `--model photo` is the
+  realistic model. `--redo` upscales everything again (for example after
+  trying another model).
+* Run it again after rebuilding the assets; files already done are skipped.
+  Delete `client/assets/game/sprites-hd/` and `images-hd/` to go back to the
+  original art (or untick Enhanced Graphics).
+* Smoke, blood and the flamer's fire are drawn from the original vector
+  shapes, so with Enhanced Graphics they are now made at your screen's
+  resolution too; that needs no upscaling.
+* Already have upscaled PNGs from another tool (e.g. Upscayl)? Put them in
+  `sprites-hd/` and `images-hd/` with the same names and run
+  `python tools/hd_sprites.py`.
+
 ## Running the unit tests
 
 ```sh
@@ -351,7 +370,8 @@ on port 8081) and the Python game server to be running.
 * `tools/swf_vector.py` — exports a SWF's vector shapes, sprites, buttons,
   text fields and fonts as SVG + JSON (the menus' art; `client/src/ui/flash.js`
   draws it back as a small Flash display list).
-* `tools/hd_sprites.py` — registers upscaled sprite sheets (see step 7).
+* `tools/upscale_textures.py` — makes 4x AI-upscaled copies of the sprites and ground textures (see step 11).
+* `tools/hd_sprites.py` — checks and registers upscaled art (see step 11).
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound
   (MP3/WAV) from a SWF, including embedded SWFs.
 * `tools/abc_decompile.py` — a small ActionScript 3 bytecode decompiler that

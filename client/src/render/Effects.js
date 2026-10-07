@@ -50,6 +50,7 @@ export class Effects {
     this.focus = { x: 0, y: 0 }; // where the listener is (the local player)
     const fx = scene.registry.get('fx') || {};
     this.bloodKeys = fx.blood?.length ? fx.blood : makeBloodTextures(scene);
+    this.bloodRes = fx.blood?.length ? fx.bloodRes || 1 : 1; // texture pixels per game pixel
     this.smokeFrames = fx.smoke || [];
     this.fireDisplays = fx.fire || [];
     this.sounds = new Set(); // playing sounds, stopped with the scene
@@ -82,7 +83,7 @@ export class Effects {
       const sx = x + Math.round((Math.random() - 0.5) * 15);
       const sy = y + Math.round((Math.random() - 0.5) * 10);
       const key = this.bloodKeys[Math.floor(Math.random() * this.bloodKeys.length)];
-      this.addDecal(this.scene.add.image(sx, sy, key).setDepth(DEPTH_BLOOD));
+      this.addDecal(this.scene.add.image(sx, sy, key).setDepth(DEPTH_BLOOD).setScale(1 / this.bloodRes));
     }
   }
 
@@ -159,9 +160,10 @@ export class Effects {
         if (progress >= 1) return false;
         const slide = progress * 0.1 * frame.graphicWidth;
         const scaleX = scale * (1 - progress * 0.3);
-        image.setScale(scaleX, scale);
+        const res = frame.res || 1;
+        image.setScale(scaleX / res, scale / res);
         image.setPosition(Math.cos(angle) * slide * scaleX, Math.sin(angle) * slide * scaleX);
-        if (masked < frame.graphicWidth) image.setCrop(0, 0, frame.pad + masked - slide, frame.height);
+        if (masked < frame.graphicWidth) image.setCrop(0, 0, (frame.pad + masked - slide) * res, frame.height * res);
         holder.y = start.y * CELL_HEIGHT - (altitude + time * climb);
         holder.setAlpha((1 - progress) * (1 - progress));
         return true;
@@ -228,7 +230,7 @@ export class Effects {
     const variants = this.fireDisplays[size];
     if (!variants?.length) return;
     const frames = variants[Math.floor(Math.random() * variants.length)];
-    const image = this.scene.add.image(0, 0, frames[0].key, frames[0].frame).setOrigin(0, 0);
+    const image = this.scene.add.image(0, 0, frames[0].key, frames[0].frame).setOrigin(0, 0).setScale(1 / (frames[0].res || 1));
     const born = this.now();
     this.particles.push({
       update: (now) => {

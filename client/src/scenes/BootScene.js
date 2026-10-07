@@ -2,8 +2,8 @@
 
 import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
-import { ASSET_ROOT, hdScale, loadSheets, registerFrames, setAtlas, setHdSheets } from '../render/assets.js';
-import { applyFilters, fitCamera } from '../render/display.js';
+import { ASSET_ROOT, imageURL, isHdTexture, loadSheets, registerFrames, setAtlas, setHdSheets } from '../render/assets.js';
+import { Display, applyFilters, fitCamera } from '../render/display.js';
 import { buildFxTextures } from '../render/fxTextures.js';
 
 export class BootScene extends Phaser.Scene {
@@ -20,7 +20,7 @@ export class BootScene extends Phaser.Scene {
 
   async create() {
     fitCamera(this.cameras.main);
-    // Upscaled sprite sheets (tools/hd_sprites.py), used with Enhanced Graphics.
+    // Upscaled sprite sheets and images (tools/upscale_textures.py), used with Enhanced Graphics.
     if (Preferences.enhanced) {
       setHdSheets(await fetch(ASSET_ROOT + 'hd.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
     }
@@ -32,7 +32,7 @@ export class BootScene extends Phaser.Scene {
     }
     setAtlas(atlas);
     loadSheets(this.load);
-    for (const name of manifest.images) this.load.image('img:' + name, ASSET_ROOT + 'images/' + name + '.png');
+    for (const name of manifest.images) this.load.image('img:' + name, imageURL(name));
     for (const [name, file] of Object.entries(manifest.sounds)) this.load.audio('snd:' + name, ASSET_ROOT + 'sounds/' + file);
 
     const bar = this.add.rectangle(WINDOW_WIDTH / 2 - 150, WINDOW_HEIGHT / 2, 0, 12, 0xffffff).setOrigin(0, 0.5);
@@ -46,9 +46,9 @@ export class BootScene extends Phaser.Scene {
     this.load.once('complete', async () => {
       if (this.failed) return;
       registerFrames(this.textures);
-      applyFilters(this.textures, (image) => hdScale(image) > 1);
+      applyFilters(this.textures, isHdTexture);
       label.setText('Preparing effects...');
-      this.registry.set('fx', await buildFxTextures(this, await fx));
+      this.registry.set('fx', await buildFxTextures(this, await fx, Display.scale));
       this.scene.start('menu');
       this.registry.get('app').start();
     });

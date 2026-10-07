@@ -7,17 +7,31 @@ export const ASSET_ROOT = 'assets/game/';
 
 let atlas = null;
 let hd = {}; // sheet -> scale of its upscaled copy in sprites-hd/ (tools/hd_sprites.py)
+let hdImages = {}; // image -> scale of its upscaled copy in images-hd/
 
 export function setAtlas(data) {
   atlas = data;
 }
 
-/** Use upscaled sheets (sprites-hd/hd.json: { sheet: 2 | 3 | 4 }). */
+/**
+ * Use upscaled art (hd.json: { sprites: { sheet: 2 | 3 | 4 }, images: { name: 2 | 3 | 4 } };
+ * older files list only the sheets).
+ */
 export function setHdSheets(map) {
-  hd = map || {};
+  map = map || {};
+  const split = map.sprites || map.images;
+  hd = (split ? map.sprites : map) || {};
+  hdImages = (split ? map.images : null) || {};
 }
 
 export const hdScale = (image) => hd[image] || 1;
+export const hdImageScale = (name) => hdImages[name] || 1;
+
+/** Is a loaded texture ("sheet:..." or "img:...") an upscaled copy? */
+export const isHdTexture = (key) => (key.startsWith('sheet:') ? hdScale(key.slice(6)) > 1 : key.startsWith('img:') && hdImageScale(key.slice(4)) > 1);
+
+/** Where image `name` (images/, or its upscaled copy) is loaded from. */
+export const imageURL = (name) => ASSET_ROOT + (hdImages[name] ? 'images-hd/' : 'images/') + name + '.png';
 
 export function hasSprite(name) {
   return !!atlas && name in atlas;
