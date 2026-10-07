@@ -632,3 +632,28 @@ export function traceShot(map, start, angle, altitude, maxRange, characters, sho
   hits.sort((a, b) => a.distance - b.distance);
   return { distance, characters: hits };
 }
+
+/**
+ * Map.spawnCharacter / evaluateSpawnPoint: score each spawn point by how
+ * close the enemies are (sum of 1 / distance) and pick randomly among the
+ * best ones (up to three within a factor of two of the best score).
+ */
+export function chooseSpawn(spawns, enemies, random = Math.random) {
+  let best = Infinity;
+  let candidates = [];
+  for (const spawn of spawns) {
+    let score = 0;
+    for (const enemy of enemies) score += 1 / Math.min(999, Math.max(1, Math.hypot(enemy.pos.x - spawn.x, enemy.pos.y - spawn.y)));
+    if (score < best) {
+      if (score * 2 < best) candidates = [spawn];
+      else {
+        candidates.push(spawn);
+        if (candidates.length > 3) candidates.shift();
+      }
+      best = score;
+    } else if (score === best) {
+      candidates.push(spawn);
+    }
+  }
+  return candidates.length ? candidates[Math.floor(random() * candidates.length)] : null;
+}

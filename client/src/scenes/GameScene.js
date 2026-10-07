@@ -2,19 +2,25 @@
 //   offline: bundled map, local character only (graphics / movement check)
 //   online:  a game room on the server; the map comes from the room info
 
-import { CELL_HEIGHT, CELL_WIDTH, PROCESS_INTERVAL, ROUND_END_TIME, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
+import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { byVector } from '../game/Direction.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
-import { parseMap } from '../game/world.js';
+import { parseWeaponStats, setWeaponStats, weaponName } from '../game/weapons.js';
+import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
 import { fetchMap } from '../net/MapService.js';
-import { cellPosToString, encodeMove, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
+import { cellPosToString, encodeFire, encodeHit, encodeMove, parseDeath, parseFire, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
 import { CharacterView } from '../render/CharacterView.js';
+import { Effects } from '../render/Effects.js';
 import { MapView } from '../render/MapView.js';
 
 const HUD_DEPTH = 10001;
+const KILL_MESSAGE_TIME = 8000; // ms a kill message stays in the feed
+const KILL_MESSAGES = 5;
+const PING_REQUEST = '?'; // Game.M_PING_REQUEST / M_PING_RESPONSE, sent as private chat
+const PING_RESPONSE = '!';
 const TEXT_STYLE = { fontFamily: 'Verdana, sans-serif', fontSize: '11px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.55)', padding: { x: 6, y: 3 } };
 
 export class GameScene extends Phaser.Scene {
@@ -36,10 +42,15 @@ export class GameScene extends Phaser.Scene {
     this.inbox = []; // player messages wait here until the map is loaded (Game.messageInQueue)
     this.lastSentMove = null;
     this.forcePositionUpdate = true;
+    this.outQueue = []; // game messages sent after the next movement packet (Game.gameMessageOutQueue)
+    this.killMessages = [];
+    this.lastPingCycle = 0;
+    this.pingIndex = 0;
   }
 
   create() {
-    this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,M,C,T,H,ESC');
+    setWeaponStats(parseWeaponStats(this.cache.text.get('constants') || ''));
+    this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,SPACE,J,M,C,T,H,ESC');
     this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE');
     this.debug = this.add.graphics().setDepth(9000);
     this.showHits = false;
@@ -49,10 +60,13 @@ export class GameScene extends Phaser.Scene {
     this.coords = this.add.text(WINDOW_WIDTH - 8, WINDOW_HEIGHT - 8, '', { ...TEXT_STYLE, fontFamily: 'monospace' }).setOrigin(1, 1).setScrollFactor(0).setDepth(HUD_DEPTH);
     this.info = this.add.text(8, 8, '', TEXT_STYLE).setScrollFactor(0).setDepth(HUD_DEPTH);
     this.timer = this.add.text(WINDOW_WIDTH / 2, 8, '', { ...TEXT_STYLE, fontSize: '14px' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
+    this.warning = this.add.text(WINDOW_WIDTH / 2, 120, '', { ...TEXT_STYLE, fontSize: '16px', color: '#ffdd55' }).setOrigin(0.5).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
+    this.killFeed = this.add.text(WINDOW_WIDTH - 8, 8, '', { ...TEXT_STYLE, align: 'right' }).setOrigin(1, 0).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
+    this.effects = new Effects(this);
     const help =
       this.mode === 'offline'
-        ? 'Offline practice · Arrows/WASD move · Shift strafe · M model · C colour · H head · T hit boxes · Esc menu'
-        : 'Arrows/WASD move · Shift strafe · T hit boxes · Esc back to lobby';
+        ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · M model · C colour · H head · T hit boxes · Esc menu'
+        : 'Arrows/WASD move · Space fire · Shift strafe · T hit boxes · Esc back to lobby';
     this.add.text(8, WINDOW_HEIGHT - 8, help, TEXT_STYLE).setOrigin(0, 1).setScrollFactor(0).setDepth(HUD_DEPTH);
 
     this.events.once('shutdown', () => this.shutdown());
@@ -80,7 +94,8 @@ export class GameScene extends Phaser.Scene {
     on(ServerEvent.PLAYER_MESSAGE, (message) => this.inbox.push(message));
     on(ServerEvent.MESSAGE, ({ source, message }) => {
       // Peers measure their ping to us with "?" and expect "!" back (Game.receiveMessage).
-      if (message === '?') c.sendPrivate('!', source);
+      if (message === PING_REQUEST) c.sendPrivate(PING_RESPONSE, source);
+      else if (message === PING_RESPONSE) this.remotes.get(source)?.pingReceived?.();
     });
     this.secondTimer = this.time.addEvent({ delay: 1000, loop: true, callback: () => this.second() });
     c.requestRoomInfo(this.room);
@@ -126,7 +141,13 @@ export class GameScene extends Phaser.Scene {
       const character = new Character({ id: user.id, name: user.name });
       character.firePos = { x: 0, y: 0 };
       character.strafing = true;
-      remote = { character, view: null };
+      remote = { id: user.id, character, view: null, ping: 0, pings: [], lastPing: 0, pingSentAt: 0 };
+      remote.pingReceived = () => {
+        // Player.pingReceived: average of the last three round trips.
+        remote.pings.unshift(performance.now() - remote.pingSentAt);
+        if (remote.pings.length > 3) remote.pings.pop();
+        remote.ping = remote.pings.reduce((a, b) => a + b, 0) / remote.pings.length;
+      };
       this.remotes.set(user.id, remote);
     }
     const ch = remote.character;
@@ -157,7 +178,12 @@ export class GameScene extends Phaser.Scene {
       if (source !== c.clientID) this.remoteRespawn(source, raw.substr(4, 6));
       return;
     }
-    if (source === c.clientID) return; // our own state is decided locally
+    if (source === c.clientID) {
+      // Our own health and position are decided locally; only the server's
+      // death announcement matters (it also arrives when we died ourselves).
+      if (message.charAt(0) === '7') this.characterKilled(this.player, parseDeath(message));
+      return;
+    }
     const user = c.peers.find((p) => p.id === source);
     const remote = this.remotes.get(source) || (user ? this.ensureRemote(user) : null);
     if (!remote) return;
@@ -166,16 +192,177 @@ export class GameScene extends Phaser.Scene {
       case '1':
         this.applyRemoteMove(ch, parseMove(message));
         break;
+      case '4':
+        if (ch.active && !ch.dead) this.remoteShot(remote, parseFire(message));
+        break;
       case '6': {
+        // Server-confirmed health after a hit.
         const hp = parseInt(message.substr(1), 10);
-        if (hp > 0) ch.setHealth(hp);
+        if (hp > 0) {
+          if (ch.hp > hp) this.effects.addBlood(ch, ch.hp - hp);
+          this.healthChanged(ch, ch.hp, () => ch.setHealth(hp));
+        }
         break;
       }
+      case '7':
+        this.characterKilled(ch, parseDeath(message));
+        break;
       case '8':
         this.remoteRespawn(source, message.substr(1, 6));
         break;
       default:
         break;
+    }
+  }
+
+  // --- combat ----------------------------------------------------------------------
+
+  /** Weapon.fire for the local player: shoot, show it, and tell the room. */
+  fireLocal() {
+    const p = this.player;
+    const shot = p.weapon.shoot(p, p.weapon.fireAngle(p));
+    this.executeShot(p, shot);
+    if (this.mode === 'online') {
+      this.forcePositionUpdate = true; // peers replay the shot from our exact position
+      this.outQueue.push(encodeFire(shot.angle, shot.param));
+    }
+  }
+
+  /**
+   * MatchPerformance.remoteShot: replay a peer's shot from where they last
+   * said they were, against our position as it was `ping` ms ago.
+   */
+  remoteShot(remote, { angle, param }) {
+    const shooter = remote.character;
+    this.player.unlag(remote.ping);
+    try {
+      this.executeShot(shooter, shooter.weapon.shoot(shooter, angle, param));
+    } finally {
+      this.player.unlag(0);
+    }
+  }
+
+  /**
+   * Map.executeShot: trace the bullet until a wall stops it. Only our own
+   * character can be hurt here; every client judges hits on itself.
+   */
+  executeShot(shooter, shot) {
+    const victim = this.player;
+    const targets = shooter !== victim && victim.active && !victim.dead ? [victim] : [];
+    const result = traceShot(this.map, shot.start, shot.angle, shot.altitude, shot.range, targets, shooter);
+    if (result.characters.length) this.localHurt(shooter, shooter.weapon);
+    shooter.weapon.queueEffects(shot, result.distance);
+  }
+
+  /** Character.hurt + Game.characterHurt for the local player. */
+  localHurt(shooter, weapon) {
+    const p = this.player;
+    const before = p.hp;
+    let lost = 0;
+    this.healthChanged(p, before, () => (lost = p.hurt(Math.min(p.hp, weapon.damage))));
+    if (!lost) return;
+    this.effects.addBlood(p, lost);
+    this.cameras.main.shake(200, 0.006); // ScreenShake(pos, 1.5, 200)
+    if (p.dead) this.localDeath(shooter, weapon.id);
+    if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, lost));
+  }
+
+  /** Game.characterDeath: kill message and the respawn countdown. */
+  localDeath(killer, weaponID) {
+    this.addKillMessage(killer, this.player, weaponID);
+    this.forcePositionUpdate = true;
+  }
+
+  /** A death announced by the server: "M<victim>7<killer><weapon><crates>". */
+  characterKilled(victim, { killerID, weaponID }) {
+    if (!victim || victim.dead) return; // we already showed our own death
+    if (!victim.local) this.effects.addBlood(victim, victim.hp);
+    this.healthChanged(victim, victim.hp, () => victim.setHealth(0));
+    const killer = killerID === this.connection?.clientID ? this.player : this.remotes.get(killerID)?.character;
+    this.addKillMessage(killer, victim, weaponID);
+  }
+
+  /**
+   * Run `change`, then play the hurt or death sound like
+   * PlayerCharacter.setHealth / die (one hurt sound at a time per character).
+   */
+  healthChanged(ch, before, change) {
+    change();
+    const sounds = ch.look.gender === 'Female' ? 'Female' : ch.look.gender === 'Monster' ? 'Monster' : 'Male';
+    const now = performance.now();
+    if (ch.dead && before > 0) {
+      this.effects.playSound('CorpseThud', ch.pos, 280);
+      if (!(now < ch.hurtSoundUntil)) this.playHurtSound(ch, sounds + 'HurtD' + (1 + Math.floor(Math.random() * 3)));
+    } else if (ch.hp < before && !(now < ch.hurtSoundUntil)) {
+      const variant = 'ABC'.charAt(Math.floor(Math.random() * 3)) + (1 + Math.floor(Math.random() * 3));
+      this.playHurtSound(ch, sounds + 'Hurt' + variant);
+    }
+  }
+
+  playHurtSound(ch, name) {
+    this.effects.playSound(name, ch.pos);
+    const audio = this.cache.audio.get('snd:' + name);
+    ch.hurtSoundUntil = performance.now() + (audio?.duration ? audio.duration * 1000 : 500);
+  }
+
+  /** Weapon.process: timers, then the queued muzzle flash, tracer and fire sound. */
+  processWeapon(ch) {
+    const weapon = ch.weapon;
+    const { effects, reloaded } = weapon.process(true);
+    if (effects) {
+      this.effects.addTracer(weapon.tracerLine(effects));
+      const sounds = weapon.fireSounds;
+      this.effects.playSound(sounds[Math.floor(Math.random() * sounds.length)], weapon.muzzle);
+    }
+    if (reloaded && ch.local && !ch.dead) this.effects.playSound(weapon.reloadSound, weapon.muzzle, weapon.reloadSoundDelay);
+  }
+
+  /** Game.respawnLocalCharacter: back at the safest spawn point after the countdown. */
+  respawnLocal() {
+    const spawn = this.pickSpawn();
+    this.player.respawn(spawn.x, spawn.y);
+    this.warning.setVisible(false);
+    this.effects.playSound('CharacterRespawn', this.player.pos);
+    if (this.mode === 'online') {
+      this.outQueue.push('8' + cellPosToString(this.player.pos));
+      this.forcePositionUpdate = true;
+    }
+  }
+
+  pickSpawn() {
+    const enemies = [...this.remotes.values()].map((r) => r.character).filter((ch) => ch.active && !ch.dead);
+    return chooseSpawn(this.map.spawns, enemies) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
+  }
+
+  /** KillMessage: "X killed Y", "You" for the local player. */
+  addKillMessage(killer, victim, weaponID) {
+    const name = (ch) => (!ch ? 'Someone' : ch.local ? 'You' : ch.name || 'Someone');
+    const text = !killer || killer === victim ? `${name(victim)} killed ${victim.local ? 'yourself' : 'themself'}` : `${name(killer)} killed ${name(victim)}`;
+    this.killMessages.push({ text: `${text} (${weaponName(weaponID)})`, until: performance.now() + KILL_MESSAGE_TIME });
+    while (this.killMessages.length > KILL_MESSAGES) this.killMessages.shift();
+    this.drawKillFeed();
+  }
+
+  drawKillFeed() {
+    const now = performance.now();
+    this.killMessages = this.killMessages.filter((m) => m.until > now);
+    this.killFeed.setVisible(this.killMessages.length > 0);
+    this.killFeed.setText(this.killMessages.map((m) => m.text).join('\n'));
+  }
+
+  /** Game.processRemotePlayers: ping one peer per second, each at most every 10 s. */
+  pingPeers() {
+    const now = performance.now();
+    if (now < this.lastPingCycle + PING_CYCLE_INTERVAL) return;
+    const remotes = [...this.remotes.values()];
+    if (!remotes.length) return;
+    const remote = remotes[this.pingIndex % remotes.length];
+    if (now - remote.lastPing > PING_INTERVAL || !remote.lastPing) {
+      this.lastPingCycle = now;
+      remote.lastPing = now;
+      remote.pingSentAt = now;
+      this.connection.sendPrivate(PING_REQUEST, remote.id);
+      this.pingIndex = (this.pingIndex + 1) % remotes.length;
     }
   }
 
@@ -207,16 +394,23 @@ export class GameScene extends Phaser.Scene {
     if (!remote) return;
     const cell = stringToCellPos(cellText);
     remote.character.respawn(cell.x + 0.5, cell.y + 0.5);
+    remote.character.firePos.x = remote.character.pos.x;
+    remote.character.firePos.y = remote.character.pos.y;
     remote.character.strafing = true;
     this.updateInfo();
   }
 
-  /** Game.sendUpdate: tell peers about our movement when it changes. */
+  /**
+   * Game.sendUpdate: tell peers about our movement when it changes, then send
+   * the queued game messages (shots, hits, respawns) right after it.
+   */
   sendUpdate() {
     const packet = encodeMove(this.player);
-    if (!shouldSendMove(packet, this.lastSentMove, this.forcePositionUpdate)) return;
-    this.connection.sendGameMessage(packet.text);
-    this.lastSentMove = packet;
+    if (shouldSendMove(packet, this.lastSentMove, this.forcePositionUpdate)) {
+      this.connection.sendGameMessage(packet.text);
+      this.lastSentMove = packet;
+    }
+    while (this.outQueue.length) this.connection.sendGameMessage(this.outQueue.shift());
     this.forcePositionUpdate = false;
   }
 
@@ -257,7 +451,7 @@ export class GameScene extends Phaser.Scene {
     const user = this.connection?.localUser;
     this.player = new Character({ id: this.connection?.clientID, name: user?.name || 'You', local: true });
     if (user) Object.assign(this.player.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
-    const spawn = map.spawns[Math.floor(Math.random() * map.spawns.length)] || { x: 5.5, y: 5.5 };
+    const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
     this.playerView = new CharacterView(this, this.player);
 
@@ -290,22 +484,43 @@ export class GameScene extends Phaser.Scene {
       view?.update(alpha);
     }
     this.cameras.main.centerOn(this.playerView.container.x, this.playerView.container.y);
+    this.effects.focus = this.player.renderPos;
+    this.effects.update();
+    if (this.killMessages.length) this.drawKillFeed();
+    if (this.player.dead) this.warning.setText(`You will respawn in: ${Math.max(0, Math.ceil(this.player.respawnTime / 1000))}`).setVisible(true);
     this.drawDebug();
     const p = this.player.pos;
     this.coords.setText(`x ${p.x.toFixed(2)}  y ${p.y.toFixed(2)}`);
   }
 
-  /** One 50 ms game tick: read input (LocalPlayer.processInput) and move. */
+  /**
+   * One 50 ms game tick: messages, input (LocalPlayer.processInput), firing
+   * and the respawn countdown (LocalCharacter.process), movement, weapons.
+   */
   tick() {
     const k = this.keys;
-    const h = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
-    const v = (k.DOWN.isDown || k.S.isDown ? 1 : 0) - (k.UP.isDown || k.W.isDown ? 1 : 0);
+    const p = this.player;
     while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
-    this.player.moveDir = byVector(h, v);
-    this.player.strafing = k.SHIFT.isDown;
-    this.player.move(this.map);
-    for (const { character } of this.remotes.values()) if (character.active) character.move(this.map);
-    if (this.mode === 'online' && this.player.active) this.sendUpdate();
+    if (!p.dead) {
+      const h = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
+      const v = (k.DOWN.isDown || k.S.isDown ? 1 : 0) - (k.UP.isDown || k.W.isDown ? 1 : 0);
+      p.moveDir = byVector(h, v);
+      p.strafing = k.SHIFT.isDown;
+      p.firing = k.SPACE.isDown || k.J.isDown;
+    }
+    p.move(this.map);
+    if (p.processTimers()) this.respawnLocal();
+    else if (p.active && !p.dead && p.firing && p.weapon.isLoaded) this.fireLocal();
+    this.processWeapon(p);
+    for (const { character } of this.remotes.values()) {
+      if (character.active) character.move(this.map);
+      character.processTimers();
+      this.processWeapon(character);
+    }
+    if (this.mode === 'online') {
+      if (p.active) this.sendUpdate();
+      this.pingPeers();
+    }
   }
 
   handleCustomizeKeys() {
@@ -364,6 +579,7 @@ export class GameScene extends Phaser.Scene {
     this.playerView?.destroy();
     for (const { view } of this.remotes.values()) view?.destroy();
     this.remotes.clear();
+    this.effects?.destroy();
     this.map = null;
   }
 }

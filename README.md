@@ -14,8 +14,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | --- | --- | --- |
 | 1 | Offline: Warehouse map with the original graphics; walk around with the original speed, collisions and animations | done |
 | 2 | Connect through the bridge: log in, lobby, create/join rooms | done |
-| 3 | Two players in a room see each other move | **ready to test** |
-| 4 | Shooting, damage, death and respawn | |
+| 3 | Two players in a room see each other move | done |
+| 4 | Shooting, damage, death and respawn (pistol) | **ready to test** |
 | 5 | Bounty crates, score, round timer, chat | |
 | 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | |
 | later | Shop and all weapons, deployables, team deathmatch / infected, customization screen, most wanted | |
@@ -137,6 +137,28 @@ Same setup as step 2. With two players in one game:
 * Leaving the game (Esc) removes that player from the other screen.
 * Movement uses the Flash client's packets, so a browser player and a
   Flash/Ruffle player in the same game should see each other too.
+
+### Step 4: shooting, damage, death and respawn
+
+Same setup as step 2. Nothing to rebuild: `git pull`, then Ctrl+F5 in both
+game windows. Everyone has the pistol for now (other weapons come with the
+shop). **Space** (or **J**) fires; hold it to keep firing every half second.
+
+* Shooting shows a muzzle flash and a quick white tracer line and plays the
+  pistol sound; the tracer stops at walls, crates and other tall objects.
+* A hit takes 7 health: the victim flashes red, groans, bleeds on the floor
+  and the health bar above their head shrinks (green, then orange below
+  half, red below a quarter). Both windows show the same health.
+* Walls stop bullets: hiding behind something tall keeps you safe.
+* At zero health the player falls over, both windows show "X killed Y" at
+  the top right, and the dead player sees "You will respawn in: 5…1".
+* After 5 seconds the dead player comes back with full health at the spawn
+  point farthest from the other player, and the other window sees them there.
+* Offline practice lets you fire too (there is nobody to hit).
+
+Hits are decided like in the Flash game: each player's own game checks
+whether an enemy shot hit *them* (allowing for the shooter's lag) and tells
+the server, so a browser player and a Flash player can shoot each other.
 
 The map list comes from the map service through the bridge, like the Flash
 client. If it can't be reached, the lobby says so and uses the bundled

@@ -52,3 +52,30 @@ export function shouldSendMove(packet, lastSent, forced) {
   if (!lastSent) return true;
   return packet.moveDir !== lastSent.moveDir || packet.dir !== lastSent.dir || packet.flags !== lastSent.flags;
 }
+
+/**
+ * Shot packet "4<angle3><param>" (Game.characterFire): the angle in whole
+ * degrees, 0-360. Peers replay the shot against themselves.
+ */
+export function encodeFire(angle, param = 0) {
+  let degrees = Math.trunc((angle * 180) / Math.PI);
+  while (degrees < 0) degrees += 360;
+  while (degrees > 360) degrees -= 360;
+  return '4' + padInt(degrees, 3) + param;
+}
+
+export function parseFire(message) {
+  return { angle: (Math.PI / 180) * parseInt(message.substr(1, 3), 10), param: parseInt(message.substr(4), 10) || 0 };
+}
+
+/** "6<attacker3><weapon2><damage2>": we were hit (Game.characterHurt). */
+export function encodeHit(attackerID, weaponID, damage) {
+  return '6' + attackerID + padInt(weaponID, 2) + padInt(damage, 2);
+}
+
+/** Relayed death "7<killer3><weapon2><crates>"; crates are 14-character entries. */
+export function parseDeath(message) {
+  const crates = [];
+  for (let i = 6; i + 14 <= message.length; i += 14) crates.push(message.substr(i, 14));
+  return { killerID: message.substr(1, 3), weaponID: parseInt(message.substr(4, 2), 10) || 0, crates };
+}

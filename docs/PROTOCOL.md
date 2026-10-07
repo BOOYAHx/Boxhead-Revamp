@@ -95,6 +95,11 @@ replays that shot from the shooter's last reported position against its own
 character (rewound by the shooter's ping), and if it is hit sends
 `6<shooter><weapon><damage>`. The server owns health, kills and crates.
 
+The rewind uses the shooter's ping, which every client measures to every
+other player by sending the private chat message `?` (`00<id>9<encrypted ?>`)
+and timing the `!` that comes back (average of the last three, one player
+pinged per second, each at most every 10 seconds).
+
 ### Chat encryption
 
 `9` messages are rotated: the first character `d` is a digit 1–9; the

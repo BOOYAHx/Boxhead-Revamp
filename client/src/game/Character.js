@@ -4,12 +4,14 @@
 
 import { S } from './Direction.js';
 import { HitCircle, moveCharacter } from './world.js';
-import { CHARACTER_HEIGHT, FIRE_RADIUS, MAX_SPEED, MOVE_RADIUS, MAX_STORED_POSITIONS } from './constants.js';
+import { CHARACTER_HEIGHT, FIRE_RADIUS, MAX_SPEED, MOVE_RADIUS, MAX_STORED_POSITIONS, PROCESS_INTERVAL, RESPAWN_TIME, SECOND } from './constants.js';
+import { PISTOL_ID, Weapon } from './weapons.js';
 
 const ANIM_FPS = 20;
 const SMOOTH_TIME = 200; // ms to blend a corrected remote position (Mover.SMOOTH_TIME)
 const BODY_FRAMES = 42; // frames per direction on body/head sheets
 const WEAPON_FRAMES = 9; // frames per direction (and per weapon pose) on weapon sheets
+const FLASH_TIME = Math.round(0.3 * SECOND); // ticks the body flashes red when hurt (PlayerCharacter.FLASH_TIME)
 
 /** CharacterAnimator: which frame of the 42-per-direction sheet to show. */
 export class Animator {
@@ -80,7 +82,14 @@ export class Character {
     this.animator = new Animator();
     this.storedPositions = []; // local only: lag compensation (LocalCharacter.unlag)
     this.look = { gender: 'Male', headModel: 0, headColor: 0, bodyModel: 0, bodyColor: 0 };
-    this.pose = 1; // weapon pose: 1 = one-handed (pistol)
+    this.weapon = new Weapon(PISTOL_ID);
+    this.pose = this.weapon.pose;
+    this.weaponSpeed = this.weapon.moveSpeed;
+    this.firing = false; // local only: fire key held
+    this.armor = 1;
+    this.hurtWaiting = 0; // fractional damage carried over (Character.hurt)
+    this.flashTime = 0; // ticks of red damage flash left
+    this.respawnTime = 0; // local only: ms until respawn after death
     this.renderPos = { x: 0, y: 0 }; // where it was last drawn, in cells
     this.smoothing = null;
   }
@@ -139,14 +148,78 @@ export class Character {
     }
   }
 
+  /**
+   * PlayerCharacter.setHealth. Returns 'hurt' when the health went down (the
+   * body flashes red), 'died' when it reached zero, otherwise null.
+   */
   setHealth(hp) {
+    let result = null;
+    if (hp > 0 && hp < this.hp) {
+      this.flashTime = FLASH_TIME;
+      result = 'hurt';
+    }
+    const wasDead = this.dead;
     this.hp = Math.max(0, hp);
-    if (this.hp <= 0) this.animator.die();
+    if (this.hp <= 0 && !wasDead) {
+      this.die();
+      result = 'died';
+    }
+    return result;
+  }
+
+  /** Character.die / LocalCharacter.die. */
+  die() {
+    this.hp = 0;
+    this.hurtWaiting = 0;
+    this.moveDir = null;
+    this.firing = false;
+    this.animator.die();
+    this.respawnTime = RESPAWN_TIME;
+    this.storedPositions = [];
+  }
+
+  /**
+   * Character.hurt: take `damage` (after armour), keeping fractions for the
+   * next hit. Returns the whole points of health actually lost.
+   */
+  hurt(damage) {
+    if (this.hp <= 0) return 0;
+    const taken = Math.max(0, Math.min(this.hp - this.hurtWaiting, damage / this.armor));
+    this.hurtWaiting += taken + 0.0001;
+    const lost = Math.trunc(this.hurtWaiting);
+    this.hurtWaiting -= lost;
+    if (lost <= 0) return 0;
+    this.setHealth(this.hp - lost);
+    return lost;
+  }
+
+  /**
+   * LocalCharacter.unlag: move the bullet hit circle to where we were `ping`
+   * ms ago, so shots are judged against what the shooter saw. unlag(0) restores it.
+   */
+  unlag(ping) {
+    if (!ping || !this.storedPositions.length) {
+      this.fireHit.pos = this.pos;
+      return;
+    }
+    const index = Math.max(0, Math.min(this.storedPositions.length - 1, Math.trunc(ping / PROCESS_INTERVAL)));
+    this.fireHit.pos = this.storedPositions[index];
+  }
+
+  /** Per-tick timers (PlayerCharacter.process, LocalCharacter.process). Returns true when it is time to respawn. */
+  processTimers() {
+    if (this.flashTime > 0) this.flashTime--;
+    if (!this.dead || !this.local) return false;
+    this.respawnTime -= PROCESS_INTERVAL;
+    return this.respawnTime <= 0;
   }
 
   respawn(x, y) {
     this.setPosition(x, y);
     this.hp = this.maxHp;
+    this.hurtWaiting = 0;
+    this.flashTime = 0;
+    this.respawnTime = 0;
     this.moveDir = null;
     this.animator.name = null;
     this.animator.idle();
