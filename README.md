@@ -22,7 +22,7 @@ The port is built in small steps. Each one is tested before the next starts.
 | 8 | The shop and every gun: Dual Uzis, Shotgun, Rifle, Flamer, AK47, Minigun, Magnum (ammo, upgrades, refunds, weapon switching) | **ready to test** |
 | 9 | The in-game menu (Esc): options, quit (with "leave game?"), close | **ready to test** |
 | 10 | Controls and weapon-bank setup (Options → configure controls / configure weapon banks), Auto Run and Spin keys | **ready to test** |
-| 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command), sharper smoke, blood and fire | **ready to test** |
+| 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command) | **ready to test** |
 | later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen | |
 
 ## Repository layout
@@ -344,9 +344,9 @@ python tools/upscale_textures.py
 * Run it again after rebuilding the assets; files already done are skipped.
   Delete `client/assets/game/sprites-hd/` and `images-hd/` to go back to the
   original art (or untick Enhanced Graphics).
-* Smoke, blood and the flamer's fire are drawn from the original vector
-  shapes, so with Enhanced Graphics they are now made at your screen's
-  resolution too; that needs no upscaling.
+* Rebuild the assets once more first: the build now also extracts the
+  characters' shadows, which were missing (the original stores them in a way
+  the extractor didn't read).
 * Already have upscaled PNGs from another tool (e.g. Upscayl)? Put them in
   `sprites-hd/` and `images-hd/` with the same names and run
   `python tools/hd_sprites.py`.

@@ -124,7 +124,8 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu):
         with Image.open(os.path.join(src_dir, file)) as f:
             sizes[name] = f.size
         done = os.path.join(dest_dir, file)
-        if not redo and os.path.exists(done):
+        # Skip files already done, unless the asset build has replaced the original since.
+        if not redo and os.path.exists(done) and os.path.getmtime(done) >= os.path.getmtime(os.path.join(src_dir, file)):
             with Image.open(done) as f:
                 if f.width % sizes[name][0] == 0 and f.width // sizes[name][0] in (2, 3, 4):
                     continue

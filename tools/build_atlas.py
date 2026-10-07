@@ -97,9 +97,13 @@ def parse_body(lines, start, name):
 
 
 def red_to_alpha(img):
-    r = img.convert('RGBA').split()[0]
+    """A black silhouette from a shadow bitmap: white-on-black ones use their red
+    channel; black ones drawn with transparency (Character_Shadow) their alpha."""
+    rgba = img.convert('RGBA')
+    r, a = rgba.split()[0], rgba.split()[3]
+    mask = a if r.getextrema()[1] == 0 and a.getextrema()[0] < 255 else r
     black = Image.new('RGBA', img.size, (0, 0, 0, 0))
-    black.putalpha(r)
+    black.putalpha(mask)
     return black
 
 

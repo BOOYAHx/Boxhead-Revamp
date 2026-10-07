@@ -3,7 +3,7 @@
 import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
 import { ASSET_ROOT, imageURL, isHdTexture, loadSheets, registerFrames, setAtlas, setHdSheets } from '../render/assets.js';
-import { Display, applyFilters, fitCamera } from '../render/display.js';
+import { applyFilters, fitCamera } from '../render/display.js';
 import { buildFxTextures } from '../render/fxTextures.js';
 
 export class BootScene extends Phaser.Scene {
@@ -48,7 +48,9 @@ export class BootScene extends Phaser.Scene {
       registerFrames(this.textures);
       applyFilters(this.textures, isHdTexture);
       label.setText('Preparing effects...');
-      this.registry.set('fx', await buildFxTextures(this, await fx, Display.scale));
+      // Built at 1x: at the drawing scale they upset the shadow layer's drawing
+      // on some graphics drivers (a grey box stamped into the ground).
+      this.registry.set('fx', await buildFxTextures(this, await fx, 1));
       this.scene.start('menu');
       this.registry.get('app').start();
     });
