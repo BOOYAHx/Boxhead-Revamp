@@ -700,8 +700,11 @@ export class TextField extends DisplayObject {
     const family = def.fontFamily ? `"${def.fontFamily}", ` : '';
     Object.assign(box.style, {
       boxSizing: 'border-box',
+      display: 'block', // an inline input would sit on an invisible text baseline, a few pixels low
       width: '100%',
-      height: '100%',
+      // A one-line input is one line tall plus Flash's 2px gutter, so the text sits 2px from
+      // the top like Flash's, instead of being centred in the whole box by the browser.
+      height: this.input && !def.multiline ? `${2 + lineHeight}px` : '100%',
       margin: '0',
       padding: `2px ${2 + (def.rightMargin || 0)}px 0 ${2 + (def.leftMargin || 0) + (def.indent || 0)}px`,
       font: `${def.italic ? 'italic ' : ''}${def.bold ? 'bold ' : ''}${size}px ${family}Arial, sans-serif`,

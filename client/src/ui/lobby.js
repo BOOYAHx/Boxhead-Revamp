@@ -683,10 +683,17 @@ export class LobbyScreen {
     label.el.style.pointerEvents = 'none';
     win.addChild(label);
     const nameBox = win.children.find((c) => c.className === 'MMOcha.lobby.InnerBox' && Math.abs(c.y + c.height / 2 - (this.roomName.y + 6)) < 8);
-    const bx = nameBox ? nameBox.x : this.roomName.x - 4;
-    const width = nameBox ? nameBox.width : 150;
+    // The dropdown lines up with the room name box, but never runs into its own label.
+    const labelField = label.child('_optionField');
+    const measure = document.createElement('canvas').getContext('2d');
+    if (labelField) measure.font = labelField.box.style.font;
+    const labelRight = labelField ? label.x + labelField.x + labelField.def.bounds[0] + 2 + measure.measureText(labelField.text).width + 6 : 0;
+    const left = nameBox ? nameBox.x : this.roomName.x - 4;
+    const right = left + (nameBox ? nameBox.width : 150);
+    const bx = Math.max(left, labelRight);
+    const width = right - bx;
     const rowHeight = Math.max(12, nameBox ? Math.round(nameBox.height) : 14);
-    const by = label.y + 1;
+    const by = label.y - 1; // the row text on the label's baseline
     const g = (attrs) => {
       const el = document.createElementNS(SVGNS, attrs.tag);
       for (const [k, v] of Object.entries(attrs)) if (k !== 'tag' && k !== 'text') el.setAttribute(k, v);
