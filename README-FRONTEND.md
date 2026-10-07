@@ -45,6 +45,9 @@ Back button to return from the game to the homepage.
   (`client/assets/site/hunters-logo.png`, cut out of its white background).
   It appears in the header, on the shutter badge and on the wanted poster.
   The favicon is Bambo's head.
+- **Title:** the hero shows the Boxhead: Bounty Hunter title logo
+  (`client/assets/site/boxhead-title.png`), cut out and recoloured for the dark
+  page: BOXHEAD in off-white, BOUNTY HUNTER in red.
 - **Font:** Anton for all text. It is the closest free match to the heavy,
   condensed lettering of the game's main menu. Headings get the menu's
   scratched, worn look. The game's menu text is drawn artwork, not a font,
