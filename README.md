@@ -56,9 +56,11 @@ This writes `client/assets/game/` (about 13 MB): baked sprite sheets plus
 ## Testing step 1 (offline)
 
 ```sh
-cd client
-python3 -m http.server 8080
+python3 tools/serve.py
 ```
+
+(On Windows: `python tools\serve.py`.) It serves `client/` on port 8080 with
+browser caching turned off, so a reload always runs the newest files.
 
 Open <http://localhost:8080/>. You spawn at a random spawn point on Warehouse.
 
@@ -99,10 +101,10 @@ You need three windows (PowerShell on Windows), each left open:
 
    It prints `[BRIDGE] ws://127.0.0.1:8081/ -> 127.0.0.1:6123`
 
-3. **Browser client**, in this repository's `client` folder:
+3. **Browser client**, in this repository's folder:
 
    ```sh
-   python -m http.server 8080
+   python tools/serve.py
    ```
 
 Open <http://localhost:8080/> (the bridge only accepts pages from
@@ -114,6 +116,17 @@ normal and one private window) with two accounts:
   the other window (and Flash players in the lobby).
 * Host a game, join it from the other window: both show `Players (2)` and the
   round timer. Esc goes back to the lobby.
+
+### Troubleshooting
+
+* **Old behaviour after downloading a new version:** use `tools/serve.py`
+  (not `python -m http.server`, which lets the browser cache old files) and
+  press Ctrl+F5 in each game window.
+* **The other player is missing:** the player list in the top-left corner
+  shows `(not seen yet)` next to anyone whose position hasn't arrived.
+  Check that both windows show the same game name there.
+* **Accounts:** they live in the game server's `users.db`. Use "Create
+  account" on the login screen; the same account can't be logged in twice.
 
 ### Step 3: seeing each other move
 

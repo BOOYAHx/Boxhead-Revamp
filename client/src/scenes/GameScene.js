@@ -54,6 +54,10 @@ export class GameScene extends Phaser.Scene {
     this.add.text(8, WINDOW_HEIGHT - 8, help, TEXT_STYLE).setOrigin(0, 1).setScrollFactor(0).setDepth(HUD_DEPTH);
 
     this.events.once('shutdown', () => this.shutdown());
+    // Browsers stop drawing hidden or fully covered windows. Keep the network
+    // side running so other players still see us (and we keep their state).
+    this.onVisibility = () => this.visibilityChanged();
+    document.addEventListener('visibilitychange', this.onVisibility);
     window.boxhead = { scene: this };
 
     if (this.mode === 'online') this.startOnline();
@@ -202,6 +206,7 @@ export class GameScene extends Phaser.Scene {
     const cell = stringToCellPos(cellText);
     remote.character.respawn(cell.x + 0.5, cell.y + 0.5);
     remote.character.strafing = true;
+    this.updateInfo();
   }
 
   /** Game.sendUpdate: tell peers about our movement when it changes. */
@@ -236,7 +241,8 @@ export class GameScene extends Phaser.Scene {
   updateInfo() {
     if (this.mode !== 'online') return;
     const c = this.connection;
-    const names = [c.localUser?.name || 'You', ...c.peers.map((p) => p.name || '…')];
+    const peerName = (p) => (p.name || '…') + (this.map && !this.remotes.get(p.id)?.character.active ? ' (not seen yet)' : '');
+    const names = [c.localUser?.name || 'You', ...c.peers.map(peerName)];
     window.boxhead && (window.boxhead.remotes = this.remotes);
     this.info.setText([`${this.room}${this.mapName ? ' · ' + this.mapName : ''}`, `Players (${names.length}): ${names.join(', ')}`].join('\n'));
   }
@@ -335,7 +341,20 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  visibilityChanged() {
+    clearInterval(this.backgroundTimer);
+    this.backgroundTimer = null;
+    if (document.hidden && this.mode === 'online') {
+      this.input.keyboard.resetKeys(); // keys released while hidden would otherwise stay down
+      this.backgroundTimer = setInterval(() => {
+        if (this.map) this.tick();
+      }, PROCESS_INTERVAL);
+    }
+  }
+
   shutdown() {
+    document.removeEventListener('visibilitychange', this.onVisibility);
+    clearInterval(this.backgroundTimer);
     for (const off of this.unsubscribe) off();
     this.unsubscribe = [];
     this.secondTimer?.remove();
