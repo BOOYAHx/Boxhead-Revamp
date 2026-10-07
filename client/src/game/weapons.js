@@ -144,6 +144,53 @@ const INFO = {
   [WeaponID.PLASMA]: { ...TWO_HAND, kind: 'projectile', bank: 3, priority: 1, barrelDistance: 0.7, sprite: 'PlasmaCannon', displays: ['PlasmaCannon', 'PlasmaCannonLit'], fireSounds: fireSounds('PlasmaCannon'), reloadSound: 'PlasmaCannonReload', changeSound: 'ChangeWeapon3', smokeSize: 1.6, smokeDistance: 0, particles: 'none', lights: true },
 };
 
+// Weapon banks (WeaponInfo.bankID / bankPriority): which number key a
+// weapon is under and its place there. The Weapon Banks screen changes them;
+// they are saved in the browser.
+const BANKS_KEY = 'bbh.banks';
+const defaultLayout = () => Object.fromEntries(Object.entries(INFO).map(([id, i]) => [id, { bank: i.bank, priority: i.priority }]));
+let bankLayout = defaultLayout();
+
+export const weaponBank = (id) => bankLayout[id]?.bank ?? 1;
+export const weaponBankPriority = (id) => bankLayout[id]?.priority ?? 0;
+
+/** WeaponInfo.defaultBanks. */
+export function defaultBanks() {
+  bankLayout = defaultLayout();
+}
+
+/** Set every weapon's bank and place (WeaponBanksScreen.bake): banks[1..8] = [weapon ids, top first]. */
+export function setBankLayout(banks) {
+  banks.forEach((ids, bank) => (ids || []).forEach((id, priority) => (bankLayout[id] = { bank, priority })));
+}
+
+/** WeaponInfo.loadBanks. */
+export function loadBanks(storage = globalThis.localStorage) {
+  defaultBanks();
+  try {
+    const saved = JSON.parse(storage?.getItem(BANKS_KEY) || 'null');
+    if (!saved || !Array.isArray(saved.bankIDs)) return;
+    saved.bankIDs.forEach((bank, id) => {
+      if (!bankLayout[id] || !Number.isInteger(bank) || bank < 1 || bank > NUM_BANKS) return;
+      bankLayout[id].bank = bank;
+      const priority = saved.bankPriorities?.[id];
+      if (Number.isFinite(priority)) bankLayout[id].priority = priority;
+    });
+  } catch {
+    // unreadable storage: keep the defaults
+  }
+}
+
+/** WeaponInfo.saveBanks. */
+export function saveBanks(storage = globalThis.localStorage) {
+  const ids = Array.from({ length: NUM_WEAPONS }, (_, id) => id);
+  try {
+    storage?.setItem(BANKS_KEY, JSON.stringify({ bankIDs: ids.map(weaponBank), bankPriorities: ids.map(weaponBankPriority) }));
+  } catch {
+    // storage unavailable
+  }
+}
+
 /** Weapons this version can fire (the explosives and gadgets come later). */
 export const isImplemented = (id) => !!INFO[id] && (INFO[id].kind || 'gun') === 'gun';
 
@@ -277,7 +324,8 @@ export class Weapon {
   constructor(id = PISTOL_ID, { remote = false } = {}) {
     const info = INFO[id] || INFO[PISTOL_ID];
     const stats = weaponStatsFor(id);
-    Object.assign(this, BASE, info);
+    const { bank, priority, ...presentation } = info; // banks come from the bank layout (getters below)
+    Object.assign(this, BASE, presentation);
     this.id = id;
     this.name = stats.name;
     this.shortName = stats.shortName;
@@ -317,6 +365,14 @@ export class Weapon {
   set fireDelay(seconds) {
     this._fireDelay = seconds;
     this.reloadTime = Math.trunc(seconds * SECOND + 1e-9);
+  }
+
+  get bank() {
+    return weaponBank(this.id);
+  }
+
+  get priority() {
+    return weaponBankPriority(this.id);
   }
 
   get bankID() {

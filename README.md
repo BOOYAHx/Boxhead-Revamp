@@ -21,6 +21,7 @@ The port is built in small steps. Each one is tested before the next starts.
 | 7 | Graphics: "Enhanced Graphics" (sharper picture, soft shadows, light and sparks) or "Classic" | done |
 | 8 | The shop and every gun: Dual Uzis, Shotgun, Rifle, Flamer, AK47, Minigun, Magnum (ammo, upgrades, refunds, weapon switching) | **ready to test** |
 | 9 | The in-game menu (Esc): options, quit (with "leave game?"), close | **ready to test** |
+| 10 | Controls and weapon-bank setup (Options → configure controls / configure weapon banks), Auto Run and Spin keys | **ready to test** |
 | later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen, controls and weapon-bank setup | |
 
 ## Repository layout
@@ -314,6 +315,22 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
 - **quit** asks "leave game?" first; quitting goes back to the lobby (or to the
   main menu from offline practice).
 - Esc still closes the chat line or the shop first when one is open.
+
+### Step 10: controls and weapon banks
+
+- In **Options** (main menu or Esc menu), **configure controls** lists every
+  action with two keys. Click a key, then press the new one (Esc, Enter and `
+  cancel). A key taken from another action is removed there. **reset** puts the
+  original keys back; **close** saves them in the browser.
+- **configure weapon banks**: drag weapons between the eight banks (a bank
+  takes at most three, like the original); higher in a list is picked first.
+  **close** saves; the change applies straight away in a game.
+- New keys from the original: **Auto Run** (Control or I: keep running while
+  the direction keys only aim) and **Turn 180** (C or L). Offline practice's
+  colour key moved from C to V.
+- The shop and the Tab scoreboard follow your keys too.
+- One fix to the original: its Controls screen put the next-weapon key on the
+  "Previous Weapon" row; the rows now match what the keys do.
 
 ## Running the unit tests
 

@@ -160,6 +160,14 @@ export class Character {
     return weapon;
   }
 
+  /** Re-sort the banks and Q/E order after the bank layout changed. */
+  rebuildBanks() {
+    const weapons = this.weapons;
+    this.weapons = [];
+    this.banks = {};
+    for (const weapon of weapons) this.pickupWeapon(weapon);
+  }
+
   /** Every weapon, with unlimited ammo, for other players (pickupRemoteWeapons). */
   pickupRemoteWeapons() {
     for (let id = 0; id < NUM_WEAPONS; id++) if (!this.weaponByID(id)) this.pickupWeapon(new Weapon(id, { remote: true }));

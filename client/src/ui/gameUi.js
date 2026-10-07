@@ -5,6 +5,7 @@
 // over the game canvas.
 
 import { Stage } from './flash.js';
+import { createControlsScreen, createWeaponBanksScreen } from './configScreens.js';
 import { createOptionsScreen } from './menus.js';
 import { ShopScreen } from './shop.js';
 
@@ -42,7 +43,7 @@ export class GameUi {
     this.shop = shopState ? new ShopScreen(lib, shopState, handlers) : null;
     this.shopOpen = false;
     this.menu = null; // the Esc menu while it is open
-    this.menuScreen = null; // what it shows: the menu, the options or the quit check
+    this.screens = []; // the menu and the screens opened from it, the last one showing
     this.setHudVisible(false);
   }
 
@@ -72,32 +73,36 @@ export class GameUi {
       button.onClick(action);
     }
     this.stage.addChild(menu);
-    this.menuScreen = menu;
+    this.screens = [menu];
+  }
+
+  get menuScreen() {
+    return this.screens[this.screens.length - 1] || null;
   }
 
   closeMenu() {
     if (!this.menu) return;
-    for (const screen of new Set([this.menuScreen, this.menu])) {
+    for (const screen of this.screens) {
       this.stage.removeChild(screen);
       screen.destroy();
     }
     this.menu = null;
-    this.menuScreen = null;
+    this.screens = [];
   }
 
-  /** Screen.showSubscreen: the menu hides while the subscreen is up. */
+  /** Screen.showSubscreen: the screen below hides while the subscreen is up. */
   showSubscreen(screen) {
-    this.menu.visible = false;
-    this.menuScreen = this.stage.addChild(screen);
+    this.menuScreen.visible = false;
+    this.screens.push(this.stage.addChild(screen));
   }
 
-  /** Screen.subscreenClose: back to the menu. */
+  /** Screen.subscreenClose: back to the screen below. */
   closeSubscreen() {
-    if (!this.menu || this.menuScreen === this.menu) return;
-    this.stage.removeChild(this.menuScreen);
-    this.menuScreen.destroy();
-    this.menuScreen = this.menu;
-    this.menu.visible = true;
+    if (this.screens.length < 2) return;
+    const screen = this.screens.pop();
+    this.stage.removeChild(screen);
+    screen.destroy();
+    this.menuScreen.visible = true;
   }
 
   showOptions() {
@@ -105,6 +110,14 @@ export class GameUi {
       createOptionsScreen(this.lib, {
         changed: () => this.handlers.preferencesChanged(),
         close: () => this.closeSubscreen(),
+        controls: () => this.showSubscreen(createControlsScreen(this.lib, { close: () => this.closeSubscreen() })),
+        weapons: () =>
+          this.showSubscreen(
+            createWeaponBanksScreen(this.lib, {
+              close: () => this.closeSubscreen(),
+              changed: () => this.handlers.banksChanged?.(),
+            }),
+          ),
       }),
     );
   }

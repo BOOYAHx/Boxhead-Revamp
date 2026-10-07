@@ -2,6 +2,7 @@
 // choice, connecting, login/register (MMOchaLogin), how to play, options and
 // the lobby (lobby.js). Each screen follows its ActionScript class.
 
+import { createControlsScreen, createWeaponBanksScreen } from './configScreens.js';
 import { FlashLibrary, Stage } from './flash.js';
 import { LobbyScreen } from './lobby.js';
 import { installWidgets } from './widgets.js';
@@ -141,6 +142,7 @@ export class FlashMenus {
   }
 
   closeSubscreen() {
+    this.closeConfig(null);
     for (const screen of [this.subscreen, this.login_]) {
       if (!screen) continue;
       this.stage.removeChild(screen);
@@ -378,12 +380,30 @@ export class FlashMenus {
   options() {
     this.ensureMainMenu();
     this.buttonsPanel.visible = false;
-    this.subscreen = this.stage.addChild(
+    const options = (this.subscreen = this.stage.addChild(
       createOptionsScreen(this.lib, {
         changed: () => this.handlers.preferencesChanged?.(),
         close: () => this.closeSubscreen(),
+        controls: () => this.showConfig(options, createControlsScreen(this.lib, { close: () => this.closeConfig(options) })),
+        weapons: () => this.showConfig(options, createWeaponBanksScreen(this.lib, { close: () => this.closeConfig(options) })),
       }),
-    );
+    ));
+  }
+
+  /** Screen.showSubscreen from the options: Controls or Weapon Banks in its place. */
+  showConfig(options, screen) {
+    this.closeConfig(options);
+    options.visible = false;
+    this.configScreen = this.stage.addChild(screen);
+  }
+
+  closeConfig(options) {
+    if (this.configScreen) {
+      this.stage.removeChild(this.configScreen);
+      this.configScreen.destroy();
+      this.configScreen = null;
+    }
+    if (options) options.visible = true;
   }
 
   // --- lobby ------------------------------------------------------------------------------
@@ -440,7 +460,7 @@ export class FlashMenus {
  * OptionsScreen (from the main menu and the in-game menu): the game options,
  * saved in the browser. changed() after every change, close() for "close".
  */
-export function createOptionsScreen(lib, { changed: onChange, close: onClose }) {
+export function createOptionsScreen(lib, { changed: onChange, close: onClose, controls = null, weapons = null }) {
   const screen = lib.create('boxhead.ui.screen.OptionsScreen');
   const ticks = {
     autoShopTickBox: ['Open shop on death', 'autoShop'],
@@ -485,12 +505,13 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose }) 
   footsteps.on('change', changed);
   for (const { tick } of extras) tick.on('change', changed);
   for (const name of Object.keys(ticks)) screen.child(name)?.on('change', changed);
-  // Key and weapon-bank configuration are not ported yet.
-  for (const [name, text] of [['controlsButton', 'configure controls'], ['weaponsButton', 'configure weapon banks']]) {
+  // OptionsScreen: the Controls and Weapon Banks screens.
+  for (const [name, text, open] of [['controlsButton', 'configure controls', controls], ['weaponsButton', 'configure weapon banks', weapons]]) {
     const button = screen.child(name);
     button.text = text;
     button.align('left');
-    button.disable();
+    if (open) button.onClick(() => open());
+    else button.disable();
   }
   const reset = screen.child('resetButton');
   reset.text = 'reset';

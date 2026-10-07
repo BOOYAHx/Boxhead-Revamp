@@ -1,13 +1,17 @@
 // Boxhead: Bounty Hunter, browser edition.
 
 import { App } from './App.js';
+import { loadBindings } from './game/controls.js';
 import { Preferences, isSaved, loadPreferences } from './game/preferences.js';
+import { loadBanks } from './game/weapons.js';
 import { Display, applyDisplay, canvasSize, sharpenText, softwareRendering, wantedScale } from './render/display.js';
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
 
 loadPreferences();
+loadBindings(); // the Controls screen's keys
+loadBanks(); // the Weapon Banks screen's layout
 // Enhanced Graphics starts off on computers drawing without a graphics card.
 if (!isSaved('enhanced') && softwareRendering()) Preferences.enhanced = false;
 Display.scale = wantedScale();

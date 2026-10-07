@@ -3,7 +3,8 @@
 //   online:  a game room on the server; the map comes from the room info
 
 import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, ROUND_START_TIME, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
-import { byVector } from '../game/Direction.js';
+import { DIRECTIONS, byVector } from '../game/Direction.js';
+import { KeyState, isKey } from '../game/controls.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
 import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
@@ -81,7 +82,9 @@ export class GameScene extends Phaser.Scene {
   create() {
     setWeaponStats(parseWeaponStats(this.cache.text.get('constants') || ''));
     fitCamera(this.cameras.main);
-    this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,SPACE,J,M,C,T,H,ESC,TAB,Q,E,R,DELETE,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT');
+    // Game keys follow the player's bindings (game/controls.js); these are the fixed ones.
+    this.keys = this.input.keyboard.addKeys('M,V,T,H,ESC');
+    this.keyState = new KeyState();
     this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE,TAB');
     this.debug = this.add.graphics().setDepth(9000);
     this.showHits = false;
@@ -94,8 +97,8 @@ export class GameScene extends Phaser.Scene {
     this.hud = new Hud(this);
     const help =
       this.mode === 'offline'
-        ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · B shop · R refill · M model · C colour · H head · T hit boxes · Esc menu'
-        : 'Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · B shop · R refill · Enter chat · Tab scores · Esc menu';
+        ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · C spin · Ctrl auto-run · B shop · R refill · M model · V colour · H head · T hit boxes · Esc menu'
+        : 'Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · C spin · Ctrl auto-run · B shop · R refill · Enter chat · Tab scores · Esc menu';
     // Not in the original: a short reminder of the keys that fades after a while.
     this.help = this.add
       .text(4, 4, help, { ...TEXT_STYLE, fontSize: '10px', backgroundColor: 'rgba(0,0,0,0.4)', wordWrap: { width: 260 } })
@@ -112,13 +115,13 @@ export class GameScene extends Phaser.Scene {
     this.onKeyDown = (event) => {
       if (this.ui?.menuOpen) return; // the Esc menu has the keyboard
       // ShopGame.process: B / N open and close the shop.
-      if (this.ui && this.chatInput === null && !this.gameOver && !event.repeat && (event.code === 'KeyB' || event.code === 'KeyN')) {
+      if (this.ui && this.chatInput === null && !this.gameOver && !event.repeat && isKey('shop', event.keyCode)) {
         if (this.ui.shopOpen) this.closeShop();
         else this.openShop();
         return;
       }
       if (this.ui?.shopOpen && this.chatInput === null) {
-        if (event.code !== 'Escape' && event.code !== 'KeyB' && event.code !== 'KeyN' && this.ui.shop.keyDown(event)) event.preventDefault();
+        if (event.code !== 'Escape' && !isKey('shop', event.keyCode) && this.ui.shop.keyDown(event)) event.preventDefault();
         return;
       }
       this.chatKey(event);
@@ -533,19 +536,15 @@ export class GameScene extends Phaser.Scene {
     this.ui?.slider.update(weapon);
   }
 
-  /** Q/E, 1-8 (LocalPlayer.processInput). */
+  /** Previous / next weapon and the eight banks (LocalPlayer.processInput). */
   handleWeaponKeys() {
     const p = this.player;
-    const k = this.keys;
-    const press = (key) => Phaser.Input.Keyboard.JustDown(key);
+    const press = (action) => this.keyState.newPress(action);
     let changed = null;
-    if (press(k.Q)) changed = p.prevWeapon();
-    if (press(k.E)) changed = p.nextWeapon() || changed;
-    [k.ONE, k.TWO, k.THREE, k.FOUR, k.FIVE, k.SIX, k.SEVEN, k.EIGHT].forEach((key, i) => {
-      if (press(key)) changed = p.selectWeaponBank(i + 1) || changed;
-    });
+    if (press('weaponDown')) changed = p.prevWeapon();
+    if (press('weaponUp')) changed = p.nextWeapon() || changed;
+    for (let n = 1; n <= 8; n++) if (press('weapon' + n)) changed = p.selectWeaponBank(n) || changed;
     if (changed) this.weaponChanged(p, true);
-    if (press(k.R) || press(k.DELETE)) this.refillCurrentWeapon();
   }
 
   // --- shop (ShopGame) -----------------------------------------------------------------
@@ -638,6 +637,11 @@ export class GameScene extends Phaser.Scene {
       now: () => performance.now(),
       openShop: () => this.openShop(),
       quit: () => this.app?.leaveGame(),
+      banksChanged: () => {
+        this.player.rebuildBanks();
+        if (this.player.active) this.ui.slider.setBanks(this.player.banks);
+        this.ui.slider.update(this.player.weapon, true);
+      },
       preferencesChanged: () => this.preferencesChanged(),
       selectWeapon: (weapon) => {
         if (this.player.selectWeapon(weapon)) this.weaponChanged(this.player, true);
@@ -1016,7 +1020,7 @@ export class GameScene extends Phaser.Scene {
     this.effects.focus = this.player.renderPos;
     this.effects.update();
     this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
-    const tab = this.keys.TAB.isDown && this.mode === 'online';
+    const tab = this.keyState.isDown('scores') && this.chatInput === null && this.mode === 'online';
     this.hud.showScoreboard(`${this.room} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
     this.drawDebug();
     const p = this.player.pos;
@@ -1037,8 +1041,8 @@ export class GameScene extends Phaser.Scene {
    * crate pickups.
    */
   tick() {
-    const k = this.keys;
     const p = this.player;
+    const ks = this.keyState;
     while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
     // ShopGame.process: death opens the shop after 3 s.
     if (Preferences.autoShop && this.autoShopTime && performance.now() >= this.autoShopTime) {
@@ -1050,15 +1054,25 @@ export class GameScene extends Phaser.Scene {
     if (captured) {
       p.moveDir = null;
       p.firing = false;
-    } else if (this.chatInput === null && p.active) this.handleWeaponKeys();
+    } else if (this.chatInput === null && p.active) {
+      if (!p.dead) this.handleWeaponKeys();
+      if (ks.newPress('refill')) this.refillCurrentWeapon(); // works while dead too
+    }
     if (!p.dead && !captured) {
       const typing = this.chatInput !== null;
-      const down = (...keys) => !typing && keys.some((key) => key.isDown);
-      const h = (down(k.RIGHT, k.D) ? 1 : 0) - (down(k.LEFT, k.A) ? 1 : 0);
-      const v = (down(k.DOWN, k.S) ? 1 : 0) - (down(k.UP, k.W) ? 1 : 0);
-      p.moveDir = byVector(h, v);
-      p.strafing = down(k.SHIFT);
-      p.firing = down(k.SPACE, k.J);
+      const down = (action) => !typing && ks.isDown(action);
+      const dir = byVector((down('right') ? 1 : 0) - (down('left') ? 1 : 0), (down('down') ? 1 : 0) - (down('up') ? 1 : 0));
+      if (down('autoRun')) {
+        // Auto run: keep running the same way; the direction keys only aim.
+        if (dir) p.dir = dir;
+        if (p.collided) p.moveDir = null;
+        p.strafing = true;
+      } else {
+        p.moveDir = dir;
+        p.strafing = down('strafe');
+      }
+      if (!typing && ks.newPress('spin')) p.dir = DIRECTIONS[(p.dir.index + 4) % 8]; // Character.spin: turn round
+      p.firing = down('fire');
     }
     if (p.active) p.move(this.map);
     if (p.active && p.processTimers()) {
@@ -1084,6 +1098,7 @@ export class GameScene extends Phaser.Scene {
       if (p.active) this.sendUpdate();
       this.pingPeers();
     }
+    ks.endTick();
   }
 
   handleCustomizeKeys() {
@@ -1096,7 +1111,7 @@ export class GameScene extends Phaser.Scene {
       look.headColor = 0;
       this.playerView.applyLook();
     }
-    if (Phaser.Input.Keyboard.JustDown(keys.C)) {
+    if (Phaser.Input.Keyboard.JustDown(keys.V)) {
       look.bodyColor = (look.bodyColor + 1) % 34;
       this.playerView.applyLook();
     }
@@ -1126,6 +1141,7 @@ export class GameScene extends Phaser.Scene {
     this.backgroundTimer = null;
     if (document.hidden && this.mode === 'online') {
       this.input.keyboard.resetKeys(); // keys released while hidden would otherwise stay down
+      this.keyState.reset();
       this.closeChat();
       this.backgroundTimer = setInterval(() => {
         if (this.map && !this.gameOver) this.tick();
@@ -1139,6 +1155,7 @@ export class GameScene extends Phaser.Scene {
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    this.keyState?.destroy();
     this.ui?.destroy();
     this.ui = null;
     this.loops.clear();

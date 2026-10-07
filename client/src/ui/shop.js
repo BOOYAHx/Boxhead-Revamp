@@ -3,6 +3,7 @@
 // stats, buy and upgrade panels, and this build's ammo panel (two buttons for
 // a pack or a full gun) and Refund page. The rules are in game/shop.js.
 
+import { isKey } from '../game/controls.js';
 import { damageDescription, maxAmmoDescription, rateOfFireDescription, upgradeDescription } from '../game/weapons.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -21,16 +22,18 @@ const ROW_TOP = 23;
 const ROW_STEP = 93;
 const KeySel = { NONE: 0, WEAPON: 1, UPGRADE1: 2, UPGRADE2: 3 };
 
+// The shop follows the player's key bindings (Shop.handleKeyDown checks both keys of each).
+const ENTER = 13;
 const KEYS = {
-  up: ['ArrowUp', 'KeyW'],
-  down: ['ArrowDown', 'KeyS'],
-  left: ['ArrowLeft', 'KeyA'],
-  right: ['ArrowRight', 'KeyD'],
-  buy: ['Enter', 'NumpadEnter', 'Space', 'KeyJ'],
-  nextTab: ['KeyE'],
-  prevTab: ['KeyQ'],
+  up: (code) => isKey('up', code),
+  down: (code) => isKey('down', code),
+  left: (code) => isKey('left', code),
+  right: (code) => isKey('right', code),
+  buy: (code) => code === ENTER || isKey('fire', code),
+  nextTab: (code) => isKey('weaponUp', code),
+  prevTab: (code) => isKey('weaponDown', code),
 };
-const is = (event, name) => KEYS[name].includes(event.code);
+const is = (event, name) => KEYS[name](event.keyCode);
 
 /** A text field's font made smaller until the text fits (WeaponDisplay name). */
 function shrinkToFit(field, size, min = 10) {
