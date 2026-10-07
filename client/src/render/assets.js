@@ -15,6 +15,15 @@ export function hasSprite(name) {
   return !!atlas && name in atlas;
 }
 
+/** Frame `index` of atlas entry `name`: { image, x, y, w, h, dx, dy }, or null. */
+export function frameInfo(name, index) {
+  const entry = atlas?.[name];
+  const frame = entry?.frames[index];
+  if (!frame) return null;
+  const [x, y, w, h, dx, dy] = frame;
+  return { image: entry.image, x, y, w, h, dx, dy };
+}
+
 export function frameCount(name) {
   return atlas?.[name]?.frames.length ?? 0;
 }

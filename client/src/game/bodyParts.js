@@ -31,6 +31,17 @@ export const COLORS = {
   "ZombieHead":[[0.8,0.85,0.825],[1.0,0.825,0.65],[0.6,0.9,0.6],[0.6,0.5,0.3],[0.45,0.3,0.15],[1.0,1.0,1.0],[0.5,0.5,0.5],[0.25,0.25,0.25],[0.1,0.1,0.1],[0.0,0.0,0.0],[1.0,0.0,0.0],[0.5,0.0,0.0],[0.25,0.0,0.0],[0.0,1.0,0.0],[0.0,0.5,0.0],[0.0,0.25,0.0],[0.0,0.0,1.0],[0.0,0.0,0.5],[0.0,0.0,0.25],[1.0,0.0,1.0],[0.5,0.0,0.5],[0.25,0.0,0.25],[0.11,0.02,0.09],[1.0,1.0,0.0],[0.5,0.5,0.0],[0.25,0.25,0.0],[0.0,1.0,1.0],[0.0,0.5,0.5],[0.0,0.25,0.25],[0.71,0.58,0.06],[1.0,0.4,0.0],[0.4,0.25,0.2],[0.43,0.64,0.78],[0.85,0.54,0.235]],
 };
 
+const MIN_TONE = 8; // CharacterColorFinish keeps pure black slightly lit
+
+/** The colour multiplied into a *Custom layer (never quite black). */
+export function tintFor(part, index) {
+  const color = colorFor(part, index);
+  const r = Math.max(MIN_TONE, (color >> 16) & 255);
+  const g = Math.max(MIN_TONE, (color >> 8) & 255);
+  const b = Math.max(MIN_TONE, color & 255);
+  return (r << 16) | (g << 8) | b;
+}
+
 export function colorFor(part, index) {
   const list = COLORS[part] || [[1, 1, 1]];
   const [r, g, b] = list[Math.max(0, Math.min(list.length - 1, index))];

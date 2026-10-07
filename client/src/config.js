@@ -8,3 +8,7 @@ const host = location.hostname || '127.0.0.1';
 
 export const BRIDGE_URL = params.get('bridge') || user.bridgeUrl || `${secure ? 'wss' : 'ws'}://${host}:8081/`;
 export const API_URL = params.get('api') || user.apiUrl || `${secure ? 'https' : 'http'}://${host}:8081/api/`;
+// Bounty rankings (mostwanted.xml), forwarded by BBHServer.py next to the API.
+export const MOST_WANTED_URL = params.get('mostwanted') || user.mostWantedUrl || API_URL.replace(/api\/?$/, 'assets/mostwanted.xml');
+// Name shown on the server select screen and in the lobby welcome line.
+export const SERVER_NAME = user.serverName || 'Squaresville';

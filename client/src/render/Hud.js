@@ -6,6 +6,7 @@
 
 import { CELL_HEIGHT, CELL_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { placingString } from '../game/bounty.js';
+import { Preferences } from '../game/preferences.js';
 
 const DEPTH = 10001;
 const FONT = 'Verdana, sans-serif';
@@ -34,6 +35,8 @@ export class Hud {
     this.bounty = text(WINDOW_WIDTH - 4, 42, 12, { color: BOUNTY_COLOR, fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
     this.bountyIcon = scene.add.image(0, 44, 'img:GUI_BountyPointsIcon').setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH);
     this.time = text(WINDOW_WIDTH - 4, 62, 12, { fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
+    this.fps = text(WINDOW_WIDTH - 5, 82, 11).setOrigin(1, 0).setAlpha(0.8).setVisible(Preferences.showFPS);
+    this.fpsUpdated = 0;
     this.warning = text(WINDOW_WIDTH / 2, WINDOW_HEIGHT * 0.8, 15, { fontStyle: 'bold', color: '#ffe080', backgroundColor: 'rgba(0,0,0,0.45)', padding: { x: 6, y: 3 } }).setOrigin(0.5);
     this.input = text(5, WINDOW_HEIGHT - 20, 11, { backgroundColor: 'rgba(0,0,0,0.5)', padding: { x: 4, y: 2 } }).setVisible(false);
     this.messageTexts = [];
@@ -194,6 +197,10 @@ export class Hud {
       return true;
     });
     this.money.setText('$' + money);
+    if (Preferences.showFPS && now - this.fpsUpdated > 500) {
+      this.fpsUpdated = now;
+      this.fps.setText(Math.round(this.scene.game.loop.actualFps) + 'fps');
+    }
 
     this.warnings = this.warnings.filter((w) => w.until > now);
     const w = this.warnings[this.warnings.length - 1];
@@ -215,7 +222,7 @@ export class Hud {
   }
 
   destroy() {
-    for (const obj of [this.money, this.placing, this.bounty, this.bountyIcon, this.time, this.warning, this.input, this.pointer, this.pointerName, this.pointerPlace, this.board, this.summary]) obj.destroy();
+    for (const obj of [this.money, this.placing, this.bounty, this.bountyIcon, this.time, this.fps, this.warning, this.input, this.pointer, this.pointerName, this.pointerPlace, this.board, this.summary]) obj.destroy();
     for (const label of this.messageTexts) label.destroy();
     for (const f of this.floaters) f.label.destroy();
   }

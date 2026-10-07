@@ -17,6 +17,6 @@ const game = new Phaser.Game({
   scene: [BootScene, MenuScene, GameScene],
 });
 
-const app = new App(game, document.getElementById('overlay'));
+const app = new App(game, { overlay: document.getElementById('overlay'), flashRoot: document.getElementById('flash-ui') });
 game.registry.set('app', app);
 window.boxheadApp = app;

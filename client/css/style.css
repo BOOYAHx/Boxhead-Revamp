@@ -44,6 +44,39 @@ body {
   display: none;
 }
 
+/* The original menus: the 700x490 Flash stage, scaled like the game canvas. */
+#flash-ui {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(100vw, calc(100vh * 700 / 490));
+  aspect-ratio: 700 / 490;
+  background: #000;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#flash-ui[hidden] {
+  display: none;
+}
+
+.flash-stage {
+  width: 100%;
+  height: 100%;
+  font-kerning: none; /* Flash text fields are not kerned */
+}
+
+/* Lobby chat: lines collect at the bottom of the box. */
+.flash-chat {
+  display: flex;
+  flex-direction: column;
+}
+
+.flash-chat > :first-child {
+  margin-top: auto;
+}
+
 .panel {
   background: var(--panel);
   border: 2px solid var(--line);

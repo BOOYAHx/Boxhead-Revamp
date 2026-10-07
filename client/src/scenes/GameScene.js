@@ -2,12 +2,13 @@
 //   offline: bundled map, local character only (graphics / movement check)
 //   online:  a game room on the server; the map comes from the room info
 
-import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, ROUND_START_TIME, SHADOW_ALPHA, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
+import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, ROUND_START_TIME, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { byVector } from '../game/Direction.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
 import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
+import { Preferences } from '../game/preferences.js';
 import { parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
@@ -18,7 +19,7 @@ import { CharacterView } from '../render/CharacterView.js';
 import { Effects } from '../render/Effects.js';
 import { Hud } from '../render/Hud.js';
 import { createSprite, showFrame } from '../render/assets.js';
-import { DEPTH_SHADOWS, MapView } from '../render/MapView.js';
+import { DEPTH_SHADOWS, MapView, shadowAlpha } from '../render/MapView.js';
 
 const HUD_DEPTH = 10001;
 const PING_REQUEST = '?'; // Game.M_PING_REQUEST / M_PING_RESPONSE, sent as private chat
@@ -318,7 +319,7 @@ export class GameScene extends Phaser.Scene {
     this.healthChanged(p, before, () => (lost = p.hurt(Math.min(p.hp, weapon.damage))));
     if (!lost) return;
     this.effects.addBlood(p, lost);
-    this.cameras.main.shake(200, 0.006); // ScreenShake(pos, 1.5, 200)
+    if (Preferences.shake) this.cameras.main.shake(200, 0.006); // ScreenShake(pos, 1.5, 200)
     if (p.dead) this.localDeath(shooter);
     if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, lost));
   }
@@ -468,7 +469,7 @@ export class GameScene extends Phaser.Scene {
       this.removeCrate(data.index);
       this.claimedCrates.delete(data.index);
       const crate = new BountyCrate(data, from, now);
-      const shadow = createSprite(this, 'BountyCrate_Shadow').setDepth(DEPTH_SHADOWS).setAlpha(SHADOW_ALPHA);
+      const shadow = createSprite(this, 'BountyCrate_Shadow').setDepth(DEPTH_SHADOWS).setAlpha(shadowAlpha());
       const sprite = createSprite(this, crate.sprite);
       this.crates.set(data.index, { crate, sprite, shadow });
     }
@@ -820,6 +821,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   shutdown() {
+    // Captured keys are blocked page-wide: release them so the menus can be typed in.
+    this.input.keyboard.clearCaptures();
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('keydown', this.onKeyDown);
     clearInterval(this.backgroundTimer);

@@ -7,10 +7,11 @@ Produces (all generated, not committed):
     images/*.png      terrain textures and UI bitmaps from BBH.swf
     sprites/*.png     baked sprite sheets (see build_atlas.py)
     atlas.json        frame rectangles and offsets for every sprite
+    ui/               the menus' vector art, text fields and fonts (swf_vector.py)
     sounds/*.mp3      every game sound
     constants.xml     weapon and health tuning, read by the game at startup
 
-Requires Python 3.9+ and Pillow.
+Requires Python 3.9+, Pillow and fontTools (pip install pillow fonttools).
 """
 import argparse
 import json
@@ -25,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import abc_decompile  # noqa: E402
 import build_atlas  # noqa: E402
 import swf_extract  # noqa: E402
+import swf_vector  # noqa: E402
 
 
 def find_abc(swf_bytes, class_name):
@@ -38,6 +40,14 @@ def find_abc(swf_bytes, class_name):
             if abc.qn(inst['name'], full=True) == class_name:
                 return abc
     raise SystemExit(f'{class_name} not found in the SWF')
+
+
+def embedded_lobby_swf(swf_bytes):
+    """The menus' art: a SWF embedded in BBH.swf as binary data (Main_MMOchaAssets)."""
+    for code, body in swf_extract.read_swf(swf_bytes):
+        if code == 87 and body[6:9] in (b'FWS', b'CWS', b'ZWS'):
+            return body[6:]
+    raise SystemExit('The menu art (Main_MMOchaAssets) was not found in BBH.swf')
 
 
 def decompile_class(abc, class_name, out_dir):
@@ -72,7 +82,7 @@ def main():
                                     os.path.join(tmp, 'as3'))
 
         if os.path.isdir(args.out):
-            for sub in ('images', 'sprites', 'sounds'):
+            for sub in ('images', 'sprites', 'sounds', 'ui'):
                 shutil.rmtree(os.path.join(args.out, sub), ignore_errors=True)
         os.makedirs(os.path.join(args.out, 'images'), exist_ok=True)
 
@@ -84,6 +94,10 @@ def main():
             shutil.copy(os.path.join(raw, 'images', name + '.png'), os.path.join(args.out, 'images', name + '.png'))
         shutil.copytree(os.path.join(raw, 'sounds'), os.path.join(args.out, 'sounds'))
         shutil.copy(args.constants, os.path.join(args.out, 'constants.xml'))
+
+        print('Exporting the menu art')
+        ui = swf_vector.export(embedded_lobby_swf(bbh), os.path.join(args.out, 'ui'), 'assets/game/ui/')
+        print(f'  {len(ui.shapes)} shapes, {len(ui.sprites)} sprites, {len(ui.buttons)} buttons, {len(ui.fonts)} fonts')
         with open(os.path.join(args.out, 'manifest.json'), 'w') as f:
             json.dump({'images': sorted(game_images), 'sounds': manifest['sounds']}, f, indent=1)
     print('Done:', args.out)

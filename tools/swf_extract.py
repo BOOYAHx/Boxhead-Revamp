@@ -137,6 +137,8 @@ def jpeg(body, code, tables):
     if alpha_data:
         try:
             img.putalpha(Image.frombytes('L', img.size, zlib.decompress(alpha_data)))
+            # The JPEG colours are premultiplied by the alpha channel.
+            img = Image.frombytes('RGBa', img.size, img.tobytes()).convert('RGBA')
         except (zlib.error, ValueError):
             pass
     return cid, img

@@ -16,16 +16,16 @@ The port is built in small steps. Each one is tested before the next starts.
 | 2 | Connect through the bridge: log in, lobby, create/join rooms | done |
 | 3 | Two players in a room see each other move | done |
 | 4 | Shooting, damage, death and respawn (pistol) | done |
-| 5 | Bounty crates, score, round timer, round summary, chat | **ready to test** |
-| 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | |
-| later | Shop and all weapons, deployables, team deathmatch / infected, customization screen, most wanted | |
+| 5 | Bounty crates, score, round timer, round summary, chat | done |
+| 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | **ready to test** |
+| later | Shop and all weapons, deployables, team deathmatch / infected, customization screen, controls and weapon-bank setup, in-game menu | |
 
 ## Repository layout
 
 ```
 client/             the browser game (static files, no build step)
   index.html
-  src/              ES modules: net/ (protocol), game/ (rules), render/, scenes/
+  src/              ES modules: net/ (protocol), game/ (rules), render/, scenes/, ui/ (menus)
   vendor/           phaser.min.js 3.90 (MIT)
   assets/game/      GENERATED from the SWFs, not committed (see below)
 tools/              asset pipeline: SWF extractor, ActionScript decompiler, atlas baker
@@ -42,16 +42,21 @@ material. You need:
 * `BBH.swf` — the (patched) game SWF
 * `assets.swf` and `constants.xml` — the files the game downloads from `/_assets/`
 
-Then, with Python 3.9+ and Pillow (`pip install pillow`):
+Copy the three files into this repository's folder, then, with Python 3.9+,
+Pillow and fontTools (`pip install pillow fonttools`):
 
 ```sh
-python3 tools/build_assets.py --bbh path/to/BBH.swf --assets path/to/assets.swf \
-    --constants path/to/constants.xml
+python3 tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants constants.xml
 ```
 
-This writes `client/assets/game/` (about 13 MB): baked sprite sheets plus
+(On Windows: `python tools\build_assets.py --bbh BBH.swf --assets assets.swf
+--constants constants.xml`.)
+
+This writes `client/assets/game/` (about 15 MB): baked sprite sheets plus
 `atlas.json` with every animation frame and draw offset, terrain textures,
-143 sounds and `constants.xml`. Re-run it whenever the SWFs change.
+143 sounds, `constants.xml`, and in `ui/` the menus' vector art, text fields
+and fonts from the lobby SWF inside `BBH.swf`. Re-run it whenever the SWFs
+change. Without fontTools the menus still build but use the computer's fonts.
 
 ## Testing step 1 (offline)
 
@@ -114,8 +119,9 @@ normal and one private window) with two accounts:
 * Create an account, log in; wrong passwords are refused.
 * The lobby lists the players online and the open games; lobby chat reaches
   the other window (and Flash players in the lobby).
-* Host a game, join it from the other window: both show `Players (2)` and the
-  round timer. Esc goes back to the lobby.
+* Host a game, join it from the other window. Esc goes back to the lobby.
+
+(Since step 6 these screens are the original menus, see below.)
 
 ### Troubleshooting
 
@@ -125,8 +131,8 @@ normal and one private window) with two accounts:
 * **The other player is missing:** the player list in the top-left corner
   shows `(not seen yet)` next to anyone whose position hasn't arrived.
   Check that both windows show the same game name there.
-* **Accounts:** they live in the game server's `users.db`. Use "Create
-  account" on the login screen; the same account can't be logged in twice.
+* **Accounts:** they live in the game server's `users.db`. Use "Register"
+  in the login box; the same account can't be logged in twice.
 
 ### Step 3: seeing each other move
 
@@ -192,6 +198,49 @@ Warehouse.
 If the game server runs elsewhere, edit `client/config.js` (bridge and map
 service addresses).
 
+### Step 6: the original menus
+
+The menus are now drawn from the original art inside `BBH.swf`, so the asset
+build has to run once more (it adds `client/assets/game/ui/`):
+
+```sh
+git pull
+pip install fonttools
+python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants constants.xml
+```
+
+Then Ctrl+F5 in both windows; the servers keep running. (Without the new
+`ui/` folder the game falls back to the plain menus of steps 2–5.)
+
+* **Main menu:** the backdrop and buttons fade in with the title music (click
+  to skip). **LOGIN** → choose a server ("Squaresville") → **connect** → the
+  login box. **Register** asks for the password twice and logs you straight
+  in; "Remember me?" keeps your name for next time. Wrong passwords and
+  unknown accounts are reported in red under the box; Cancel goes back.
+* **QUICKPLAY** starts offline practice; Esc returns to the main menu.
+* **HOW TO PLAY:** four slides, click to go through them.
+* **OPTIONS:** volume, shadows, blood, screen shake and Show FPS work in game
+  and are remembered by the browser. Open shop on death, shell casings,
+  smoke, footsteps and Auto Reload are saved for the features that need
+  them; "configure controls" / "configure weapon banks" are greyed out for
+  now.
+* **Lobby:** chat (5 messages per 5 seconds), players online (you first), the
+  game browser (click a game to see its mode, map, players and time left,
+  then **Join** or double-click; it refreshes every 6 seconds), **Join
+  Private** by name, **Host Game** (name, private, map list, FFA), **Join
+  Random**, and **Exit** back to the main menu. Joining a game that is gone
+  shows "Game not found"; hosting with a taken name shows "Room name already
+  in use".
+* **Most Wanted** tab: the top bounty hunters from the server's
+  `mostwanted.xml`, with their character pictures.
+* If the connection drops in the lobby it says "You have been disconnected"
+  and logs back in by itself when the server is back. A drop during a game
+  returns to the main menu and reconnects.
+* "Customize Character" only shows a notice for now (it comes later).
+
+`client/config.js` can also set the server name shown in the menus
+(`serverName`) and where the Most Wanted list comes from (`mostWantedUrl`).
+
 ## Running the unit tests
 
 ```sh
@@ -208,6 +257,9 @@ on port 8081) and the Python game server to be running.
 ## Tools
 
 * `tools/build_assets.py` — the one-step asset build above.
+* `tools/swf_vector.py` — exports a SWF's vector shapes, sprites, buttons,
+  text fields and fonts as SVG + JSON (the menus' art; `client/src/ui/flash.js`
+  draws it back as a small Flash display list).
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound
   (MP3/WAV) from a SWF, including embedded SWFs.
 * `tools/abc_decompile.py` — a small ActionScript 3 bytecode decompiler that

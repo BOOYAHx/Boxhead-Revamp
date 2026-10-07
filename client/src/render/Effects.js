@@ -2,6 +2,7 @@
 // ground (Blood, Map.addBlood) and positional sounds (AreaSound).
 
 import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
+import { Preferences } from '../game/preferences.js';
 import { DEPTH_SHADOWS } from './MapView.js';
 
 const TRACER_TIME = 80; // ms (TracerLine.TIME)
@@ -42,6 +43,7 @@ export class Effects {
 
   /** Map.addBlood: one splat per 5 points of damage, remainders carried per character. */
   addBlood(character, damage) {
+    if (!Preferences.blood) return;
     damage += character.bloodWaiting || 0;
     const splats = Math.floor(damage / BLOOD_DAMAGE_PER_SPLAT);
     character.bloodWaiting = damage - splats * BLOOD_DAMAGE_PER_SPLAT;

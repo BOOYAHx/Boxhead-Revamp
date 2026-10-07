@@ -3,31 +3,23 @@
 // with a soft shadow underneath, the muzzle flash while firing and the
 // health bar overhead (PlayerCharacter.drawOverhead).
 
-import { CELL_HEIGHT, CELL_WIDTH, SHADOW_ALPHA } from '../game/constants.js';
-import { MODELS, colorFor } from '../game/bodyParts.js';
+import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
+import { MODELS, tintFor } from '../game/bodyParts.js';
 import { createSprite, showFrame } from './assets.js';
-import { DEPTH_CORPSES, DEPTH_SHADOWS } from './MapView.js';
+import { DEPTH_CORPSES, DEPTH_SHADOWS, shadowAlpha } from './MapView.js';
 
-const MIN_TONE = 8; // CharacterColorFinish keeps pure black slightly lit
 const FLASH_TINT = 0xff5040; // stands in for PlayerCharacter.FLASH_CT (red damage flash)
 const HEALTH_GREEN = 0x00ff00; // HealthBar: white bar tinted by health
 const HEALTH_ORANGE = 0xcc6600;
 const HEALTH_RED = 0xcc0000;
 const OVERHEAD_Y = 55; // health bar this many pixels above the feet
 
-function tone(color) {
-  const r = Math.max(MIN_TONE, (color >> 16) & 255);
-  const g = Math.max(MIN_TONE, (color >> 8) & 255);
-  const b = Math.max(MIN_TONE, color & 255);
-  return (r << 16) | (g << 8) | b;
-}
-
 export class CharacterView {
   constructor(scene, character, weaponSprite = 'Pistol', nameColor = '#ffffff') {
     this.scene = scene;
     this.character = character;
     this.weaponSprite = weaponSprite;
-    this.shadow = createSprite(scene, 'Character_Shadow').setDepth(DEPTH_SHADOWS).setAlpha(SHADOW_ALPHA);
+    this.shadow = createSprite(scene, 'Character_Shadow').setDepth(DEPTH_SHADOWS).setAlpha(shadowAlpha());
     this.container = scene.add.container(0, 0);
     this.bodyCustom = createSprite(scene, 'BondBodyCustom');
     this.body = createSprite(scene, 'BondBody');
@@ -55,9 +47,9 @@ export class CharacterView {
     const head = MODELS[look.headModel] || MODELS[0];
     const body = MODELS[look.bodyModel] || MODELS[0];
     this.parts = { body: body + 'Body', bodyCustom: body + 'BodyCustom', head: head + 'Head', headCustom: head + 'HeadCustom' };
-    this.bodyTint = tone(colorFor(body + 'Body', look.bodyColor));
+    this.bodyTint = tintFor(body + 'Body', look.bodyColor);
     this.bodyCustom.setTint(this.bodyTint);
-    this.headCustom.setTint(tone(colorFor(head + 'Head', look.headColor)));
+    this.headCustom.setTint(tintFor(head + 'Head', look.headColor));
     this.flashing = false;
   }
 

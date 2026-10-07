@@ -6,4 +6,8 @@ window.BOXHEAD_CONFIG = {
   bridgeUrl: null,
   // Map service gateway (BBHServer.py /api/). Default: http(s)://<host>:8081/api/
   apiUrl: null,
+  // Most Wanted rankings. Default: the apiUrl folder + assets/mostwanted.xml
+  mostWantedUrl: null,
+  // Server name shown in the menus. Default: Squaresville
+  serverName: null,
 };

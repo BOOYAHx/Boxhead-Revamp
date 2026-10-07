@@ -83,6 +83,17 @@ export class Screens {
     this.loginFeedback.className = isError ? 'error' : 'muted';
   }
 
+  loginFailed(message) {
+    this.setLoginFeedback(message || 'Login failed', true);
+  }
+
+  loginSucceeded() {}
+
+  registerResult(ok, error) {
+    if (ok) this.setLoginFeedback('Account created. You can log in now.');
+    else this.setLoginFeedback(error, true);
+  }
+
   // --- lobby -----------------------------------------------------------------
 
   showLobby({ user, maps }) {
@@ -214,5 +225,9 @@ export class Screens {
     if (!this.lobby) return;
     this.lobby.feedback.textContent = text;
     this.lobby.feedback.className = isError ? 'error' : 'muted';
+  }
+
+  roomError(creating) {
+    this.setLobbyFeedback(creating ? 'Room name already in use' : 'Game not found', true);
   }
 }
