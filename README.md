@@ -18,8 +18,9 @@ The port is built in small steps. Each one is tested before the next starts.
 | 4 | Shooting, damage, death and respawn (pistol) | done |
 | 5 | Bounty crates, score, round timer, round summary, chat | done |
 | 6 | Menus rebuilt to look like the original lobby (art extracted from the SWF) | done |
-| 7 | Graphics: "Enhanced Graphics" (sharper picture, soft shadows, light and sparks) or "Classic" | **ready to test** |
-| later | Shop and all weapons, deployables, team deathmatch / infected, customization screen, controls and weapon-bank setup, in-game menu | |
+| 7 | Graphics: "Enhanced Graphics" (sharper picture, soft shadows, light and sparks) or "Classic" | done |
+| 8 | The shop and every gun: Dual Uzis, Shotgun, Rifle, Flamer, AK47, Minigun, Magnum (ammo, upgrades, refunds, weapon switching) | **ready to test** |
+| later | Grenades, Grenade Launcher, Plasma Cannon, deployables and the other equipment, team deathmatch / infected, customization screen, controls and weapon-bank setup, in-game menu | |
 
 ## Repository layout
 
@@ -279,6 +280,29 @@ bitmaps; Enhanced can use upscaled copies instead:
 
 It checks the sizes, restores transparency if the upscaler dropped it, and
 lists the sheets it will use. Run it again after rebuilding the assets.
+
+### Step 8: the shop and the guns
+
+**Rebuild the assets first** (the build now also exports the flamer's fire and
+the Minigun's sounds):
+
+```
+python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants constants.xml
+```
+
+- Each round starts in the shop with $10,000 (plus any award from the last
+  round) and only the Pistol. Close it with **Enter Game**, **B** or **Esc** to
+  spawn. Offline practice gives $1,000,000 so you can try everything.
+- Buy guns, ammo packs or a full refill, and the two upgrades per gun. The
+  **Refund** tab returns a gun (with its upgrades) within a minute of buying it.
+- In game: **Q / E** previous / next weapon, **1-8** weapon banks, **R** (or
+  Delete) buys ammo for the gun in hand, **B** or the Shop button opens the shop.
+  The weapon bar at the top left shows the bank and the ammo left.
+- After dying the shop opens by itself after 3 s ("Open shop on death"); you
+  respawn when you close it. "Auto Reload" in Options refills a gun when it is
+  down to its last round.
+- Grenades, the Grenade Launcher, the Plasma Cannon and the equipment page are
+  shown faded: they come in the next step.
 
 ## Running the unit tests
 

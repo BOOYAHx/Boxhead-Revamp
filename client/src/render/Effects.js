@@ -1,8 +1,8 @@
 // Short-lived combat effects: bullet tracer lines (TracerLine), blood on the
 // ground (Blood, Map.addBlood), muzzle smoke (Smoke), ejected shell casings
-// (ShellCasing) and positional sounds (AreaSound). With "Enhanced Graphics"
-// on there are also light from muzzle flashes, glowing tracers, sparks where
-// bullets hit walls, and blood spray.
+// (ShellCasing, ShotgunShell), the flamer's fire (Fire) and positional sounds
+// (AreaSound). With "Enhanced Graphics" on there are also light from muzzle
+// flashes, glowing tracers, sparks where bullets hit walls, and blood spray.
 
 import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
@@ -27,7 +27,11 @@ const DEPTH_BLOOD = DEPTH_SHADOWS - 0.5;
 
 const SMOKE_LIFE = 450; // ms (Smoke.lifeSpan)
 const SHELL_SPEED = 5e-5; // ShellCasing.SPEED_MULTIPLIER
-const SHELL_FRAMES = 6;
+const SHELL_VELOCITY = 10; // Weapon.smokeAndShell always throws shells at 10
+const SHELLS = { ShellCasing1: 6, ShotgunShell: 8 }; // sprite -> frames
+const FIRE_FRAME_TIME = 1000 / 50; // ms (Fire.FRAME_RATE)
+const FIRE_LIFE = 1000; // ms (Particle.lifeSpan)
+const SECOND_TICKS = 20;
 
 const VOLUME_RANGE = 10; // cells (AreaSound)
 const VOLUME_MIN = 0.25;
@@ -47,6 +51,8 @@ export class Effects {
     const fx = scene.registry.get('fx') || {};
     this.bloodKeys = fx.blood?.length ? fx.blood : makeBloodTextures(scene);
     this.smokeFrames = fx.smoke || [];
+    this.fireDisplays = fx.fire || [];
+    this.sounds = new Set(); // playing sounds, stopped with the scene
   }
 
   /** The effects' clock (ms); tests may slow it down. */
@@ -58,10 +64,10 @@ export class Effects {
     return Preferences.enhanced;
   }
 
-  /** TracerLine: a thin white line from the muzzle that fades out in 80 ms. */
+  /** TracerLine: a thin line from the muzzle that fades out in 80 ms (white; the Railgun's purple). */
   addTracer(line) {
     if (line.length <= 0) return;
-    this.tracers.push({ ...line, end: this.now() + TRACER_TIME });
+    this.tracers.push({ color: TRACER_COLOR, alpha: TRACER_ALPHA, ...line, end: this.now() + TRACER_TIME });
   }
 
   /** Map.addBlood: one splat per 5 points of damage, remainders carried per character. */
@@ -86,30 +92,55 @@ export class Effects {
   }
 
   /**
-   * Weapon.smokeAndShell for a shot being shown: smoke from the barrel and a
-   * shell casing thrown out of the gun (each with its original option), plus
-   * the enhanced light and sparks.
+   * Weapon.getParticles for a shot being shown: smoke from the barrel and a
+   * shell casing (smokeAndShell), the shotgun's shell and five puffs, the
+   * Railgun's smoke trail or the Flamer's fire; plus the enhanced light and
+   * sparks. Smoke and shells each have their own option.
    */
   addShotEffects(weapon, effects) {
-    const { shot, distance } = effects;
-    const dir = { x: Math.cos(shot.angle), y: Math.sin(shot.angle) };
-    if (Preferences.smoke) this.addSmoke(shot, dir, distance, weapon);
-    if (Preferences.shells) this.addShell(shot, dir, weapon);
-    if (!this.enhanced) return;
-    this.addMuzzleLight(effects.muzzle, weapon.barrelAltitude);
-    if (distance < shot.range - 0.01) {
-      const end = { x: shot.start.x + dir.x * distance, y: shot.start.y + dir.y * distance };
-      this.addSparks(end, shot.altitude, shot.angle);
+    const { shot, distances } = effects;
+    const rays = shot.tracers.map((t, i) => ({ ...t, distance: distances[i], dx: Math.cos(t.angle), dy: Math.sin(t.angle) }));
+    if (!rays.length) return;
+    const smoke = (ray, spread, d = weapon.smokeDistance, size = weapon.smokeSize, length = ray.distance, altitude = weapon.barrelAltitude) =>
+      Preferences.smoke && this.addSmoke({ x: ray.start.x + ray.dx * d, y: ray.start.y + ray.dy * d }, ray.angle + (Math.random() - 0.5) * spread, size, length, altitude);
+    const shell = (ray, sprite) =>
+      Preferences.shells &&
+      this.addShell({ x: ray.start.x + ray.dx * weapon.shellDistance, y: ray.start.y + ray.dy * weapon.shellDistance }, Math.PI + ray.angle - effects.hand * 0.5, weapon.barrelAltitude, sprite);
+    switch (weapon.particles) {
+      case 'smokeAndShell':
+        smoke(rays[0], 0.05);
+        shell(rays[0], 'ShellCasing1');
+        break;
+      case 'shotgun':
+        if (rays.length === 5) shell(rays[2], 'ShotgunShell');
+        for (const ray of rays) smoke(ray, 0.2);
+        break;
+      case 'smokeTrail': {
+        const ray = rays[0];
+        for (let d = weapon.smokeDistance; d < ray.distance; d += 3) smoke(ray, 0.05, d, 3, ray.distance - d, weapon.barrelAltitude + 2);
+        break;
+      }
+      case 'fire':
+        if (rays.length >= 5 && weapon.takeFireBurst()) this.addFire(weapon, effects.muzzle, rays[2]);
+        break;
+      default:
+        break;
     }
+    if (!this.enhanced) return;
+    if (weapon.flamer) this.addMuzzleLight(effects.muzzle, weapon.barrelAltitude, 0xff8030, 0.6);
+    else if (weapon.muzzleFlashes.length) this.addMuzzleLight(effects.muzzle, weapon.barrelAltitude, weapon.tracerColor === TRACER_COLOR ? 0xffc060 : weapon.tracerColor);
+    if (weapon.flamer) return;
+    rays.forEach((ray, i) => {
+      if (ray.distance >= ray.range - 0.01) return;
+      const end = { x: ray.start.x + ray.dx * ray.distance, y: ray.start.y + ray.dy * ray.distance };
+      this.addSparks(end, ray.altitude, ray.angle, rays.length > 1 ? 3 : 0, i);
+    });
   }
 
-  /** Smoke: a soft streak along the shot that drifts up and fades (450 ms). */
-  addSmoke(shot, dir, distance, weapon) {
+  /** Smoke: a soft streak (at most `size` cells, not past `distance`) that drifts up and fades (450 ms). */
+  addSmoke(start, angle, size, distance, altitude) {
     if (!this.smokeFrames.length) return;
     const frame = this.smokeFrames[Math.floor(Math.random() * this.smokeFrames.length)];
-    const size = weapon.smokeSize;
-    const start = { x: shot.start.x + dir.x * weapon.smokeDistance, y: shot.start.y + dir.y * weapon.smokeDistance };
-    const angle = shot.angle + (Math.random() - 0.5) * 0.05;
     const length = Math.min(size, distance);
     const scale = (size * CELL_WIDTH) / frame.graphicWidth;
     const masked = Math.min((length / size) * frame.graphicWidth + 5, frame.graphicWidth);
@@ -121,7 +152,6 @@ export class Effects {
     holder.add(image);
     const born = this.now();
     const climb = Math.max(0.02, (scale * scale - 1) * 0.05);
-    const altitude = shot.altitude;
     this.particles.push({
       update: (now) => {
         const time = now - born;
@@ -140,59 +170,99 @@ export class Effects {
     });
   }
 
-  /** ShellCasing: thrown back past the hand, arcs up and lands, then stays on the ground. */
-  addShell(shot, dir, weapon) {
-    if (!hasSprite('ShellCasing1')) return;
-    const pos = { x: shot.start.x + dir.x * weapon.shellDistance, y: shot.start.y + dir.y * weapon.shellDistance };
-    const angle = Math.PI + shot.angle - weapon.handMultiplier * 0.5;
-    const velocity = weapon.shellVelocity;
+  /** ShellCasing / ShotgunShell: thrown back past the hand, arcs up and lands, then stays on the ground. */
+  addShell(pos, angle, altitude, sprite = 'ShellCasing1') {
+    if (!hasSprite(sprite)) return;
+    const frames = SHELLS[sprite] || 6;
+    const velocity = SHELL_VELOCITY;
     const vx = (Math.cos(angle) + 0.2 - 0.4 * Math.random()) * velocity * SHELL_SPEED;
     const vy = (Math.sin(angle) + 0.2 - 0.4 * Math.random()) * velocity * SHELL_SPEED;
-    const startFrame = Math.floor(Math.random() * SHELL_FRAMES);
-    const maxAltitude = shot.altitude + velocity;
-    const sprite = createSprite(this.scene, 'ShellCasing1', startFrame);
+    const startFrame = Math.floor(Math.random() * frames);
+    const maxAltitude = altitude + velocity;
+    const image = createSprite(this.scene, sprite, startFrame);
     const born = this.now() - 25;
     let landed = false;
-    const place = (time, altitude, frame) => {
+    const place = (time, height, frame) => {
       const x = (pos.x + vx * time) * CELL_WIDTH;
       const y = (pos.y + vy * time) * CELL_HEIGHT;
-      showFrame(sprite, 'ShellCasing1', frame, Math.round(x), Math.round(y - altitude));
-      sprite.setDepth(landed ? DEPTH_BLOOD + 0.1 : y / CELL_HEIGHT);
+      showFrame(image, sprite, frame, Math.round(x), Math.round(y - height));
+      image.setDepth(landed ? DEPTH_BLOOD + 0.1 : y / CELL_HEIGHT);
     };
     this.particles.push({
       update: (now) => {
         const time = now - born;
-        const frame = (startFrame + Math.floor(time / 100)) % SHELL_FRAMES;
+        const frame = (startFrame + Math.floor(time / 100)) % frames;
         const k = Math.abs(time - 200) / 200;
-        const altitude = Math.max(0, maxAltitude - k * k * velocity);
-        if (altitude <= 0 && time > 200) {
+        const height = Math.max(0, maxAltitude - k * k * velocity);
+        if (height <= 0 && time > 200) {
           landed = true;
           place(time, 0, frame);
-          this.addDecal(sprite);
+          this.addDecal(image);
           return false;
         }
-        place(time, altitude, frame);
+        place(time, height, frame);
         return true;
       },
-      destroy: () => !landed && sprite.destroy(),
+      destroy: () => !landed && image.destroy(),
+    });
+  }
+
+  /**
+   * Flamer.getParticles: ten flames along the stream, small at the ends and
+   * large in the middle, each drifting forward and up until it burns out.
+   */
+  addFire(weapon, muzzle, ray) {
+    if (!this.fireDisplays.length) return;
+    const maxLength = weapon.range - weapon.barrelDistance;
+    const length = Math.max(0, Math.min(maxLength, ray.distance - weapon.barrelDistance));
+    for (let i = 0; i < 10; i++) {
+      const d = ((i + 0.5) * maxLength) / 10;
+      if (d > length) break;
+      const size = i <= 2 || i >= 9 ? 0 : i <= 3 || i >= 7 ? 1 : 2;
+      this.addFlame({ x: muzzle.x + ray.dx * d, y: muzzle.y + ray.dy * d }, 20 - 2 * size, ray, (0.02 * (10 - i)) / 10, length - d, size);
+    }
+  }
+
+  /** Fire: one pre-rendered flame playing at 50 frames a second. */
+  addFlame(pos, startAltitude, dir, speed, maxDistance, size) {
+    const variants = this.fireDisplays[size];
+    if (!variants?.length) return;
+    const frames = variants[Math.floor(Math.random() * variants.length)];
+    const image = this.scene.add.image(0, 0, frames[0].key, frames[0].frame).setOrigin(0, 0);
+    const born = this.now();
+    this.particles.push({
+      update: (now) => {
+        const time = now - born;
+        const distance = (time / 1000) * SECOND_TICKS * speed;
+        const frame = Math.floor(time / FIRE_FRAME_TIME);
+        if (distance > maxDistance || frame >= frames.length || time > FIRE_LIFE) return false;
+        const f = frames[frame];
+        const x = (pos.x + dir.dx * distance) * CELL_WIDTH;
+        const y = (pos.y + dir.dy * distance) * CELL_HEIGHT;
+        image.setFrame(f.frame);
+        image.setPosition(Math.round(x + f.dx), Math.round(y + f.dy - Math.trunc(startAltitude + time / 60)));
+        image.setDepth(y / CELL_HEIGHT);
+        return true;
+      },
+      destroy: () => image.destroy(),
     });
   }
 
   /** Enhanced: a short warm light around the muzzle flash. */
-  addMuzzleLight(muzzle, altitude) {
+  addMuzzleLight(muzzle, altitude, color = 0xffc060, strength = 1) {
     const { x, y } = px(muzzle);
-    const light = this.scene.add.image(x, y - altitude, 'fx:glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xffc060).setDepth(DEPTH_LIGHT).setScale(0.7, 0.55);
-    const floor = this.scene.add.image(x, y, 'fx:glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xff9a40).setDepth(DEPTH_BLOOD + 0.2).setScale(1.2, 0.85);
-    this.fade([light, floor], 110, [0.4, 0.25]);
+    const light = this.scene.add.image(x, y - altitude, 'fx:glow').setBlendMode(Phaser.BlendModes.ADD).setTint(color).setDepth(DEPTH_LIGHT).setScale(0.7, 0.55);
+    const floor = this.scene.add.image(x, y, 'fx:glow').setBlendMode(Phaser.BlendModes.ADD).setTint(color === 0xffc060 ? 0xff9a40 : color).setDepth(DEPTH_BLOOD + 0.2).setScale(1.2, 0.85);
+    this.fade([light, floor], 110, [0.4 * strength, 0.25 * strength]);
   }
 
-  /** Enhanced: sparks and a puff of dust where a bullet hits a wall. */
-  addSparks(pos, altitude, angle) {
+  /** Enhanced: sparks and a puff of dust where a bullet hits a wall (`sparks` 0: a random handful). */
+  addSparks(pos, altitude, angle, sparks = 0) {
     const { x, y } = px(pos);
     const sy = y - altitude;
     const flash = this.scene.add.image(x, sy, 'fx:glow').setBlendMode(Phaser.BlendModes.ADD).setTint(0xffe0a0).setScale(0.35).setDepth(DEPTH_LIGHT);
     this.fade([flash], 90, [0.8]);
-    const count = 5 + Math.floor(Math.random() * 4);
+    const count = sparks || 5 + Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
       const a = angle + Math.PI + (Math.random() - 0.5) * 2.2;
       const speed = 0.08 + Math.random() * 0.14; // px per ms
@@ -270,18 +340,53 @@ export class Effects {
     });
   }
 
-  /** SoundControl.playAreaSound: quieter and panned with distance from the listener. */
-  playSound(name, pos, delay = 0) {
-    const key = 'snd:' + name;
-    if (!name || !this.scene.cache.audio.exists(key)) return;
+  /** AreaSound: quieter and panned with distance from the listener. */
+  soundLevels(pos) {
     const distance = Math.hypot(pos.x - this.focus.x, pos.y - this.focus.y);
     const volume = (VOLUME_MIN + Math.max(0, Math.min(1, (VOLUME_RANGE - distance) / VOLUME_RANGE)) * (1 - VOLUME_MIN)) * GAME_VOLUME;
     const pan = Math.max(-1, Math.min(1, (pos.x - this.focus.x) / PAN_RANGE));
+    return { volume, pan };
+  }
+
+  /**
+   * SoundControl.playAreaSound. Returns the sound, which can be stopped
+   * (or null when it does not exist or audio is unavailable).
+   */
+  playSound(name, pos, delay = 0, { loop = false } = {}) {
+    const key = 'snd:' + name;
+    if (!name || !this.scene.cache.audio.exists(key)) return null;
     try {
-      this.scene.sound.play(key, { volume, pan, delay: delay / 1000 });
+      const sound = this.scene.sound.add(key);
+      this.sounds.add(sound);
+      const done = () => {
+        this.sounds.delete(sound);
+        sound.destroy();
+      };
+      sound.once('complete', done);
+      sound.once('stop', done);
+      sound.play({ ...this.soundLevels(pos), delay: delay / 1000, loop });
+      return sound;
     } catch (error) {
-      // Audio can be unavailable (autoplay rules, no device); the game goes on.
+      return null; // Audio can be unavailable (autoplay rules, no device); the game goes on.
     }
+  }
+
+  /** Keep a playing sound (a weapon loop) at the right volume as things move. */
+  moveSound(sound, pos) {
+    if (!sound || !this.sounds.has(sound)) return;
+    const { volume, pan } = this.soundLevels(pos);
+    sound.setVolume?.(volume);
+    sound.setPan?.(pan);
+  }
+
+  stopSound(sound) {
+    if (sound && this.sounds.has(sound)) sound.stop();
+  }
+
+  /** How long a sound lasts, in ms (0 if unknown). */
+  soundLength(name) {
+    const audio = name && this.scene.cache.audio.get('snd:' + name);
+    return audio?.duration ? audio.duration * 1000 : 0;
   }
 
   update() {
@@ -296,22 +401,24 @@ export class Effects {
     this.tracers = this.tracers.filter((t) => t.end > now);
     for (const t of this.tracers) {
       const k = (t.end - now) / TRACER_TIME;
-      const alpha = (1 - Math.pow(1 - k, 1.5)) * TRACER_ALPHA;
       const x = t.x * CELL_WIDTH;
       const y = t.y * CELL_HEIGHT - t.altitude;
       const x2 = x + t.dx * t.length * CELL_WIDTH;
       const y2 = y + t.dy * t.length * CELL_HEIGHT;
+      const alpha = (1 - Math.pow(1 - k, 1.5)) * t.alpha;
       if (this.enhanced) {
-        // A faint warm glow around the line.
-        g.lineStyle(3, 0xffe0a0, alpha * 0.35);
+        // A faint glow around the line.
+        g.lineStyle(3, t.color === TRACER_COLOR ? 0xffe0a0 : t.color, alpha * 0.35);
         g.lineBetween(x, y, x2, y2);
       }
-      g.lineStyle(TRACER_WIDTH, TRACER_COLOR, alpha);
+      g.lineStyle(TRACER_WIDTH, t.color, alpha);
       g.lineBetween(x, y, x2, y2);
     }
   }
 
   destroy() {
+    for (const sound of [...this.sounds]) sound.stop();
+    this.sounds.clear();
     for (const p of this.particles) p.destroy();
     this.particles = [];
     this.tracerGraphics.destroy();

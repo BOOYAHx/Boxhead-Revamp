@@ -1,7 +1,7 @@
 // Draws one Character the way PlayerCharacter.draw layered it: tinted body
 // colour layer, body outline, held weapon, tinted head layer, head outline,
-// with a soft shadow underneath, the muzzle flash while firing and the
-// health bar overhead (PlayerCharacter.drawOverhead).
+// with a soft shadow underneath, the muzzle flash while firing, the Flamer's
+// backpack and the health bar overhead (PlayerCharacter.drawOverhead).
 
 import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
 import { MODELS, tintFor } from '../game/bodyParts.js';
@@ -16,19 +16,19 @@ const HEALTH_RED = 0xcc0000;
 const OVERHEAD_Y = 55; // health bar this many pixels above the feet
 
 export class CharacterView {
-  constructor(scene, character, weaponSprite = 'Pistol', nameColor = '#ffffff') {
+  constructor(scene, character, nameColor = '#ffffff') {
     this.scene = scene;
     this.character = character;
-    this.weaponSprite = weaponSprite;
     this.shadow = scene.shadows.create('Character_Shadow');
     this.container = scene.add.container(0, 0);
     this.bodyCustom = createSprite(scene, 'BondBodyCustom');
     this.body = createSprite(scene, 'BondBody');
-    this.weapon = createSprite(scene, weaponSprite);
+    this.weapon = createSprite(scene, 'Pistol');
+    this.backpack = createSprite(scene, 'Pistol').setVisible(false);
     this.headCustom = createSprite(scene, 'BondHeadCustom');
     this.head = createSprite(scene, 'BondHead');
-    this.flash = createSprite(scene, character.weapon.muzzleFlash).setVisible(false);
-    this.container.add([this.bodyCustom, this.body, this.weapon, this.headCustom, this.head, this.flash]);
+    this.flash = createSprite(scene, 'MuzzleFlashSmall1').setVisible(false);
+    this.container.add([this.backpack, this.bodyCustom, this.body, this.weapon, this.headCustom, this.head, this.flash]);
     this.healthBorder = scene.add.image(0, 0, 'img:HealthBar_BarBorder').setOrigin(0, 0).setDepth(10000);
     this.healthBar = scene.add.image(0, 0, 'img:HealthBar_Bar').setOrigin(0, 0).setDepth(10000);
     this.shownHealth = -1;
@@ -125,13 +125,14 @@ export class CharacterView {
     const weapon = ch.weapon;
     if (ch.dead) {
       this.weapon.setVisible(false);
+      this.backpack.setVisible(false);
       this.flash.setVisible(false);
       // Corpses lying face up show the head under the body.
       if (ch.dir.dy > 0 && anim.finished) order.unshift(this.headCustom, this.head);
       else order.push(this.headCustom, this.head);
     } else {
       const weaponFrame = anim.weaponFrame(ch.dir);
-      showFrame(this.weapon, this.weaponSprite, weaponFrame, 0, 0);
+      showFrame(this.weapon, weapon.display, weaponFrame, 0, 0);
       // The muzzle flash goes behind the gun when facing away from the camera.
       const behind = ch.dir.dy < 0;
       if (weapon.flashVisible) {
@@ -142,8 +143,17 @@ export class CharacterView {
       }
       if (behind) order.push(this.flash, this.weapon, this.headCustom, this.head);
       else order.push(this.weapon, this.headCustom, this.head, this.flash);
+      // The Flamer's tank is drawn first when facing south-west to east, otherwise last.
+      if (weapon.backpack) {
+        showFrame(this.backpack, weapon.backpack, weaponFrame, 0, 0);
+        if (ch.dir.index <= 1 || ch.dir.index >= 6) order.unshift(this.backpack);
+        else order.push(this.backpack);
+      } else {
+        this.backpack.setVisible(false);
+      }
     }
     order.forEach((sprite, index) => this.container.moveTo(sprite, index));
+    if (!order.includes(this.backpack)) this.container.moveTo(this.backpack, order.length);
 
     this.container.setPosition(x, y);
     this.container.setDepth(ch.dead && anim.finished ? DEPTH_CORPSES : y / CELL_HEIGHT);

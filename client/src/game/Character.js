@@ -5,7 +5,7 @@
 import { S } from './Direction.js';
 import { HitCircle, moveCharacter } from './world.js';
 import { CHARACTER_HEIGHT, FIRE_RADIUS, MAX_SPEED, MOVE_RADIUS, MAX_STORED_POSITIONS, PROCESS_INTERVAL, RESPAWN_TIME, SECOND } from './constants.js';
-import { PISTOL_ID, Weapon } from './weapons.js';
+import { NUM_WEAPONS, PISTOL_ID, Weapon, WeaponID } from './weapons.js';
 
 const ANIM_FPS = 20;
 const SMOOTH_TIME = 200; // ms to blend a corrected remote position (Mover.SMOOTH_TIME)
@@ -72,7 +72,6 @@ export class Character {
     this.collided = false;
     this.moving = false;
     this.speedMultiplier = 1;
-    this.weaponSpeed = 1;
     this.hp = 100;
     this.maxHp = 100;
     this.active = false; // drawn and hittable
@@ -82,9 +81,12 @@ export class Character {
     this.animator = new Animator();
     this.storedPositions = []; // local only: lag compensation (LocalCharacter.unlag)
     this.look = { gender: 'Male', headModel: 0, headColor: 0, bodyModel: 0, bodyColor: 0 };
-    this.weapon = new Weapon(PISTOL_ID);
-    this.pose = this.weapon.pose;
-    this.weaponSpeed = this.weapon.moveSpeed;
+    this.weapons = []; // every weapon held, in Q/E order (PlayerCharacter.weaponPool)
+    this.banks = {}; // bank 1-8 -> its weapons, by priority (weaponBanks)
+    this.weapon = null; // the one in hand
+    this.refillTarget = null; // an emptied gun the refill key buys ammo for
+    this.animSpeed = 1; // walk animation speed: the weapon's when it was selected
+    this.selectWeapon(this.pickupWeapon(new Weapon(PISTOL_ID)));
     this.firing = false; // local only: fire key held
     this.armor = 1;
     this.hurtWaiting = 0; // fractional damage carried over (Character.hurt)
@@ -117,8 +119,128 @@ export class Character {
     return this.hp <= 0;
   }
 
+  /** PlayerCharacter.getSpeed: the weapon in hand sets the pace. */
   get speed() {
-    return MAX_SPEED * this.weaponSpeed * this.speedMultiplier;
+    return MAX_SPEED * this.weapon.moveSpeed * this.speedMultiplier;
+  }
+
+  get pose() {
+    return this.weapon.pose;
+  }
+
+  // --- weapons (PlayerCharacter) ---------------------------------------------------
+
+  weaponByID(id) {
+    return this.weapons.find((w) => w.id === id) || null;
+  }
+
+  /**
+   * PlayerCharacter.pickupWeapon: banks are kept in priority order; the Q/E
+   * order is by bank, and inside a bank from the lowest priority up. Picking
+   * up a weapon already held adds its ammo instead. Returns the held weapon.
+   */
+  pickupWeapon(weapon) {
+    const owned = this.weaponByID(weapon.id);
+    if (owned) {
+      if (owned !== weapon && owned.ammo && weapon.ammo) owned.ammo.add(weapon.ammo.count);
+      return owned;
+    }
+    const bank = (this.banks[weapon.bank] ||= []);
+    const at = bank.findIndex((w) => w.priority > weapon.priority);
+    bank.splice(at < 0 ? bank.length : at, 0, weapon);
+    let after = -1;
+    for (let i = this.weapons.length - 1; i >= 0; i--) {
+      const w = this.weapons[i];
+      if (weapon.bank > w.bank || (weapon.bank === w.bank && weapon.priority < w.priority)) {
+        after = i;
+        break;
+      }
+    }
+    this.weapons.splice(after + 1, 0, weapon);
+    return weapon;
+  }
+
+  /** Every weapon, with unlimited ammo, for other players (pickupRemoteWeapons). */
+  pickupRemoteWeapons() {
+    for (let id = 0; id < NUM_WEAPONS; id++) if (!this.weaponByID(id)) this.pickupWeapon(new Weapon(id, { remote: true }));
+  }
+
+  dropWeapon(weapon) {
+    this.weapons = this.weapons.filter((w) => w !== weapon);
+    const bank = this.banks[weapon.bank];
+    if (bank) {
+      bank.splice(bank.indexOf(weapon), 1);
+      if (!bank.length) delete this.banks[weapon.bank];
+    }
+    if (this.refillTarget === weapon) this.refillTarget = null;
+  }
+
+  /** PlayerCharacter.selectWeapon. Returns true when the weapon in hand changed. */
+  selectWeapon(weapon) {
+    if (!weapon || weapon === this.weapon) return false;
+    this.refillTarget = null;
+    this.weapon = weapon;
+    this.animSpeed = weapon.moveSpeed;
+    return true;
+  }
+
+  selectWeaponByID(id) {
+    return this.selectWeapon(this.weaponByID(id));
+  }
+
+  /** The next weapon with ammo, in Q/E order (E). Returns the new weapon or null. */
+  nextWeapon(step = 1) {
+    const list = this.weapons;
+    const n = list.length;
+    const i = list.indexOf(this.weapon);
+    for (let k = 1; k <= n; k++) {
+      const w = list[(((i + step * k) % n) + n) % n];
+      if (w === this.weapon) break;
+      if (w.available) return this.selectWeapon(w) ? w : null;
+    }
+    return null;
+  }
+
+  /** The previous weapon with ammo (Q). */
+  prevWeapon() {
+    return this.nextWeapon(-1);
+  }
+
+  /**
+   * PlayerCharacter.selectWeaponBank (keys 1-8): the bank's first weapon
+   * with ammo, or, when already holding one of its weapons, the next one.
+   */
+  selectWeaponBank(n) {
+    const bank = this.banks[n];
+    if (!bank?.length) return null;
+    const i = bank.indexOf(this.weapon);
+    if (i < 0) {
+      const w = bank.find((x) => x.available);
+      return w && this.selectWeapon(w) ? w : null;
+    }
+    for (let k = 1; k < bank.length; k++) {
+      const w = bank[(i + k) % bank.length];
+      if (w.available) return this.selectWeapon(w) ? w : null;
+    }
+    return null;
+  }
+
+  /** selectStartWeapon: Dual Pistols, else the Pistol, else anything. */
+  startWeapon() {
+    return this.weaponByID(WeaponID.AKIMBO_PISTOLS) || this.weaponByID(PISTOL_ID) || this.weapons[0] || null;
+  }
+
+  /**
+   * PlayerCharacter.checkAutoSwitch, when a gun has reloaded: an empty gun
+   * is swapped for the previous one with ammo; if that is the Pistol, the
+   * refill key will buy ammo for the empty gun. Returns the new weapon or null.
+   */
+  checkAutoSwitch() {
+    if (!this.local || this.weapon.available) return null;
+    const old = this.weapon;
+    const now = this.prevWeapon();
+    if (this.weapon.id === PISTOL_ID && old.ammo && old.ammo.count === 0) this.refillTarget = old;
+    return now;
   }
 
   setPosition(x, y) {
@@ -135,7 +257,7 @@ export class Character {
     this.collided = false;
     if (this.dead) return;
     if (this.moveDir) {
-      this.animator.walk(this.weaponSpeed * this.speedMultiplier);
+      this.animator.walk(this.animSpeed);
       if (!this.strafing) this.dir = this.moveDir;
       this.collided = moveCharacter(map, this, this.speed);
     } else {

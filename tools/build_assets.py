@@ -8,7 +8,7 @@ Produces (all generated, not committed):
     sprites/*.png     baked sprite sheets (see build_atlas.py)
     atlas.json        frame rectangles and offsets for every sprite
     ui/               the menus' vector art, text fields and fonts (swf_vector.py)
-    sounds/*.mp3      every game sound
+    sounds/           every game sound (.mp3; .wav for the uncompressed and ADPCM ones)
     constants.xml     weapon and health tuning, read by the game at startup
 
 Requires Python 3.9+, Pillow and fontTools (pip install pillow fonttools).
@@ -60,6 +60,7 @@ FX_SYMBOLS = {
     'smoke': 'boxhead.world.thing.particle.Smoke_SmokeGraphics',
     'blood': 'boxhead.world.thing.particle.Blood_BloodMC',
 }
+FIRE_SYMBOL = 'boxhead.assets.render.FireLayer'  # the flamer's flames (FireRenderer)
 
 
 def export_fx(swf_bytes, path):
@@ -72,6 +73,12 @@ def export_fx(swf_bytes, path):
             print(f'  {name}: {len(symbol["frames"])} frames')
         else:
             print(f'  {name}: not found in BBH.swf', file=sys.stderr)
+    fire = swf_vector.tinted_bitmap_frames(library, FIRE_SYMBOL)
+    if fire:
+        fx['fire'] = fire
+        print(f'  fire: {len(fire["colors"])} frames')
+    else:
+        print('  fire: not found in BBH.swf', file=sys.stderr)
     with open(path, 'w') as f:
         json.dump(fx, f)
 

@@ -688,9 +688,11 @@ def parse_place(code, body):
         place['filters'] = read_filters(r)
     if flags2 & 0x02:
         place['blend'] = r.u8()
-    if flags2 & 0x04:
+    # The last fields are sometimes left out (Flash writes a cacheAsBitmap
+    # flag without its byte), so stop at the end of the tag.
+    if flags2 & 0x04 and r.pos < len(body):
         r.u8()  # cacheAsBitmap
-    if flags2 & 0x20:
+    if flags2 & 0x20 and r.pos < len(body):
         place['visible'] = bool(r.u8())
     return place, bool(flags & 0x01)
 
@@ -1047,6 +1049,50 @@ def symbol_frames(library, class_name):
     svgs = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{num(w)}" height="{num(h)}" viewBox="{num(x0)} {num(y0)} {num(w)} {num(h)}">'
             + ''.join(writer.defs) + body + '</svg>' for _, body in shapes]
     return {'frames': svgs, 'bounds': [x0, y0, x1, y1], 'blur': blur, 'alpha': alpha}
+
+
+def tinted_bitmap_frames(library, class_name):
+    """A MovieClip showing one bitmap-filled shape under a different colour
+    transform on each frame (the flamer's FireLayer): the bitmap as a PNG data
+    URL, the rectangle it fills, the clip's offset and every frame's colour
+    transform [[r, g, b, a] multipliers, [r, g, b, a] offsets]. None if absent."""
+    cid = library.classes.get(class_name)
+    sprite = library.sprites.get(cid)
+    if not sprite or not sprite['frames'] or not sprite['frames'][0]:
+        return None
+    first = sprite['frames'][0][0]
+    offset = (first.get('matrix') or [1, 0, 0, 1, 0, 0])[4:6]
+    inner = first.get('id')
+    while inner in library.sprites:
+        places = library.sprites[inner]['frames'][0]
+        if len(places) != 1:
+            return None
+        inner = places[0].get('id')
+    shape = library.shapes.get(inner)
+    if not shape:
+        return None
+    fill = next((f for f in shape['fills'] if f.get('type') == 'bitmap' and f.get('bitmap') in library.bitmaps), None)
+    if not fill:
+        return None
+    kind, code, body = library.bitmaps[fill['bitmap']]
+    if kind == 'lossless':
+        _, img = swf_extract.lossless(body, code == 36)
+    else:
+        _, img = swf_extract.jpeg(body, code, library.jpeg_tables)
+    out = io.BytesIO()
+    img.save(out, 'PNG', optimize=True)
+    import base64
+    identity = [[1, 1, 1, 1], [0, 0, 0, 0]]
+    colors = []
+    for frame in sprite['frames']:
+        place = frame[0] if frame else {}
+        colors.append(place.get('cxform') or identity)
+    return {
+        'image': 'data:image/png;base64,' + base64.b64encode(out.getvalue()).decode('ascii'),
+        'rect': shape['bounds'],
+        'offset': offset,
+        'colors': colors,
+    }
 
 
 def export(data, out_dir, url_prefix='assets/game/ui/'):

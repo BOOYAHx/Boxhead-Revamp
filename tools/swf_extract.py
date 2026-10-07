@@ -156,7 +156,9 @@ def sound(body):
     data = body[7:]
     if fmt == 2:
         return cid, 'mp3', data[2:]  # skip SeekSamples
-    if fmt in (0, 3):
+    if fmt == 1:
+        data, width = adpcm(data, channels), 2
+    if fmt in (0, 1, 3):
         out = io.BytesIO()
         import wave
         with wave.open(out, 'wb') as w:
@@ -166,6 +168,60 @@ def sound(body):
             w.writeframes(data)
         return cid, 'wav', out.getvalue()
     return cid, None, None
+
+
+ADPCM_STEPS = (
+    7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
+    107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,
+    876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428, 4871,
+    5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623,
+    27086, 29794, 32767)
+ADPCM_INDEX = {
+    2: (-1, 2),
+    3: (-1, -1, 2, 4),
+    4: (-1, -1, -1, -1, 2, 4, 6, 8),
+    5: (-1, -1, -1, -1, -1, -1, -1, -1, 1, 2, 4, 6, 8, 10, 13, 16),
+}
+
+
+def adpcm(data, channels=1):
+    """Flash's ADPCM sound format as 16-bit little-endian PCM: packets of 4096
+    samples, each starting with a raw sample and step index per channel."""
+    bit = 0
+    total = len(data) * 8
+
+    def read(n):
+        nonlocal bit
+        value = 0
+        for _ in range(n):
+            value = (value << 1) | ((data[bit >> 3] >> (7 - (bit & 7))) & 1)
+            bit += 1
+        return value
+
+    bits = read(2) + 2
+    table = ADPCM_INDEX[bits]
+    sign = 1 << (bits - 1)
+    out = []
+    while total - bit >= 22 * channels:
+        state = []
+        for _ in range(channels):
+            sample = read(16)
+            if sample >= 0x8000:
+                sample -= 0x10000
+            state.append([sample, read(6)])
+            out.append(sample)
+        for _ in range(4095):
+            if total - bit < bits * channels:
+                break
+            for ch in state:
+                code = read(bits)
+                step = ADPCM_STEPS[ch[1]]
+                magnitude = code & (sign - 1)
+                delta = ((2 * magnitude + 1) * step) >> (bits - 1)
+                ch[0] = max(-32768, min(32767, ch[0] - delta if code & sign else ch[0] + delta))
+                ch[1] = max(0, min(88, ch[1] + table[magnitude]))
+                out.append(ch[0])
+    return struct.pack(f'<{len(out)}h', *out)
 
 
 def extract(data, out, manifest, depth=0):

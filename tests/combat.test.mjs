@@ -27,10 +27,12 @@ function player(x, y, local = true) {
   return ch;
 }
 
-test('weapon stats come from constants.xml, ignoring upgrade values', () => {
+test('weapon stats come from constants.xml, upgrades kept apart', () => {
   const stats = parseWeaponStats(CONSTANTS);
-  assert.deepEqual(stats[0], { name: 'Pistol', damage: 7, range: 20, spread: 0.08, fireDelay: 0.5, moveSpeed: 1 });
-  assert.equal(stats[16].range, 1000);
+  const { upgrades, ...pistolStats } = stats[0];
+  assert.deepEqual(pistolStats, { name: 'Pistol', shortName: 'Pistol', ammo: null, ammoIncrement: 0, damage: 7, range: 20, spread: 0.08, fireDelay: 0.5, moveSpeed: 1, cost: 0, ammoCost: 0, description: '' });
+  assert.deepEqual(upgrades, [{ type: 'damage', value: 9, cost: 2500 }, null]);
+  assert.equal(stats[16].range, 100); // "Infinite" is 100 cells, like WeaponInfo.create
   setWeaponStats(stats);
   const pistol = new Weapon(PISTOL_ID);
   assert.equal(pistol.reloadTime, 10); // 0.5 s at 20 ticks per second
@@ -53,11 +55,11 @@ test('shot effects wait for the previous muzzle flash and report the reload', ()
   const ch = player(5, 5);
   const w = ch.weapon;
   const shot = w.shoot(ch, 0);
-  w.queueEffects(shot, 6);
+  w.queueEffects(shot, [6]);
   const first = w.process(true);
   assert.ok(first.effects);
   assert.ok(w.flashVisible);
-  const line = w.tracerLine(first.effects);
+  const [line] = w.tracerLines(first.effects);
   assert.ok(Math.abs(line.length - 5.2) < 1e-9); // distance minus the barrel
   assert.equal(line.altitude, 22);
   let reloaded = false;

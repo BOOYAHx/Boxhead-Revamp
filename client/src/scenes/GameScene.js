@@ -9,7 +9,9 @@ import { MODELS } from '../game/bodyParts.js';
 import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
-import { parseWeaponStats, setWeaponStats } from '../game/weapons.js';
+import { ShopState } from '../game/shop.js';
+import { PISTOL_ID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
+import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
 import { fetchMap } from '../net/MapService.js';
@@ -30,6 +32,8 @@ const MAX_FLOOD = 3; // chat messages per FLOOD_TIME before further ones are dro
 const FLOOD_TIME = 2000;
 const MAX_CHAT_LENGTH = 120;
 const LEADER_COLOR = 0xffffff;
+const AUTO_SHOP_DELAY = 3000; // ShopGame.AUTO_SHOP_DELAY
+const OFFLINE_MONEY = 1000000; // practice: enough to try everything
 const TEXT_STYLE = { fontFamily: 'Verdana, sans-serif', fontSize: '11px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.55)', padding: { x: 6, y: 3 } };
 
 export class GameScene extends Phaser.Scene {
@@ -66,12 +70,18 @@ export class GameScene extends Phaser.Scene {
     this.claimedCrates = new Map(); // picked up by us, waiting for the server's confirmation
     this.lastPingCycle = 0;
     this.pingIndex = 0;
+    this.ui = null; // weapon slider and shop (the original art)
+    this.shop = null; // ShopState
+    this.autoShopTime = 0;
+    this.autoSelectWeapon = null;
+    this.loops = new Map(); // weapon -> playing loop sound
+    this.reloadSounds = []; // the local player's pending reload / change sounds
   }
 
   create() {
     setWeaponStats(parseWeaponStats(this.cache.text.get('constants') || ''));
     fitCamera(this.cameras.main);
-    this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,SPACE,J,M,C,T,H,ESC,TAB');
+    this.keys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D,SHIFT,SPACE,J,M,C,T,H,ESC,TAB,Q,E,R,DELETE,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT');
     this.input.keyboard.addCapture('UP,DOWN,LEFT,RIGHT,SPACE,TAB');
     this.debug = this.add.graphics().setDepth(9000);
     this.showHits = false;
@@ -84,8 +94,8 @@ export class GameScene extends Phaser.Scene {
     this.hud = new Hud(this);
     const help =
       this.mode === 'offline'
-        ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · M model · C colour · H head · T hit boxes · Esc menu'
-        : 'Arrows/WASD move · Space fire · Shift strafe · Enter chat · Tab scores · Esc lobby';
+        ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · B shop · R refill · M model · C colour · H head · T hit boxes · Esc menu'
+        : 'Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · B shop · R refill · Enter chat · Tab scores · Esc lobby';
     // Not in the original: a short reminder of the keys that fades after a while.
     this.help = this.add
       .text(4, 4, help, { ...TEXT_STYLE, fontSize: '10px', backgroundColor: 'rgba(0,0,0,0.4)', wordWrap: { width: 260 } })
@@ -99,8 +109,30 @@ export class GameScene extends Phaser.Scene {
     // side running so other players still see us (and we keep their state).
     this.onVisibility = () => this.visibilityChanged();
     document.addEventListener('visibilitychange', this.onVisibility);
-    this.onKeyDown = (event) => this.chatKey(event);
+    this.onKeyDown = (event) => {
+      // ShopGame.process: B / N open and close the shop.
+      if (this.ui && this.chatInput === null && !this.gameOver && !event.repeat && (event.code === 'KeyB' || event.code === 'KeyN')) {
+        if (this.ui.shopOpen) this.closeShop();
+        else this.openShop();
+        return;
+      }
+      if (this.ui?.shopOpen && this.chatInput === null) {
+        if (event.code !== 'Escape' && event.code !== 'KeyB' && event.code !== 'KeyN' && this.ui.shop.keyDown(event)) event.preventDefault();
+        return;
+      }
+      this.chatKey(event);
+    };
+    this.onKeyUp = (event) => {
+      if (!this.ui?.shopOpen) return;
+      this.ui.shop.keyUp(event);
+      // ShopGame.handleKeyUp: Escape closes the shop.
+      if (event.code === 'Escape') {
+        this.swallowEscape = true;
+        this.closeShop();
+      }
+    };
     window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
     window.boxhead = { scene: this };
 
     if (this.mode === 'online') this.startOnline();
@@ -148,7 +180,11 @@ export class GameScene extends Phaser.Scene {
     this.connection.existingPickups = '';
     this.connection.sendGameMessage('0k1'); // map loaded (BountyGame.loadMap)
     for (const user of this.connection.peers) if (user.handshake) this.ensureRemote(user);
-    this.connection.sendGameMessage('8' + cellPosToString(this.player.pos)); // spawned (Game.respawnLocalCharacter)
+    if (!this.ui) {
+      // No shop art: spawn straight away (Game.respawnLocalCharacter).
+      this.player.active = true;
+      this.connection.sendGameMessage('8' + cellPosToString(this.player.pos));
+    }
     this.forcePositionUpdate = true;
     this.updateScores();
   }
@@ -180,6 +216,8 @@ export class GameScene extends Phaser.Scene {
     let remote = this.remotes.get(user.id);
     if (!remote) {
       const character = new Character({ id: user.id, name: user.name });
+      character.pickupRemoteWeapons();
+      character.selectWeaponByID(user.handshake?.weaponID || PISTOL_ID);
       character.firePos = { x: 0, y: 0 };
       character.strafing = true;
       character.stats = newStats();
@@ -199,7 +237,7 @@ export class GameScene extends Phaser.Scene {
     if (user.handshake && !ch.active) ch.hp = user.handshake.hp;
     if (this.map) {
       remote.view?.destroy();
-      remote.view = new CharacterView(this, ch, 'Pistol', '#ffe08a');
+      remote.view = new CharacterView(this, ch, '#ffe08a');
       remote.view.setPlacing(ch.stats.placing ? placingString(ch.stats.placing) : '');
     }
     return remote;
@@ -271,21 +309,56 @@ export class GameScene extends Phaser.Scene {
       case 'm':
         this.crateTaken(ch, message);
         break;
+      case '0':
+        if (message.charAt(1) === 'q') {
+          // A peer changed weapon (Game.processPlayerMessage "q").
+          if (ch.selectWeaponByID(parseInt(message.substr(2, 2), 10))) this.weaponChanged(ch, true);
+        } else if (message.charAt(1) === 'l') this.remotePurchase(ch, message);
+        break;
       default:
         break;
     }
   }
 
+  /**
+   * "0l<weapon2><action>": a peer bought an upgrade or returned a gun. The
+   * Flash client never received these from this server; applying them means
+   * our hit checks use the shooter's real damage.
+   */
+  remotePurchase(ch, message) {
+    const weapon = ch.weaponByID(parseInt(message.substr(2, 2), 10));
+    const action = message.charAt(4);
+    if (!weapon) return;
+    if (action === '1' || action === '2') weapon.buyUpgrade(parseInt(action, 10));
+    else if (action === '3') {
+      const fresh = new weapon.constructor(weapon.id, { remote: true });
+      const wasCurrent = ch.weapon === weapon;
+      ch.dropWeapon(weapon);
+      ch.pickupWeapon(fresh);
+      if (wasCurrent) ch.selectWeapon(fresh);
+    }
+  }
+
   // --- combat ----------------------------------------------------------------------
 
-  /** Weapon.fire for the local player: shoot, show it, and tell the room. */
+  /** Weapon.fire + Game.characterFire for the local player: shoot, show it, warn about ammo, tell the room. */
   fireLocal() {
     const p = this.player;
-    const shot = p.weapon.shoot(p, p.weapon.fireAngle(p));
+    const w = p.weapon;
+    w.useFireAmmo();
+    const param = w.fireParam();
+    const shot = w.shoot(p, w.fireAngle(p), param);
     this.executeShot(p, shot);
+    if (w.ammo) {
+      if (w.ammo.count === 0) this.hud.showWarning('OUT OF AMMO!', 2000);
+      else if (!w.ammoWarningGiven && w.ammo.count <= Math.max(1, w.ammo.max * 0.2)) {
+        w.ammoWarningGiven = true;
+        this.hud.showWarning('LOW AMMO!', 3000);
+      }
+    }
     if (this.mode === 'online') {
       this.forcePositionUpdate = true; // peers replay the shot from our exact position
-      this.outQueue.push(encodeFire(shot.angle, shot.param));
+      this.outQueue.push(encodeFire(shot.angle, param));
     }
   }
 
@@ -309,10 +382,15 @@ export class GameScene extends Phaser.Scene {
    */
   executeShot(shooter, shot) {
     const victim = this.player;
-    const targets = shooter !== victim && victim.active && !victim.dead ? [victim] : [];
-    const result = traceShot(this.map, shot.start, shot.angle, shot.altitude, shot.range, targets, shooter);
-    if (result.characters.length) this.localHurt(shooter, shooter.weapon, shot.angle);
-    shooter.weapon.queueEffects(shot, result.distance);
+    const weapon = shooter.weapon;
+    const distances = shot.tracers.map((t) => {
+      const targets = shooter !== victim && victim.active && !victim.dead ? [victim] : [];
+      const result = traceShot(this.map, t.start, t.angle, t.altitude, t.range, targets, shooter);
+      // Every ray (shotgun pellet, flame) that reaches us does the full damage.
+      if (result.characters.length) this.localHurt(shooter, weapon, t.angle);
+      return result.distance;
+    });
+    weapon.queueEffects(shot, distances);
   }
 
   /** Character.hurt + Game.characterHurt for the local player. */
@@ -326,7 +404,7 @@ export class GameScene extends Phaser.Scene {
     // ScreenShake(pos, 1.5, 200); Phaser scales the shake by the zoom twice.
     if (Preferences.shake) this.cameras.main.shake(200, 0.006 / (Display.scale * Display.scale));
     if (p.dead) this.localDeath(shooter);
-    if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, lost));
+    if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, Math.min(99, lost)));
   }
 
   /** Game.characterDeath: kill message and the respawn countdown. */
@@ -334,6 +412,7 @@ export class GameScene extends Phaser.Scene {
     this.addKillMessage(killer, this.player);
     this.hud.showWarning('You will respawn in: [seconds]', this.player.respawnTime);
     this.forcePositionUpdate = true;
+    if (this.ui) this.autoShopTime = performance.now() + AUTO_SHOP_DELAY; // ShopGame.characterDeath
   }
 
   /**
@@ -378,25 +457,189 @@ export class GameScene extends Phaser.Scene {
     ch.hurtSoundUntil = performance.now() + (audio?.duration ? audio.duration * 1000 : 500);
   }
 
-  /** Weapon.process: timers, then the queued muzzle flash, tracer and fire sound. */
-  processWeapon(ch) {
-    const weapon = ch.weapon;
-    const { effects, reloaded } = weapon.process(true);
-    if (effects) {
-      this.effects.addTracer(weapon.tracerLine(effects));
-      this.effects.addShotEffects(weapon, effects);
-      const sounds = weapon.fireSounds;
-      this.effects.playSound(sounds[Math.floor(Math.random() * sounds.length)], weapon.muzzle);
+  /**
+   * PlayerCharacter.updateWeapons: every weapon held ticks (holstered ones
+   * still reload); the one in hand shows its queued shot: flash, tracers,
+   * smoke, shells, fire and sounds. An empty gun is swapped once reloaded.
+   */
+  processWeapons(ch) {
+    for (const weapon of ch.weapons) {
+      const current = weapon === ch.weapon;
+      const { effects, reloaded, stopLoop } = weapon.process(current);
+      if (effects && current) this.showShot(ch, weapon, effects);
+      if (stopLoop || (!current && this.loops.has(weapon))) this.stopLoop(weapon, stopLoop);
+      else if (this.loops.has(weapon)) this.effects.moveSound(this.loops.get(weapon), weapon.muzzle);
+      if (reloaded) {
+        if (ch.local && !ch.dead && weapon.hasAmmo) this.playReloadSound(weapon, weapon.reloadSoundDelay);
+        const next = ch.checkAutoSwitch();
+        if (next) this.weaponChanged(ch, true);
+      }
     }
-    if (reloaded && ch.local && !ch.dead) this.effects.playSound(weapon.reloadSound, weapon.muzzle, weapon.reloadSoundDelay);
+  }
+
+  /** Weapon.executeEffects. */
+  showShot(ch, weapon, effects) {
+    if (ch.local) this.stopReloadSounds();
+    for (const line of weapon.tracerLines(effects)) this.effects.addTracer(line);
+    this.effects.addShotEffects(weapon, effects);
+    const sounds = weapon.fireSounds;
+    const fire = sounds.length ? sounds[Math.floor(Math.random() * sounds.length)] : null;
+    if (weapon.loopSound) {
+      if (effects.startLoop) {
+        if (fire) this.effects.playSound(fire, weapon.muzzle);
+        this.loops.set(weapon, this.effects.playSound(weapon.loopSound, weapon.muzzle, fire ? this.effects.soundLength(fire) : 0, { loop: true }));
+      }
+    } else if (fire) this.effects.playSound(fire, weapon.muzzle);
+  }
+
+  stopLoop(weapon, playStop) {
+    this.effects.stopSound(this.loops.get(weapon));
+    this.loops.delete(weapon);
+    weapon.loopPlaying = false;
+    if (playStop && weapon.stopSound) this.effects.playSound(weapon.stopSound, weapon.muzzle);
+  }
+
+  /** Weapon.playReloadSound: the local player's reload click (both guns for akimbo). */
+  playReloadSound(weapon, delay) {
+    if (!weapon.reloadSound || !weapon.hasAmmo) return;
+    this.reloadSounds.push(this.effects.playSound(weapon.reloadSound, weapon.muzzle, delay));
+    if (weapon.reloadSound2) this.reloadSounds.push(this.effects.playSound(weapon.reloadSound2, weapon.muzzle, delay + weapon.reloadSoundDelay2 - weapon.reloadSoundDelay));
+  }
+
+  stopReloadSounds() {
+    for (const sound of this.reloadSounds) this.effects.stopSound(sound);
+    this.reloadSounds = [];
+  }
+
+  /**
+   * After PlayerCharacter.selectWeapon: the change sound (Weapon.playChangeWeaponSound),
+   * and for us, "0q" to the room and the weapon slider.
+   */
+  weaponChanged(ch, sound) {
+    const weapon = ch.weapon;
+    weapon.updatePosition(ch);
+    if (sound) {
+      if (ch.local) this.stopReloadSounds();
+      const change = weapon.changeSound;
+      if (change) {
+        const s = this.effects.playSound(change, weapon.muzzle);
+        if (ch.local) this.reloadSounds.push(s);
+      }
+      if (ch.local) this.playReloadSound(weapon, change ? this.effects.soundLength(change) : 0);
+    }
+    if (!ch.local) return;
+    if (this.mode === 'online') this.outQueue.push('0q' + padInt(weapon.id, 2));
+    this.ui?.slider.update(weapon);
+  }
+
+  /** Q/E, 1-8 (LocalPlayer.processInput). */
+  handleWeaponKeys() {
+    const p = this.player;
+    const k = this.keys;
+    const press = (key) => Phaser.Input.Keyboard.JustDown(key);
+    let changed = null;
+    if (press(k.Q)) changed = p.prevWeapon();
+    if (press(k.E)) changed = p.nextWeapon() || changed;
+    [k.ONE, k.TWO, k.THREE, k.FOUR, k.FIVE, k.SIX, k.SEVEN, k.EIGHT].forEach((key, i) => {
+      if (press(key)) changed = p.selectWeaponBank(i + 1) || changed;
+    });
+    if (changed) this.weaponChanged(p, true);
+    if (press(k.R) || press(k.DELETE)) this.refillCurrentWeapon();
+  }
+
+  // --- shop (ShopGame) -----------------------------------------------------------------
+
+  openShop() {
+    if (!this.ui || this.ui.shopOpen || this.gameOver) return;
+    this.autoShopTime = 0;
+    const p = this.player;
+    p.moveDir = null;
+    p.firing = false;
+    this.ui.openShop();
+    this.updateShopTime();
+  }
+
+  /** ShopGame.closeShop: the first close of a round spawns us with what we bought. */
+  closeShop() {
+    if (!this.ui?.shopOpen) return;
+    const p = this.player;
+    this.ui.closeShop();
+    if (!p.active) {
+      for (const weapon of this.shop.ownedWeapons()) p.pickupWeapon(weapon);
+      this.respawnLocal(false);
+      if (p.selectWeapon(p.startWeapon())) this.weaponChanged(p, true);
+      else this.weaponChanged(p, false);
+    }
+    this.forcePositionUpdate = true;
+    this.ui.slider.setBanks(p.banks);
+    if (this.autoSelectWeapon && p.selectWeaponByID(this.autoSelectWeapon.id)) this.weaponChanged(p, true);
+    this.autoSelectWeapon = null;
+    this.ui.slider.update(p.weapon, true);
+    this.updateScores();
+  }
+
+  /** ShopGame.handleBuyWeapon / handleRefillWeapon / handleWeaponUpgrade, and refunds. */
+  purchased(result) {
+    const p = this.player;
+    const id = result.weapon.id;
+    if (result.event === 'buy' && !p.weaponByID(id)) {
+      if (p.active) p.pickupWeapon(result.weapon);
+      this.autoSelectWeapon = result.weapon;
+    }
+    if (result.event === 'refund') {
+      const held = p.weaponByID(id);
+      if (held) {
+        if (p.weapon === held) {
+          this.stopLoop(held, false);
+          if (p.selectWeapon(p.weaponByID(1) || p.weaponByID(PISTOL_ID) || p.weapons.find((w) => w !== held && w.available))) this.weaponChanged(p, false);
+        }
+        p.dropWeapon(held);
+      }
+      if (this.autoSelectWeapon?.id === id) this.autoSelectWeapon = null;
+    }
+    if (this.mode === 'online') this.connection.sendGameMessage('0l' + padInt(id, 2) + result.action);
+    if (p.active) this.ui.slider.setBanks(p.banks);
+    this.ui.slider.update(p.weapon, true);
+    this.updateScores();
+  }
+
+  /** ShopGame.refillCurrentWeapon (R / Delete): ammo for the emptied gun, or the one in hand. */
+  refillCurrentWeapon() {
+    const p = this.player;
+    if (!this.ui || !p.weapon) return;
+    const target = p.refillTarget || p.weapon;
+    this.ui.shop.refillByID(target.id, true);
+    if (target !== p.weapon && target.ammo?.count > 0 && p.selectWeapon(target)) this.weaponChanged(p, true);
+    this.updateScores();
+  }
+
+  /** ShopGame.updateShopGameTime: the countdown to the round's start. */
+  updateShopTime() {
+    if (!this.ui?.shopOpen) return;
+    if (this.mode === 'offline') return this.ui.shop.setCountDown(0);
+    if (this.roundTime >= 0) this.ui.shop.setCountDown(Math.max(0, Math.trunc(this.roundTime - ROUND_START_TIME)));
+  }
+
+  /** The shop's handlers (what buying does to the game). */
+  shopHandlers() {
+    return {
+      playSound: (name) => this.app?.playSound(name),
+      purchased: (result) => this.purchased(result),
+      close: () => this.closeShop(),
+      now: () => performance.now(),
+      openShop: () => this.openShop(),
+      selectWeapon: (weapon) => {
+        if (this.player.selectWeapon(weapon)) this.weaponChanged(this.player, true);
+      },
+    };
   }
 
   /** Game.respawnLocalCharacter: back at the safest spawn point after the countdown. */
-  respawnLocal() {
+  respawnLocal(sound = true) {
     const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
     this.hud.clearWarnings();
-    this.effects.playSound('CharacterRespawn', this.player.pos);
+    if (sound) this.effects.playSound('CharacterRespawn', this.player.pos);
     if (this.mode === 'online') {
       this.outQueue.push('8' + cellPosToString(this.player.pos));
       this.forcePositionUpdate = true;
@@ -514,6 +757,7 @@ export class GameScene extends Phaser.Scene {
     if (ch.local) {
       this.effects.playSound('Ka_ching', ch.pos);
       ch.stats.money += crate.bounty; // Player.pickupMoney (no money premium)
+      if (this.ui?.shopOpen) this.ui.shop.refresh();
       const camera = this.cameras.main;
       this.hud.addMoneyFloater(crate.bounty, crate.end.x * CELL_WIDTH - camera.scrollX, crate.end.y * CELL_HEIGHT - camera.scrollY - 20);
     }
@@ -570,6 +814,7 @@ export class GameScene extends Phaser.Scene {
     this.roundTime -= 1;
     if (this.roundTime % 20 === 0) this.connection.requestRoundTime();
     if (this.roundTime === ROUND_START_TIME) this.effects.playSound('GameStart', this.effects.focus);
+    this.updateShopTime();
     if (this.gameOver) {
       this.hud.setSummaryCountdown(this.roundTime);
       // Start the next round once the server has (its "p" jumps back up).
@@ -587,6 +832,8 @@ export class GameScene extends Phaser.Scene {
     if (this.gameOver || !this.player) return;
     this.gameOver = true;
     this.closeChat();
+    if (this.ui?.shopOpen) this.ui.closeShop();
+    this.ui?.setHudVisible(false);
     const everyone = this.players();
     const shown = rankPlayers(everyone.map((p) => ({ ...p, active: p.local ? this.participated : true })));
     const awards = roundAwards(awardIDs, everyone);
@@ -686,11 +933,30 @@ export class GameScene extends Phaser.Scene {
     const user = this.connection?.localUser;
     this.player = new Character({ id: this.connection?.clientID, name: user?.name || 'You', local: true });
     this.player.stats = newStats(this.app?.roundBonus || 0);
+    if (this.mode === 'offline') this.player.stats.money = OFFLINE_MONEY;
     if (this.app) this.app.roundBonus = 0; // Player.newRound spends the bonus
     if (user) Object.assign(this.player.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
     const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
     this.playerView = new CharacterView(this, this.player);
+    // The round starts in the shop (BountyGame.showInitUI); we spawn when it closes.
+    this.shop = new ShopState(this.player.stats);
+    const lib = this.app?.menus?.lib;
+    const root = document.getElementById('game-ui');
+    if (lib && root) {
+      try {
+        this.ui = new GameUi(root, lib, this.shop, this.shopHandlers());
+      } catch (error) {
+        console.warn('The shop art could not be built:', error);
+        this.ui = null;
+      }
+    }
+    if (this.ui) {
+      this.player.active = false;
+      const b = map.borderRect;
+      this.player.setPosition(b.x + b.width / 2, b.y + b.height / 2); // the camera looks at the middle meanwhile
+      this.openShop();
+    }
 
     const { borderRect } = map;
     this.cameraBounds = { x: borderRect.x * CELL_WIDTH, y: borderRect.y * CELL_HEIGHT, width: borderRect.width * CELL_WIDTH, height: borderRect.height * CELL_HEIGHT };
@@ -702,7 +968,7 @@ export class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
-      if (this.swallowEscape) this.swallowEscape = false;
+      if (this.swallowEscape || this.ui?.shopOpen) this.swallowEscape = false;
       else if (this.chatInput === null) {
         this.app.leaveGame();
         return;
@@ -725,6 +991,7 @@ export class GameScene extends Phaser.Scene {
       this.accumulator -= PROCESS_INTERVAL;
     }
     this.player.animator.advance(delta);
+    if (this.ui && this.player.active && !this.ui.shopOpen) this.ui.slider.update(this.player.weapon);
     const alpha = this.accumulator / PROCESS_INTERVAL;
     this.playerView.update(alpha);
     for (const { character, view } of this.remotes.values()) {
@@ -762,7 +1029,17 @@ export class GameScene extends Phaser.Scene {
     const k = this.keys;
     const p = this.player;
     while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
-    if (!p.dead) {
+    // ShopGame.process: death opens the shop after 3 s.
+    if (Preferences.autoShop && this.autoShopTime && performance.now() >= this.autoShopTime) {
+      this.autoShopTime = 0;
+      this.openShop();
+    }
+    if (this.ui?.shopOpen) {
+      p.moveDir = null;
+      p.firing = false;
+      this.ui.shop.updateRespawnTime(Math.max(0, Math.ceil(p.respawnTime / 1000)), p.active, p.dead);
+    } else if (this.chatInput === null && p.active) this.handleWeaponKeys();
+    if (!p.dead && !this.ui?.shopOpen) {
       const typing = this.chatInput !== null;
       const down = (...keys) => !typing && keys.some((key) => key.isDown);
       const h = (down(k.RIGHT, k.D) ? 1 : 0) - (down(k.LEFT, k.A) ? 1 : 0);
@@ -771,14 +1048,24 @@ export class GameScene extends Phaser.Scene {
       p.strafing = down(k.SHIFT);
       p.firing = down(k.SPACE, k.J);
     }
-    p.move(this.map);
-    if (p.processTimers()) this.respawnLocal();
-    else if (p.active && !p.dead && p.firing && p.weapon.isLoaded) this.fireLocal();
-    this.processWeapon(p);
+    if (p.active) p.move(this.map);
+    if (p.active && p.processTimers()) {
+      if (!this.ui?.shopOpen) this.respawnLocal(); // the shop holds the respawn back
+    } else if (p.active && !p.dead && p.firing && p.weapon.canFire()) this.fireLocal();
+    this.processWeapons(p);
+    // AutoReload: a gun down to its last round is filled up.
+    if (Preferences.autoReload && this.ui && !this.ui.shopOpen && !this.gameOver && p.active && !p.dead) {
+      const w = p.weapon;
+      if (this.shop.autoReload(w)?.ok) {
+        this.ui.shop.refresh();
+        if (this.mode === 'online') this.connection.sendGameMessage('0l' + padInt(w.id, 2) + '0');
+        this.updateScores();
+      }
+    }
     for (const { character } of this.remotes.values()) {
       if (character.active) character.move(this.map);
       character.processTimers();
-      this.processWeapon(character);
+      this.processWeapons(character);
     }
     this.checkBountyCrates();
     if (this.mode === 'online') {
@@ -839,6 +1126,10 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard.clearCaptures();
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    this.ui?.destroy();
+    this.ui = null;
+    this.loops.clear();
     clearInterval(this.backgroundTimer);
     for (const off of this.unsubscribe) off();
     this.unsubscribe = [];

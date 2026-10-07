@@ -360,6 +360,9 @@ export class Connection extends Emitter {
         return this.emit(ServerEvent.SERVER_MESSAGE, { message: 'R' + rest });
       case 'm':
         return this.emit(ServerEvent.PLAYER_MESSAGE, { source: data.substr(2, 3), message: 'm' + data.substr(5) });
+      case 'l':
+        // A purchase relayed by the server: "0l<id3><weapon2><action>".
+        return this.emit(ServerEvent.PLAYER_MESSAGE, { source: data.substr(2, 3), message: '0l' + data.substr(5) });
       case 'y': {
         const id = data.substr(2, 3);
         const user = id === this.clientID ? this.localUser : this.peers.find((p) => p.id === id);
