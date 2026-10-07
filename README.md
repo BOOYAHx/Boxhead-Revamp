@@ -338,6 +338,12 @@ python tools/upscale_textures.py
   uses your graphics card (NVIDIA, AMD or Intel with Vulkan); it takes a few
   minutes. Then press Ctrl+F5 with **Enhanced Graphics** on in Options.
 * The bigger your game window, the sharper it gets (up to 4x the original).
+* Some graphics drivers make Real-ESRGAN output noise instead of a picture
+  (in the game: striped, grainy blocks and grey boxes). Every file is now
+  checked against its original and broken ones are left out; the tool then
+  suggests `--tile 64`, `--model fast`, or `--cpu` (slow, an hour or more, but
+  it always works). Already have broken files from before? Run
+  `python tools/hd_sprites.py` and they are dropped.
 * `--model fast` is quicker and a little softer; `--model photo` is the
   realistic model. `--redo` upscales everything again (for example after
   trying another model).

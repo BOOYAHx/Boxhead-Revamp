@@ -12,8 +12,10 @@ tools/upscale_textures.py does all of this for you. To use another upscaler:
 
 The checker makes sure every file is exactly 2x, 3x or 4x its original,
 puts back the transparency if the upscaler dropped it (taken from the
-original, enlarged smoothly), and writes hd.json, which the game reads at
-start-up. Files that are missing or the wrong size keep the original art.
+original, enlarged smoothly), leaves out files that don't look like their
+original when shrunk back (some graphics drivers make the upscaler output
+noise), and writes hd.json, which the game reads at start-up. Files that
+are missing, the wrong size or broken keep the original art.
 Run it again whenever you change the folders; delete them to go back to the
 original art.
 
@@ -27,7 +29,34 @@ import os
 from PIL import Image
 
 SCALES = (2, 3, 4)
+MAX_COLOUR_DIFF = 25  # average colour difference (0-255) after shrinking back; good upscales are under 15
+MAX_ALPHA_DIFF = 30  # the same for transparency
 FOLDERS = (('sprites', 'sprites-hd'), ('images', 'images-hd'))
+
+
+def difference(original, hd):
+    """How far `hd`, shrunk back to the original's size, is from it: (colour, transparency), 0-255."""
+    small = hd.convert('RGBA').resize(original.size, Image.BOX)
+    a, b = original.convert('RGBA'), small
+    pa, pb = a.load(), b.load()
+    colour = weight = alpha = 0.0
+    w, h = original.size
+    step = max(1, (w * h) // 40000)  # sample big images
+    count = 0
+    for i in range(0, w * h, step):
+        x, y = i % w, i // w
+        c1, c2 = pa[x, y], pb[x, y]
+        k = max(c1[3], c2[3]) / 255
+        colour += k * (abs(c1[0] - c2[0]) + abs(c1[1] - c2[1]) + abs(c1[2] - c2[2])) / 3
+        weight += k
+        alpha += abs(c1[3] - c2[3])
+        count += 1
+    return colour / max(weight, 1e-9), alpha / max(count, 1)
+
+
+def looks_right(original, hd):
+    colour, alpha = difference(original, hd)
+    return colour <= MAX_COLOUR_DIFF and alpha <= MAX_ALPHA_DIFF
 
 
 def register_folder(originals, hd_dir, log=print):
@@ -60,6 +89,9 @@ def register_folder(originals, hd_dir, log=print):
             hd.putalpha(alpha)
             hd.save(path, optimize=True)
             log(f'  {file}: transparency restored from the original')
+        if not looks_right(original, hd):
+            log(f'  {file}: does not look like the original (a broken upscale?), skipped')
+            continue
         registered[name] = scale
     return registered
 

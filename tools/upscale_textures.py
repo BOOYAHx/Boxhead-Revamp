@@ -9,9 +9,13 @@ client/assets/game/ 4 times, and registers them (tools/hd_sprites.py). The
 game uses them when "Enhanced Graphics" is on in Options; press Ctrl+F5.
 
 It uses the graphics card (any card with Vulkan: NVIDIA, AMD or Intel), and
-takes a few minutes. Run it again after rebuilding the assets; files already
-done are skipped (--redo does them all again). Delete
-client/assets/game/sprites-hd/ and images-hd/ to go back to the original art.
+takes a few minutes. Every result is checked against its original; some
+graphics drivers make Real-ESRGAN output noise, and those files are left out
+(try --tile 64, another --gpu, or --cpu, which is slow but always works).
+
+Run it again after rebuilding the assets; files already done are skipped
+(--redo does them all again). Delete client/assets/game/sprites-hd/ and
+images-hd/ to go back to the original art.
 
 Models (--model):
   anime  realesrgan-x4plus-anime: sharp, clean outlines (default; suits the cartoon art)
@@ -111,7 +115,8 @@ def finish(name, out_dir, dest_dir, pad, original_size):
     return scale
 
 
-def upscale_folder(exe, model, game, src, dest, redo, gpu):
+def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
+    """Upscale one folder; returns (files done, files that came out broken)."""
     src_dir = os.path.join(game, src)
     dest_dir = os.path.join(game, dest)
     os.makedirs(dest_dir, exist_ok=True)
@@ -124,15 +129,15 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu):
         with Image.open(os.path.join(src_dir, file)) as f:
             sizes[name] = f.size
         done = os.path.join(dest_dir, file)
-        # Skip files already done, unless the asset build has replaced the original since.
+        # Skip files already done well, unless the asset build has replaced the original since.
         if not redo and os.path.exists(done) and os.path.getmtime(done) >= os.path.getmtime(os.path.join(src_dir, file)):
-            with Image.open(done) as f:
-                if f.width % sizes[name][0] == 0 and f.width // sizes[name][0] in (2, 3, 4):
+            with Image.open(done) as f, Image.open(os.path.join(src_dir, file)) as original:
+                if f.width % sizes[name][0] == 0 and f.width // sizes[name][0] in (2, 3, 4) and hd_sprites.looks_right(original, f):
                     continue
         names.append(name)
     if not names:
         print(f'{src}: everything already upscaled (use --redo to do it again).')
-        return
+        return 0, []
     total = sum(sizes[n][0] * sizes[n][1] for n in names)
     print(f'{src}: upscaling {len(names)} files ({total / 1e6:.1f} million pixels) with {model} ...')
     with tempfile.TemporaryDirectory() as tmp:
@@ -144,15 +149,26 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu):
         cmd = [exe, '-i', work, '-o', out, '-n', model, '-s', str(SCALE), '-f', 'png', '-m', os.path.join(os.path.dirname(exe), 'models')]
         if gpu is not None:
             cmd += ['-g', str(gpu)]
+        if tile:
+            cmd += ['-t', str(tile)]
         result = subprocess.run(cmd, cwd=os.path.dirname(exe))
         if result.returncode != 0:
             sys.exit('Real-ESRGAN failed. Is the graphics driver up to date? (--gpu picks another card, --model fast uses less memory)')
+        broken = []
         for name in names:
             if not os.path.exists(os.path.join(out, name + '.png')):
                 print(f'  {name}: not upscaled, keeping the original')
                 continue
             if finish(name, out, dest_dir, pads[name], sizes[name]) is None:
                 print(f'  {name}: too large to enlarge, keeping the original')
+                continue
+            path = os.path.join(dest_dir, name + '.png')
+            with Image.open(path) as hd, Image.open(os.path.join(src_dir, name + '.png')) as original:
+                ok = hd_sprites.looks_right(original, hd)
+            if not ok:
+                os.remove(path)  # so the next run tries it again
+                broken.append(name)
+        return len(names), broken
 
 
 def main():
@@ -162,18 +178,32 @@ def main():
     ap.add_argument('--only', choices=['sprites', 'images'], help='just one of the two folders')
     ap.add_argument('--redo', action='store_true', help='upscale everything again')
     ap.add_argument('--gpu', type=int, help='graphics card number, if you have several')
+    ap.add_argument('--cpu', action='store_true', help='use the processor instead of the graphics card (slow, but works everywhere)')
+    ap.add_argument('--tile', type=int, help='work in smaller pieces, e.g. 64 (helps some graphics cards)')
     ap.add_argument('--upscaler', help='path to an existing realesrgan-ncnn-vulkan executable')
     args = ap.parse_args()
     if not os.path.isdir(os.path.join(args.game, 'sprites')):
         sys.exit(f'{args.game} has no sprites: build the assets first (tools/build_assets.py).')
     cache = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.realesrgan')
     exe = args.upscaler or find_upscaler(cache)
+    gpu = -1 if args.cpu else args.gpu
+    done, broken = 0, []
     for src, dest in hd_sprites.FOLDERS:
         if args.only and args.only != src:
             continue
-        upscale_folder(exe, MODELS[args.model], args.game, src, dest, args.redo, args.gpu)
-    hd_sprites.register(args.game)
-    print('Done. Turn on "Enhanced Graphics" in Options and press Ctrl+F5 in the game.')
+        n, bad = upscale_folder(exe, MODELS[args.model], args.game, src, dest, args.redo, gpu, args.tile)
+        done += n
+        broken += bad
+    hd_sprites.register(args.game, log=lambda *a: None)
+    if broken:
+        print(f'\n{len(broken)} of {done} files came out broken (noise instead of a picture) and were left out.')
+        print('Real-ESRGAN does this with some graphics drivers. Run it again with one of these:')
+        print('  python tools/upscale_textures.py --tile 64')
+        print('  python tools/upscale_textures.py --model fast')
+        print('  python tools/upscale_textures.py --cpu      (slow: an hour or more, but it always works)')
+        print('Files that worked are kept; only the broken ones are done again.')
+    else:
+        print('Done. Turn on "Enhanced Graphics" in Options and press Ctrl+F5 in the game.')
 
 
 if __name__ == '__main__':
