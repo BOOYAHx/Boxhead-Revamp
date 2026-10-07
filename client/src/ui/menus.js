@@ -6,6 +6,7 @@ import { createControlsScreen, createWeaponBanksScreen } from './configScreens.j
 import { FlashLibrary, Stage } from './flash.js';
 import { LobbyScreen } from './lobby.js';
 import { installWidgets } from './widgets.js';
+import { gradeScreen, installTheme } from './theme.js';
 import { FOOTSTEPS, Preferences, resetPreferences, savePreferences } from '../game/preferences.js';
 
 // MainMenuScreen fade, in frames at 30 fps.
@@ -50,10 +51,12 @@ export class FlashMenus {
     this.playSound = playSound;
     this.portrait = portrait;
     this.serverName = serverName;
-    installWidgets(lib, { playSound: (name) => this.playSound(name) });
+    installTheme(lib);
+    installWidgets(lib, { playSound: (name) => this.playSound(name), theme: true });
     this.frame = document.createElement('div');
     this.frame.className = 'flash-stage';
     root.appendChild(this.frame);
+    gradeScreen(this.frame); // the modern look (ui/theme.js) over every menu and lobby screen
     this.stage = new Stage(this.frame);
     this.timers = [];
     this.lobby = null;

@@ -1,3 +1,10 @@
+/* Anton: the website's lettering, used by the modern menus (src/ui/theme.js). */
+@font-face {
+  font-family: 'Anton';
+  src: url('../assets/site/Anton-Regular.ttf') format('truetype');
+  font-display: swap;
+}
+
 :root {
   --bg: #111;
   --fg: #f1ece4;
