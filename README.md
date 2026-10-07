@@ -185,7 +185,11 @@ centre, bounty points and the time left under the money, messages bottom left.
 * Other players show their place ("1st"…) above their name. An arrow at the
   edge of the screen points to the best-placed other player when they are
   out of sight.
-* Hold **Tab** for the scoreboard (place, score, kills, deaths, bounty points).
+* Hold **Tab** for the scoreboard: the original "Scores" board, best first
+  (ties keep the earlier player ahead), wanted players in red.
+* Between rounds the original Game Summary shows the standings, the awards
+  (Winner, Hunter, Dominator, Scrooge, Target Dummy) with each winner's
+  portrait, and "Next Game begins in N seconds...".
 * **Enter** opens the chat line, Enter sends, Esc cancels. The other window
   shows "Name: message" bottom left. Like the original: no ";" and no more
   than 3 messages in 2 seconds, and messages containing your password are

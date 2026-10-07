@@ -125,13 +125,30 @@ export function roundAwards(awardIDs, players) {
   const [winner, hunter, professional, poacher, dummy] = ids.map(find);
   const kd = (p) => (p.stats.deaths > 0 ? `${Math.trunc((p.stats.kills / p.stats.deaths) * 100) / 100} K/D` : 'Max K/D');
   const poach = (p) => (p.stats.kills > 0 ? `$${Math.trunc((p.stats.score - START_SCORE) / p.stats.kills)} Per Kill` : `$${p.stats.score - START_SCORE} Free Money`);
+  // Someone who has left by now is "unknown" (a question mark); "000" means nobody won it.
+  const unknown = ids.map((id, i) => id !== '000' && ![winner, hunter, professional, poacher, dummy][i]);
   return [
     { title: 'Winner', color: 0xfff336, bonus: 5000, player: winner, caption: winner ? `${winner.stats.score} Earned` : '' },
     { title: 'The Hunter', color: 0xaaff4f, bonus: 5000, player: hunter, caption: hunter ? `${hunter.stats.bountyPoints} Bounty Points` : '' },
     { title: 'The Professional', color: 0xff4545, bonus: 2000, player: professional, caption: professional ? kd(professional) : '' },
     { title: 'The Poacher', color: 0x5d7cff, bonus: 2000, player: poacher, caption: poacher ? poach(poacher) : '' },
     { title: 'Target Dummy', color: 0xf2923d, bonus: 2000, player: dummy, caption: dummy ? `${dummy.stats.deaths} Deaths` : '' },
-  ];
+  ].map((award, i) => ({ ...award, unknown: unknown[i] }));
+}
+
+/**
+ * ScoreBoard.update / GameSummary.refreshScores: everyone by score, highest
+ * first; on a tie whoever comes first in the list stays ahead.
+ */
+export function scoreOrder(players) {
+  const left = [...players];
+  const out = [];
+  while (left.length) {
+    let best = 0;
+    for (let i = 1; i < left.length; i++) if (left[i].stats.score > left[best].stats.score) best = i;
+    out.push(left.splice(best, 1)[0]);
+  }
+  return out;
 }
 
 /** Keep only characters the original chat input accepted (no ';', which separates messages). */

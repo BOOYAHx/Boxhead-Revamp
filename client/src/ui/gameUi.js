@@ -4,6 +4,7 @@
 // its options and "are you sure?" screens). A transparent Flash stage laid
 // over the game canvas.
 
+import { scoreOrder } from '../game/bounty.js';
 import { Stage } from './flash.js';
 import { createControlsScreen, createWeaponBanksScreen } from './configScreens.js';
 import { createOptionsScreen } from './menus.js';
@@ -159,12 +160,86 @@ export class GameUi {
     this.setHudVisible(true);
   }
 
+  // --- scores (boxhead.ui.score) ----------------------------------------------------
+
+  /**
+   * BountyScoreBoard while the scores key is held: everyone by score.
+   * players: [{ name, stats, wanted }] (null hides it).
+   */
+  showScoreboard(players) {
+    if (!players) {
+      if (this.scoreboard) this.scoreboard.visible = false;
+      return;
+    }
+    if (!this.scoreboard) this.scoreboard = this.stage.addChild(this.lib.create('boxhead.ui.score.BountyScoreBoard'));
+    this.scoreboard.visible = true;
+    fillEntries(this.scoreboard, players);
+  }
+
+  /**
+   * GameSummary at the end of a round: the standings, the five awards with
+   * each winner's picture, and the countdown to the next round.
+   * awards: from roundAwards(); portrait(player) gives a picture canvas.
+   */
+  showSummary(players, awards, portrait) {
+    this.summary?.destroy();
+    const summary = (this.summary = this.stage.addChild(this.lib.create('boxhead.ui.score.GameSummary')));
+    this.showScoreboard(null);
+    summary.child('nextGameField').text = '';
+    fillEntries(summary, players);
+    const names = ['winnerAwardEntry', 'hunterAwardEntry', 'dominatorAwardEntry', 'scroogeAwardEntry', 'targetDummyAwardEntry'];
+    awards.forEach((award, i) => {
+      const entry = summary.child(names[i]);
+      if (!entry) return;
+      const title = entry.child('awardField');
+      title.text = award.title;
+      title.box.style.textDecoration = 'underline';
+      title.textColor = award.color;
+      if (i === 0) {
+        // AwardEntry.largeTextMode
+        title.scaleX += 0.15;
+        title.scaleY += 0.15;
+        title.y -= 3;
+      }
+      entry.child('bonusField').text = '$' + award.bonus;
+      entry.child('scoreField').text = award.player ? award.caption : '';
+      entry.child('nameField').text = award.player ? award.player.name : '';
+      const box = entry.child('characterBox');
+      if (award.unknown) box?.unknown?.();
+      else if (award.player) box?.drawCharacter?.(portrait(award.player));
+      else box?.clear?.();
+    });
+  }
+
+  setSummaryCountdown(seconds) {
+    const field = this.summary?.child('nextGameField');
+    if (field) field.text = 'Next Game begins in ' + Math.max(0, seconds) + ' seconds...';
+  }
+
   destroy() {
     this.closeMenu();
     this.shop?.destroy();
     this.stage.clear();
     this.root.replaceChildren();
     this.root.hidden = true;
+  }
+}
+
+const WANTED_COLOR = 0xd72b2b; // MMOchaUser.WANTED_COLOR
+
+/** ScoreBoardEntry.update for the 16 rows of a board ("entry0".."entry15"). */
+function fillEntries(board, players) {
+  const ranked = scoreOrder(players);
+  for (let i = 0; i < 16; i++) {
+    const entry = board.child('entry' + i);
+    if (!entry) continue;
+    const p = ranked[i];
+    const name = entry.child('nameField');
+    name.text = p ? `${i + 1}) ${p.name}` : '';
+    name.textColor = p?.wanted ? WANTED_COLOR : 0xffffff;
+    entry.child('killsField').text = p ? String(p.stats.kills) : '';
+    entry.child('deathsField').text = p ? String(p.stats.deaths) : '';
+    entry.child('scoreField').text = p ? '$' + p.stats.score : '';
   }
 }
 

@@ -19,6 +19,7 @@ import { fetchMap } from '../net/MapService.js';
 import { cellPosToString, encodeFire, encodeHit, encodeMove, parseDeath, parseFire, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
 import { padInt } from '../util/strings.js';
 import { CharacterView } from '../render/CharacterView.js';
+import { drawPortrait } from '../render/portrait.js';
 import { Effects } from '../render/Effects.js';
 import { Hud } from '../render/Hud.js';
 import { createSprite, showFrame } from '../render/assets.js';
@@ -801,6 +802,12 @@ export class GameScene extends Phaser.Scene {
     return list;
   }
 
+  /** Rows for the Scores board and the Game Summary: name, stats, and the Most Wanted colour. */
+  scoreRows(players) {
+    const users = [this.connection?.localUser, ...(this.connection?.peers || [])].filter(Boolean);
+    return players.map((p) => ({ ...p, wanted: !!users.find((u) => u.id === p.id)?.wanted }));
+  }
+
   /** Game.updateScores / GUI.updateLeaderboard. */
   updateScores() {
     if (!this.player) return;
@@ -832,6 +839,7 @@ export class GameScene extends Phaser.Scene {
     this.updateShopTime();
     if (this.gameOver) {
       this.hud.setSummaryCountdown(this.roundTime);
+      this.ui?.setSummaryCountdown(this.roundTime);
       // Start the next round once the server has (its "p" jumps back up).
       // Starting on our own countdown can beat the server by a moment, and it
       // ignores gameplay packets, like our spawn, until the new round begins.
@@ -854,8 +862,14 @@ export class GameScene extends Phaser.Scene {
     const awards = roundAwards(awardIDs, everyone);
     // GameSummary.displayAward: award money is added to the winner's next round.
     for (const award of awards) if (award.player?.local) this.app.roundBonus = (this.app.roundBonus || 0) + award.bonus;
-    this.hud.showSummary(shown, awards);
-    this.hud.setSummaryCountdown(this.roundTime);
+    if (this.ui) {
+      // GameSummary lists everyone in the room (players who never spawned too).
+      this.ui.showSummary(this.scoreRows(everyone), awards, (player) => drawPortrait(this.textures, player.character.look));
+      this.ui.setSummaryCountdown(this.roundTime);
+    } else {
+      this.hud.showSummary(shown, awards);
+      this.hud.setSummaryCountdown(this.roundTime);
+    }
     this.hud.clearWarnings();
     this.effects.playSound('EndRound', this.effects.focus);
   }
@@ -1021,7 +1035,8 @@ export class GameScene extends Phaser.Scene {
     this.effects.update();
     this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
     const tab = this.keyState.isDown('scores') && this.chatInput === null && this.mode === 'online';
-    this.hud.showScoreboard(`${this.room} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
+    if (this.ui) this.ui.showScoreboard(tab ? this.scoreRows(this.players()) : null);
+    else this.hud.showScoreboard(`${this.room} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
     this.drawDebug();
     const p = this.player.pos;
     this.coords.setText(`x ${p.x.toFixed(2)}  y ${p.y.toFixed(2)}`);
