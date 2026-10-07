@@ -9,7 +9,6 @@ import { Stage } from './flash.js';
 import { createControlsScreen, createWeaponBanksScreen } from './configScreens.js';
 import { createOptionsScreen } from './menus.js';
 import { ShopScreen } from './shop.js';
-import { gradeScreen } from './theme.js';
 
 const SPACING = 50; // WeaponSliderDisplay.SPACING
 const DISABLED_ALPHA = 0.4;
@@ -43,7 +42,6 @@ export class GameUi {
     });
     this.stage.addChild(this.shopButton);
     this.shop = shopState ? new ShopScreen(lib, shopState, handlers) : null;
-    if (this.shop) gradeScreen(this.shop.clip); // the shop and Esc menu get the modern look; the HUD does not
     this.shopOpen = false;
     this.menu = null; // the Esc menu while it is open
     this.screens = []; // the menu and the screens opened from it, the last one showing
@@ -64,7 +62,6 @@ export class GameUi {
   openMenu() {
     if (this.menu) return;
     const menu = (this.menu = this.lib.create('boxhead.ui.screen.IngameMenuScreen'));
-    gradeScreen(menu);
     const actions = {
       optionsButton: ['options', () => this.showOptions()],
       quitButton: ['quit', () => this.confirmQuit()],
@@ -97,7 +94,6 @@ export class GameUi {
   /** Screen.showSubscreen: the screen below hides while the subscreen is up. */
   showSubscreen(screen) {
     this.menuScreen.visible = false;
-    gradeScreen(screen);
     this.screens.push(this.stage.addChild(screen));
   }
 

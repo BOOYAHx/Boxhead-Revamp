@@ -1,8 +1,6 @@
 // Behaviour of the original lobby widgets (MMOcha.lobby.*), attached to the
 // symbols when they are created, the way Flash linked symbols to classes.
 
-import { themeLabel, themeRoundButton, themeScrollBar, themeTextButton, themeTick, DISABLED_FILTER } from './theme.js';
-
 const IDENTITY = [[1, 1, 1, 1], [0, 0, 0, 0]];
 const RED = [[0.55, 0, 0, 1], [0, 0, 0, 0]]; // TextButton.RED (pressed)
 const DISABLED = [[0.4, 0.4, 0.4, 1], [0, 0, 0, 0]]; // LobbyButton
@@ -50,9 +48,7 @@ function addButtonApi(button, ui, { disabledColor = DISABLED, sound = 'ClickShor
   };
   button.disable = () => {
     button.enabled = false;
-    // Themed (red) buttons go grey when disabled; the original ones darken.
-    if (button.themed) button.el.setAttribute('filter', `url(#${DISABLED_FILTER})`);
-    else setColor(button.lib, button, disabledColor);
+    setColor(button.lib, button, disabledColor);
   };
   Object.defineProperty(button, 'text', {
     get: () => labelFields(button)[0]?.text || '',
@@ -76,7 +72,6 @@ function textButton(ui) {
     button.groups.up.style.opacity = '0.5';
     setColor(button.lib, button.groups.down, RED);
     addButtonApi(button, ui);
-    if (ui.theme) themeTextButton(button, labelFields(button));
     /** TextButton.align: the label to the left, right or centre of the button. */
     button.align = (side) => {
       const where = side.toLowerCase().charAt(0);
@@ -93,15 +88,11 @@ function roundButton(ui) {
   return (button) => {
     unstretch(button);
     addButtonApi(button, ui, { disabledColor: ROUND_DISABLED });
-    if (ui.theme) ((button.themed = true), themeRoundButton(button, labelFields(button)));
   };
 }
 
 function lobbyButton(ui) {
-  return (button) => {
-    addButtonApi(button, ui);
-    if (ui.theme) ((button.themed = true), themeRoundButton(button, labelFields(button)));
-  };
+  return (button) => addButtonApi(button, ui);
 }
 
 /** TickBox: frames "Ticked"/"Unticked"; a click toggles it and fires "change". */
@@ -109,14 +100,12 @@ function tickBox(ui) {
   return (clip) => {
     let ticked = false;
     clip.gotoAndStop('Unticked');
-    if (ui.theme) themeTick(clip);
     clip.el.style.cursor = 'pointer';
     Object.defineProperty(clip, 'ticked', {
       get: () => ticked,
       set: (value) => {
         ticked = !!value;
         clip.gotoAndStop(ticked ? 'Ticked' : 'Unticked');
-        if (ui.theme) themeTick(clip);
       },
     });
     clip.on('click', () => {
@@ -127,7 +116,6 @@ function tickBox(ui) {
     clip.displayOption = (name, value = false) => {
       const field = clip.getChildByName('_optionField');
       if (field) field.text = name || '';
-      if (field && ui.theme) themeLabel(field, { scale: 1 });
       clip.ticked = value;
     };
   };
@@ -269,7 +257,6 @@ function scrollBar(ui) {
     const up = clip.getChildByName('_upButton');
     const down = clip.getChildByName('_downButton');
     if (!background || !handle || !up || !down) return;
-    if (ui.theme) themeScrollBar(handle, [up, down]);
     const sx = clip.scaleX;
     const sy = clip.scaleY;
     // ScrollBar.arrange: arrows keep their shape whatever the bar's height.

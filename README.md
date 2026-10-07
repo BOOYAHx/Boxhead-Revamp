@@ -44,7 +44,6 @@ The port is built in small steps. Each one is tested before the next starts.
 | 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command) | **ready to test** |
 | 12 | Grenades, Grenade Launcher, Plasma Cannon, C4, mines, airstrikes, barrels, barricades and spy satellite | **ready to playtest** |
 | 13 | Character customization in the lobby | done |
-| 14 | Modern look for the menus, lobby, shop and Esc menu | done |
 | later | Turrets, team deathmatch / infected | |
 
 ## Repository layout
@@ -422,19 +421,6 @@ hidden). Your patched game's art has rows for skin tone, hair and glasses.
 Those options were never finished (the code always picks option 0 and the
 server ignores their messages), so those rows are hidden. The third row is
 labelled Gender, which is what it sets.
-
-### Step 14: the modern menus
-
-Update with `git pull`, then **Ctrl+F5**. The menus, lobby, shop and Esc
-menu keep the original screens and layout, restyled to match the website
-(`client/src/ui/theme.js`):
-- The screens are regraded from cold grey to warm charcoal.
-- The grey capsule buttons are blood red (brighter on hover, grey when
-  disabled). Scroll bars have red handles, and tick boxes are bounty gold.
-- Button, menu and option labels use the website's Anton lettering in
-  capitals. Chat, names and text you type keep the original font so they
-  stay easy to read.
-- The in-game HUD (weapon slider, money, scoreboard) is unchanged.
 
 ## Deploying
 
