@@ -11,7 +11,9 @@
   build step. The generated game assets in `client/assets/game/` are tracked
   (shared with the copyright holders' permission); rebuild them with
   `tools/build_assets.py` and commit the result. The AI-upscaled HD copies
-  (`sprites-hd/`, `images-hd/`, `hd.json`) remain local to each computer.
+  (`sprites-hd/`, `images-hd/`, `hd.json`) and the saved maps (`maps/`) are
+  tracked too, but they are made on the user's computer (GPU upscaler, map
+  service): never commit stand-ins for them from elsewhere.
 - If an update genuinely requires rebuilding generated game assets or
   restarting a service, explain the specific requirement rather than claiming
   that `git pull` handles it automatically.

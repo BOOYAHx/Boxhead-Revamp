@@ -23,8 +23,24 @@ Then refresh the browser with **Ctrl+F5**. The static client server can keep
 running. The game's art, sounds and stats (`client/assets/game/`) are part of
 the repository, used with the copyright holders' permission, so a fresh clone
 plays straight away and `git pull` keeps them up to date; there is no asset
-build to run. Your AI-upscaled HD files (`sprites-hd/`, `images-hd/`,
-`hd.json`) stay on your computer and are left alone.
+build to run.
+
+Two parts are made on your computer and then shared the same way:
+
+* **HD textures**: run `python tools/upscale_textures.py` (step 11), then commit
+  `client/assets/game/sprites-hd/`, `images-hd/` and `hd.json`.
+* **The online maps**: run `python tools/save_maps.py` to save every bounty map
+  into `client/assets/game/maps/maps.json`, then commit it. The game uses the
+  saved maps first, so online rooms keep working if the old XGen map service
+  goes away (without the file it asks the service, and falls back to the
+  Warehouse).
+
+```sh
+python tools/save_maps.py
+git add client/assets/game
+git commit -m "Add HD textures and saved maps"
+git push
+```
 
 ## Progress
 
@@ -58,7 +74,7 @@ client/             the browser game (static files, no build step)
   index.html
   src/              ES modules: net/ (protocol), game/ (rules), render/, scenes/, ui/ (menus)
   vendor/           phaser.min.js 3.90 (MIT)
-  assets/game/      generated from the SWFs and committed, with permission (see below)
+  assets/game/      the game's assets, committed with permission (see below)
 tools/              asset pipeline: SWF extractor, ActionScript decompiler, atlas baker
 tests/              unit tests for the game rules and protocol helpers (node --test)
 docs/PROTOCOL.md    the network protocol, as reverse-engineered from the client
@@ -611,6 +627,7 @@ the original art and are not tracked by git (`art/templates/`); committing
   draws it back as a small Flash display list).
 * `tools/upscale_textures.py` — makes 4x AI-upscaled copies of the sprites and ground textures (see step 11).
 * `tools/hd_sprites.py` — checks and registers upscaled art (see step 11).
+* `tools/save_maps.py` — saves every online bounty map into the game files (see "Website and updates").
 * `tools/export_intro.py` — exports the original loading screen from BBH.swf (see step 18).
 * `tools/redrawn_art.py` — drawing templates for, and loading of, hand-redrawn 4x art (see step 15).
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound

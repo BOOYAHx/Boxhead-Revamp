@@ -330,7 +330,7 @@ export class App {
     c.enablePing(5000);
     this.ui.showLobby({ user: c.localUser, maps: this.maps });
     this.ui.setPlayers([c.localUser, ...c.peers].filter(Boolean));
-    if (!this.maps.some((m) => m?.online)) this.ui.setLobbyFeedback('Map service unavailable: using the bundled Warehouse map.');
+    if (!this.maps.some((m) => m?.online || m?.saved)) this.ui.setLobbyFeedback('Map service unavailable: using the bundled Warehouse map.');
     c.requestRoomList();
     clearInterval(this.roomTimer);
     // The original lobby refreshes the game browser itself; the plain menus need a timer.

@@ -1,9 +1,11 @@
 // The bounty map list and map data, fetched like DatabaseRequest did:
 // xgen.stickarena.maps.list / maps.get for the BBHBOUNTYMAPS account, here
-// through BBHServer.py's /api/ gateway. Falls back to the bundled map when
-// the service cannot be reached.
+// through BBHServer.py's /api/ gateway. The maps saved into the game files by
+// tools/save_maps.py come first, so play does not depend on the service; the
+// bundled Warehouse is the last resort.
 
 import { API_URL } from '../config.js';
+import { ASSET_ROOT } from '../render/assets.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
 
 const ACCOUNT = 'BBHBOUNTYMAPS';
@@ -18,8 +20,25 @@ async function request(params, signal) {
   return rsp;
 }
 
+/** The maps saved by tools/save_maps.py (maps/maps.json: [{ slot, name, data }]), or null. */
+async function savedMapList() {
+  try {
+    const response = await fetch(ASSET_ROOT + 'maps/maps.json', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const list = [];
+    for (const map of await response.json()) {
+      if (map && map.slot >= 0 && typeof map.data === 'string') list[map.slot] = { slot: map.slot, name: map.name || `Map ${map.slot}`, data: map.data, online: false, saved: true };
+    }
+    return list.some(Boolean) ? list : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Map list indexed by slot id (MapInfo.mapList): [{ slot, name }]. */
 export async function fetchMapList() {
+  const saved = await savedMapList();
+  if (saved) return saved;
   try {
     const rsp = await request({ method: 'xgen.stickarena.maps.list' });
     const list = [];

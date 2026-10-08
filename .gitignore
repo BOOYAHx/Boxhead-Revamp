@@ -1,9 +1,6 @@
-# The game assets in client/assets/game/ are tracked: generated from the original SWFs by
-# tools/build_assets.py and shared with the copyright holders' permission. The AI-upscaled
-# copies are made on each computer (tools/upscale_textures.py) and stay local.
-client/assets/game/sprites-hd/
-client/assets/game/images-hd/
-client/assets/game/hd.json
+# The game assets in client/assets/game/ are tracked, with the copyright holders'
+# permission: the build from the original SWFs, the AI-upscaled HD copies
+# (tools/upscale_textures.py) and the saved maps (tools/save_maps.py).
 
 __pycache__/
 *.pyc
