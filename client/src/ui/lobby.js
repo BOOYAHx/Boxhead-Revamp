@@ -17,6 +17,7 @@ const CONNECTING_MESSAGE = 'Connecting to server...';
 const JOINING_MESSAGE = 'Joining Lobby...';
 const NAME_COLORS = { wanted: '#d72b2b', moderator: '#dfdfdf', normal: '#a6a6a6' }; // MMOchaUser colours
 const MAX_CHAT_LINES = 100;
+const MAX_SENT = 10; // ChatWindow: messages remembered for the Up key
 const SPAM_LIMIT = 5; // messages per SPAM_TIME (MMOchaLobby.setSpamLimits)
 const SPAM_TIME = 5000;
 const AUTO_REFRESH = 6000; // GameBrowserWindow.AUTO_REFRESH_TIME
@@ -327,11 +328,19 @@ export class LobbyScreen {
       const text = this.chatInput.text.trim();
       if (!text) return;
       this.chatInput.text = '';
+      // ChatWindow.sendChatMessage: the last 10 messages sent from this page, newest first.
+      const page = this.page;
+      page.sent = [text, ...(page.sent || [])].slice(0, MAX_SENT);
+      page.sentShown = -1;
       if (this.page.user) this.sendPrivateChat(text, this.page);
       else this.sendChat(text);
     };
     this.chatInput.box.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') send();
+      else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        this.recallSent(event.key === 'ArrowUp' ? 1 : -1);
+      }
     });
     page.child('_sendButton')?.on('click', () => (this.menus.playSound('ClickShort'), send()));
     const box = this.chatField.box;
@@ -351,6 +360,19 @@ export class LobbyScreen {
     this.chatScroll?.on('stepdown', () => (box.scrollTop += line));
     this.serverName = serverName;
     this.printWelcome();
+  }
+
+  /** ChatWindow.onKeyRelease: Up brings back older messages you sent, Down newer ones, then an empty line. */
+  recallSent(step) {
+    const page = this.page;
+    const sent = page.sent || [];
+    const shown = page.sentShown ?? -1;
+    const next = Math.max(-1, Math.min(sent.length - 1, shown + step));
+    if (next === shown) return;
+    page.sentShown = next;
+    const box = this.chatInput.box;
+    box.value = next < 0 ? '' : sent[next];
+    box.setSelectionRange(box.value.length, box.value.length);
   }
 
   /** MMOchaLobby.generateWelcomeMessage */
