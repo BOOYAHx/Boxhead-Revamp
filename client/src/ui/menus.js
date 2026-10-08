@@ -443,6 +443,11 @@ export class FlashMenus {
     this.lobby?.addChat(name, text, kind);
   }
 
+  /** A private message from another player in the lobby. */
+  receivePrivate(user, text) {
+    this.lobby?.receivePrivate(user, text);
+  }
+
   lobbyDisconnected() {
     this.lobby?.disconnected();
   }

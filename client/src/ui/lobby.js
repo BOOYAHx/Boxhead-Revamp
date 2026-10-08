@@ -5,6 +5,7 @@
 import { MOST_WANTED_URL } from '../config.js';
 import { COLORS, MODELS, tintFor } from '../game/bodyParts.js';
 import { DIRECTIONS, SW } from '../game/Direction.js';
+import { Social } from '../game/social.js';
 
 const LOBBY_FRAME = 4; // background frames with the premiums tab hidden (Constants.HIDE_PREMIUMS)
 const MOST_WANTED_FRAME = 6;
@@ -26,6 +27,11 @@ const MAP_ROW = 18;
 const capitalize = (name) => (name ? name.charAt(0).toUpperCase() + name.substr(1) : '');
 const nameColor = (user) => (user?.wanted ? NAME_COLORS.wanted : user?.level > 0 ? NAME_COLORS.moderator : NAME_COLORS.normal);
 const byY = (list) => [...list].sort((a, b) => a.y - b.y);
+const byX = (list) => [...list].sort((a, b) => a.x - b.x);
+const sameName = (a, b) => !!a && !!b && (a.name || '').toLowerCase() === (b.name || '').toLowerCase();
+const STATUS_HEIGHT = 18; // UserOptionsPopup.STATUS_HEIGHT
+const STAGE_WIDTH = 700;
+const STAGE_HEIGHT = 490;
 const SVGNS = 'http://www.w3.org/2000/svg';
 const GENDERS = ['Monster', 'Male', 'Female']; // Constants.MONSTER / MALE / FEMALE
 const TURN_STEP = 20; // CustomizationWindow.mouseMove: pixels of drag per eighth of a turn
@@ -45,6 +51,7 @@ export class LobbyScreen {
     this.sent = [];
     this.interfaceEnabled = true;
     this.reconnecting = false;
+    this.social = new Social();
     const root = (this.root = menus.add('MMOcha.lobby.MMOchaLobby'));
     this.background = root.child('background');
     this.windows = root.child('windows');
@@ -61,6 +68,7 @@ export class LobbyScreen {
     this.setupBrowser();
     this.setupHost();
     this.setupNotification();
+    this.setupUserPopups();
     this.setupMostWanted();
     this.setupCustomization();
     this.showTab('lobby');
@@ -68,6 +76,7 @@ export class LobbyScreen {
   }
 
   dispose() {
+    this.closeUserPopups();
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
   }
@@ -274,19 +283,37 @@ export class LobbyScreen {
 
   setupChat(serverName) {
     const win = this.windows.child('_mainChatWindow');
-    for (const tab of win.children) {
-      if (tab.className === 'MMOcha.lobby.ChatTab' && tab.name !== '_lobbyTab') tab.visible = false;
-    }
-    for (const name of ['_leftButton', '_rightButton']) {
-      const b = win.child(name);
-      if (b) b.visible = false;
-    }
-    const lobbyTab = win.child('_lobbyTab');
-    lobbyTab?.child('_background')?.gotoAndStop('Selected');
-    const tabName = lobbyTab?.child('_nameField');
+    // MainChatWindow: the main chatroom's tab, then one tab per private conversation.
+    this.lobbyPage = { user: null, nodes: null, waiting: false };
+    this.page = this.lobbyPage;
+    this.userPages = [];
+    this.pageIndex = 0;
+    this.lobbyTab = win.child('_lobbyTab');
+    this.chatTabs = byX(win.children.filter((c) => c.className === 'MMOcha.lobby.ChatTab' && c !== this.lobbyTab));
+    const tabName = this.lobbyTab?.child('_nameField');
     if (tabName) tabName.text = 'MAIN CHATROOM';
-    const closeTab = lobbyTab?.child('_closeButton');
+    const closeTab = this.lobbyTab?.child('_closeButton');
     if (closeTab) closeTab.visible = false;
+    for (const tab of [this.lobbyTab, ...this.chatTabs].filter(Boolean)) {
+      tab.el.style.cursor = 'pointer';
+      const name = tab.child('_nameField');
+      if (name) name.mouseEnabled = false;
+      tab.on('click', () => {
+        const page = tab === this.lobbyTab ? this.lobbyPage : tab.page;
+        if (!page || page === this.page) return;
+        this.menus.playSound('ClickShort');
+        this.openPage(page);
+      });
+      tab.child('_closeButton')?.on('click', (event) => {
+        event.stopPropagation();
+        if (tab.page) this.closePage(tab.page);
+      });
+    }
+    this.tabLeft = win.child('_leftButton');
+    this.tabRight = win.child('_rightButton');
+    this.tabLeft?.on('click', () => this.scrollTabsTo(this.pageIndex - 1));
+    this.tabRight?.on('click', () => this.scrollTabsTo(this.pageIndex + 1));
+    this.updateTabs();
     const page = win.child('_lobbyPage');
     this.chatField = page.child('_chatField');
     this.chatField.box.textContent = '';
@@ -300,7 +327,8 @@ export class LobbyScreen {
       const text = this.chatInput.text.trim();
       if (!text) return;
       this.chatInput.text = '';
-      this.sendChat(text);
+      if (this.page.user) this.sendPrivateChat(text, this.page);
+      else this.sendChat(text);
     };
     this.chatInput.box.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') send();
@@ -349,7 +377,17 @@ export class LobbyScreen {
   }
 
   /** ChatWindow.print: keep the newest lines, follow them if we were at the bottom. */
-  print(runs, after = null) {
+  print(runs, after = null, page = this.lobbyPage) {
+    if (page !== this.page) {
+      // A page that is not showing keeps its lines aside; its tab lights up (ChatTab "Waiting").
+      const line = this.chatField.appendRuns(runs);
+      line.remove();
+      page.nodes.push(line);
+      while (page.nodes.length > MAX_CHAT_LINES) page.nodes.shift();
+      page.waiting = true;
+      this.updateTabs();
+      return line;
+    }
     const box = this.chatField.box;
     const atBottom = box.scrollTop >= box.scrollHeight - box.clientHeight - 2;
     const line = this.chatField.appendRuns(runs);
@@ -368,15 +406,20 @@ export class LobbyScreen {
 
   /** MMOchaLobby.checkSpamProtect: at most SPAM_LIMIT messages in SPAM_TIME. */
   sendChat(text) {
-    if (!this.interfaceEnabled) return;
+    if (!this.spamCheck(this.lobbyPage)) return;
+    this.handlers.chat(text);
+  }
+
+  spamCheck(page) {
+    if (!this.interfaceEnabled) return false;
     const now = Date.now();
     this.sent = this.sent.filter((t) => now - t < SPAM_TIME);
     if (this.sent.length >= SPAM_LIMIT) {
-      this.print([['Please wait before sending another message.', NAME_COLORS.wanted]]);
-      return;
+      this.print([['Please wait before sending another message.', NAME_COLORS.wanted]], null, page);
+      return false;
     }
     this.sent.push(now);
-    this.handlers.chat(text);
+    return true;
   }
 
   /** "<Name> message", the name in the sender's colour, "<<Name>>" for moderators (ChatWindow.print). */
@@ -385,8 +428,116 @@ export class LobbyScreen {
     if (kind === 'system') return this.print([[`** ${text} **`, GLOBAL_COLOR]]);
     if (kind === 'notice') return this.print([[text, null]]);
     const user = kind === 'own' ? this.user : this.players.find((p) => p.name === name);
+    if (user && user !== this.user && this.social.isBlocked(user.name)) return; // MMOchaLobby.handleMessage: blocked
+    this.chatLine(user, name, text, this.lobbyPage);
+  }
+
+  /** One "<Name> message" line on a page; the name opens the player's options (MMOchaLobby.userNameClick). */
+  chatLine(user, name, text, page) {
     const [open, close] = user?.level > 0 ? ['<<', '>>'] : ['<', '>'];
-    this.print([[`${open}${capitalize(name)}${close} `, nameColor(user)], [text, null]]);
+    const line = this.print([[`${open}${capitalize(name)}${close} `, nameColor(user)], [text, null]], null, page);
+    const span = line.firstChild;
+    if (user && span) {
+      span.style.cursor = 'pointer';
+      span.addEventListener('click', (event) => {
+        const p = this.windows.localPoint(event);
+        this.showUserOptions(user, p.x + 50, p.y);
+      });
+    }
+    return line;
+  }
+
+  // --- private conversations (MainChatWindow user pages, ChatTab) ----------------------------------
+
+  /** MMOchaLobby.privateMessageClick: open (or create) the conversation with a player and type there. */
+  openPrivateChat(user) {
+    if (!this.interfaceEnabled || !user || user === this.user || sameName(user, this.user)) return;
+    if (this.tab !== 'lobby') this.showTab('lobby');
+    this.openPage(this.userPage(user) || this.createUserPage(user));
+    this.chatInput.box.focus();
+  }
+
+  userPage(user) {
+    return this.userPages.find((page) => sameName(page.user, user)) || null;
+  }
+
+  createUserPage(user) {
+    const page = { user, nodes: [], waiting: false };
+    this.userPages.push(page);
+    this.scrollTabsTo(this.userPages.length - 1);
+    return page;
+  }
+
+  /** MainChatWindow.openPage: the chat field shows that page's lines. */
+  openPage(page) {
+    if (page === this.page) return;
+    const box = this.chatField.box;
+    this.page.nodes = [...box.children];
+    this.page.scroll = box.scrollTop >= box.scrollHeight - box.clientHeight - 2 ? null : box.scrollTop;
+    box.replaceChildren(...page.nodes);
+    page.nodes = null;
+    page.waiting = false;
+    this.page = page;
+    box.scrollTop = page.scroll ?? box.scrollHeight;
+    this.syncChatScroll();
+    this.updateTabs();
+  }
+
+  /** MainChatWindow.closeTabClick */
+  closePage(page) {
+    this.menus.playSound('ClickShort');
+    if (this.page === page) this.openPage(this.lobbyPage);
+    const index = this.userPages.indexOf(page);
+    if (index < 0) return;
+    this.userPages.splice(index, 1);
+    this.scrollTabsTo(index);
+  }
+
+  /** MainChatWindow.reset: back to the main chatroom, every conversation closed. */
+  resetPages() {
+    this.openPage(this.lobbyPage);
+    this.userPages = [];
+    this.scrollTabsTo(0);
+  }
+
+  scrollTabsTo(index) {
+    this.pageIndex = Math.max(0, Math.min(this.userPages.length - this.chatTabs.length, index));
+    this.updateTabs();
+  }
+
+  /** MainChatWindow.updateTabs + ChatTab.setPage: names, and which tab is open or has new lines. */
+  updateTabs() {
+    const frame = (page) => (page === this.page ? 'Selected' : page.waiting ? 'Waiting' : 'Unselected');
+    this.lobbyTab?.child('_background')?.gotoAndStop(frame(this.lobbyPage));
+    this.chatTabs.forEach((tab, i) => {
+      const page = this.userPages[this.pageIndex + i];
+      tab.visible = !!page;
+      tab.page = page || null;
+      if (!page) return;
+      tab.child('_nameField').text = capitalize(page.user.name);
+      tab.child('_background')?.gotoAndStop(frame(page));
+    });
+    if (this.tabLeft) this.tabLeft.visible = this.pageIndex > 0;
+    if (this.tabRight) this.tabRight.visible = this.pageIndex < this.userPages.length - this.chatTabs.length;
+  }
+
+  /** MMOchaLobby.sendPrivateChat: "c" + text to that player only, shown on their page. */
+  sendPrivateChat(text, page) {
+    if (!this.spamCheck(page)) return;
+    if (!this.players.some((p) => sameName(p, page.user))) {
+      this.print([[`${capitalize(page.user.name)} is not in the lobby.`, null]], null, page);
+      return;
+    }
+    this.handlers.privateMessage?.(page.user, text);
+    this.chatLine(this.user, this.user?.name || 'You', text, page);
+  }
+
+  /** MMOchaLobby.handleMessage (PM): on that player's page, opened for the first message. */
+  receivePrivate(user, text) {
+    if (!user || this.social.isBlocked(user.name)) return;
+    const page = this.userPage(user) || this.createUserPage(user);
+    page.user = user;
+    this.chatLine(user, user.name, text, page);
   }
 
   // --- connection (MMOchaLobby.disconnected / connected / joinedLobby) --------------------------------
@@ -411,6 +562,7 @@ export class LobbyScreen {
     this.print([[CONNECTING_MESSAGE, null]]);
     this.closeWindow();
     this.popup.visible = false;
+    this.closeUserPopups();
     this.setInterface(false, true);
   }
 
@@ -424,6 +576,7 @@ export class LobbyScreen {
   rejoined(user) {
     this.reconnecting = false;
     this.user = user;
+    this.resetPages();
     const line = this.lastLine(JOINING_MESSAGE);
     this.printWelcome(line);
     this.players = [];
@@ -457,6 +610,20 @@ export class LobbyScreen {
     this.userRows = byY(win.children.filter((c) => c.className === 'MMOcha.lobby.UserDisplay'));
     this.userScroll = win.child('_scrollBar');
     this.userIndex = 0;
+    // UserDisplay: a click opens the player's options, a double click a private conversation.
+    for (const row of this.userRows) {
+      row.el.style.cursor = 'pointer';
+      row.child('_nameField').box.style.pointerEvents = 'auto';
+      row.on('click', (event) => {
+        if (!row.user) return;
+        const p = this.windows.localPoint(event);
+        this.showUserOptions(row.user, p.x - 50, p.y);
+      });
+      row.on('dblclick', () => {
+        this.closeUserPopups();
+        this.openPrivateChat(row.user);
+      });
+    }
     this.userScroll?.on('scrolldrag', (e) => this.showUsers(Math.round(e.detail * Math.max(0, this.players.length - this.userRows.length)), false));
     this.userScroll?.on('stepup', () => this.showUsers(this.userIndex - 1));
     this.userScroll?.on('stepdown', () => this.showUsers(this.userIndex + 1));
@@ -469,8 +636,14 @@ export class LobbyScreen {
 
   setPlayers(users) {
     const local = this.user;
-    const others = users.filter((u) => u && u !== local).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    this.players = [local, ...others].filter(Boolean);
+    const before = this.players;
+    this.players = this.social.order([local, ...users.filter((u) => u && u !== local)], local);
+    // ChatPage.userDisconnected / a player back under a new id
+    for (const page of this.userPages) {
+      const now = this.players.find((p) => sameName(p, page.user));
+      if (now) page.user = now;
+      else if (before.some((p) => sameName(p, page.user))) this.print([[`${capitalize(page.user.name)} left the lobby.`, null]], null, page);
+    }
     this.showUsers(this.userIndex);
   }
 
@@ -480,10 +653,10 @@ export class LobbyScreen {
     rows.forEach((row, i) => {
       const user = this.players[this.userIndex + i];
       row.visible = !!user;
+      row.user = user || null;
       if (!user) return;
       row.child('_nameField').text = capitalize(user.name);
-      const icon = row.child('_icon');
-      icon?.gotoAndStop(user === this.user ? 'Local' : user.level > 0 ? 'Moderator' : user.wanted ? 'Wanted' : 'None');
+      row.child('_icon')?.gotoAndStop(this.social.icon(user, this.user));
     });
     if (this.userScroll) {
       this.userScroll.handleSize = Math.max(0.2, Math.min(1, rows.length / Math.max(1, this.players.length)));
@@ -764,6 +937,136 @@ export class LobbyScreen {
     this.popup.child('_messageField').text = message;
     this.popup.visible = true;
     this.windows.content.appendChild(this.popup.el);
+  }
+
+  // --- a player's options and stats (UserOptionsPopup, UserStatsPopup) ---------------------------
+
+  setupUserPopups() {
+    const popup = (this.optionsPopup = this.windows.child('_userOptionsPopup'));
+    this.statsPopup = this.windows.child('_userStatsPopup');
+    if (!popup || !this.statsPopup) return;
+    const buttons = (this.popupButtons = popup.child('_buttons'));
+    const button = (name, text, fn) => {
+      const b = buttons.child(name);
+      b.text = text;
+      b.baseY = b.y;
+      b.onClick((event) => {
+        const user = this.popupUser;
+        this.closeUserPopups();
+        if (user) fn(user, event);
+      });
+      return b;
+    };
+    const social = (fn) => (user) => {
+      fn(user);
+      this.setPlayers(this.players); // UserList.updateUserSocialStatus: re-sorted, new icon
+    };
+    this.optionButtons = {
+      privateMessage: button('_privateMessageButton', 'Private Message', (user) => this.openPrivateChat(user)),
+      stats: button('_statsButton', 'View Stats', (user, event) => {
+        const p = this.windows.localPoint(event);
+        this.showUserStats(user, p.x, p.y);
+      }),
+      addFriend: button('_addFriendButton', 'Add Friend', social((user) => this.social.setFriend(user.name, true))),
+      removeFriend: button('_removeFriendButton', 'Remove Friend', social((user) => this.social.setFriend(user.name, false))),
+      addIgnore: button('_addIgnoreButton', 'Block', social((user) => this.social.setBlocked(user.name, true))),
+      removeIgnore: button('_removeIgnoreButton', 'Unblock', social((user) => this.social.setBlocked(user.name, false))),
+    };
+    this.buttonsY = buttons.y;
+    this.statusRows = { moderator: popup.child('_moderator'), wanted: popup.child('_wanted') };
+    for (const row of Object.values(this.statusRows)) row.baseY = row.y;
+    this.popupBackground = popup.child('_background');
+    // A click anywhere else closes them (UserOptionsPopup / UserStatsPopup.mouseUp).
+    this.onPopupPointerUp = (event) => {
+      if (this.optionsPopup.visible && !this.optionsPopup.el.contains(event.target)) this.closeUserPopups();
+      else if (this.statsPopup.visible && this.statsShownAt < performance.now() - 50) this.closeUserPopups();
+    };
+  }
+
+  /**
+   * MMOchaLobby.showUserOptionsPopup: View Stats for yourself; for anyone else
+   * Private Message, View Stats, Add / Remove Friend and Block / Unblock, under
+   * their Moderator! and Wanted! status.
+   */
+  showUserOptions(user, x, y) {
+    if (!this.interfaceEnabled || !this.optionsPopup || !user) return;
+    this.closeUserPopups();
+    const popup = this.optionsPopup;
+    const local = user === this.user || sameName(user, this.user);
+    this.popupUser = user;
+    let buttonsY = this.buttonsY;
+    let wantedY = this.statusRows.wanted.baseY;
+    const status = (row, show, frame, text, color) => {
+      row.visible = show;
+      if (!show) return false;
+      row.child('_icon')?.gotoAndStop(frame);
+      const field = row.child('_textField');
+      field.autoSize = 'left';
+      field.text = text;
+      field.box.style.color = color;
+      row.x = -Math.round(row.width / 2); // centred over the buttons
+      return true;
+    };
+    const wanted = status(this.statusRows.wanted, !!user.wanted, 'Wanted', 'Wanted!', NAME_COLORS.wanted);
+    if (!wanted) buttonsY -= STATUS_HEIGHT;
+    const moderator = status(this.statusRows.moderator, user.level > 0, 'Moderator', 'Moderator!', NAME_COLORS.moderator);
+    if (!moderator) {
+      buttonsY -= STATUS_HEIGHT;
+      wantedY -= STATUS_HEIGHT;
+    }
+    this.statusRows.wanted.y = wantedY;
+    this.popupButtons.y = buttonsY;
+    const b = this.optionButtons;
+    const friend = this.social.isFriend(user.name);
+    const blocked = this.social.isBlocked(user.name);
+    const shown = local ? [b.stats] : [b.privateMessage, b.stats, friend ? b.removeFriend : b.addFriend, blocked ? b.removeIgnore : b.addIgnore];
+    for (const button of Object.values(b)) {
+      button.visible = shown.includes(button);
+      button.y = button.baseY;
+    }
+    if (local) b.stats.y = b.privateMessage.baseY;
+    // The background fits what is shown, with the same margin above and below.
+    const last = shown[shown.length - 1];
+    const top = moderator || wanted ? 0 : buttonsY + b.privateMessage.baseY;
+    const bottom = buttonsY + last.y + last.height;
+    const height = bottom - top + 2 * Math.max(0, top) + 8 + (moderator || wanted ? 4 : 0);
+    this.popupBackground.scaleY = height / 100;
+    this.placePopup(popup, x, y, 76, -4, height - 4);
+  }
+
+  /** MMOchaLobby.showUserStatsPopup: Bounty Points, Kills, Deaths, Wins and Rounds. */
+  showUserStats(user, x, y) {
+    if (!this.interfaceEnabled || !this.statsPopup || !user) return;
+    this.closeUserPopups();
+    const popup = this.statsPopup;
+    const name = popup.child('_nameField');
+    name.text = capitalize(user.name);
+    name.box.style.color = nameColor(user);
+    const stats = user.stats || {};
+    const n = (v) => String(v || 0);
+    popup.child('_statsField').text = 'Bounty Points\nKills\nDeaths\nWins\nRounds';
+    popup.child('_valuesField').text = [stats.bounty, stats.kills, stats.deaths, stats.wins, (stats.wins || 0) + (stats.losses || 0)].map(n).join('\n');
+    const waiting = popup.child('_waitingAnim');
+    if (waiting) waiting.visible = false;
+    this.statsShownAt = performance.now();
+    this.placePopup(popup, x, y, 76, -14, 104);
+  }
+
+  /** Show a popup at (x, y), kept inside the stage (MMOchaLobby.constrainPopup). */
+  placePopup(popup, x, y, halfWidth, top, bottom) {
+    popup.x = Math.round(Math.max(halfWidth, Math.min(STAGE_WIDTH - halfWidth, x)));
+    popup.y = Math.round(Math.max(-top, Math.min(STAGE_HEIGHT - bottom, y)));
+    popup.visible = true;
+    this.windows.content.appendChild(popup.el);
+    // From the next click on: the one that opened it is still going up.
+    requestAnimationFrame(() => window.addEventListener('pointerup', this.onPopupPointerUp));
+  }
+
+  closeUserPopups() {
+    window.removeEventListener('pointerup', this.onPopupPointerUp);
+    if (this.optionsPopup) this.optionsPopup.visible = false;
+    if (this.statsPopup) this.statsPopup.visible = false;
+    this.popupUser = null;
   }
 
   // --- Most Wanted (MostWantedPage) -----------------------------------------------------------------

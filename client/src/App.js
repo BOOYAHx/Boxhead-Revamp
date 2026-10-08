@@ -46,6 +46,7 @@ export class App {
       joinRoom: (name) => this.joinRoom(name),
       createRoom: (options) => this.createRoom(options),
       chat: (text) => this.lobbyChat(text),
+      privateMessage: (user, text) => this.connection.sendPrivate('c' + text, user.id),
       preferencesChanged: () => this.applyPreferences(),
       customize: (look) => this.customize(look),
     };
@@ -144,9 +145,11 @@ export class App {
     c.on(ServerEvent.PEER_DISCONNECTED, refreshPlayers);
     c.on(ServerEvent.MOST_WANTED_CHANGE, refreshPlayers);
     c.on(ServerEvent.MESSAGE, ({ source, message }) => {
-      if (c.room !== LOBBY || source === c.clientID || message.charAt(0) !== 'C') return;
+      if (c.room !== LOBBY || source === c.clientID) return;
       const peer = c.peers.find((p) => p.id === source);
-      this.ui.addChat(peer?.name || 'Someone', message.substr(1));
+      // MMOchaLobby.handleMessage: "C" the chatroom, "c" a private message.
+      if (message.charAt(0) === 'C') this.ui.addChat(peer?.name || 'Someone', message.substr(1));
+      else if (message.charAt(0) === 'c' && peer) this.ui.receivePrivate?.(peer, message.substr(1));
     });
     c.on(ServerEvent.WARNING, ({ message }) => c.room === LOBBY && this.ui.addChat('Moderator', message, 'warning'));
     c.on(ServerEvent.GLOBAL_MESSAGE, ({ message }) => c.room === LOBBY && this.ui.addChat('', message, 'system'));

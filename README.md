@@ -44,6 +44,7 @@ The port is built in small steps. Each one is tested before the next starts.
 | 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command) | **ready to test** |
 | 12 | Grenades, Grenade Launcher, Plasma Cannon, C4, mines, airstrikes, barrels, barricades and spy satellite | **ready to playtest** |
 | 13 | Character customization in the lobby | done |
+| 16 | Lobby player options: click a name for View Stats (yours) or Private Message, View Stats, Add Friend and Block (anyone else); private chat tabs | **ready to test** |
 | 14 | Lighting pass (Enhanced Graphics): lights from muzzle flashes and explosions on walls, props, people and the floor; contact shadows; ambient occlusion where walls meet the floor | **ready to test** |
 | 15 | Hand-redrawn 4x art: templates and loading (`tools/redrawn_art.py`); the drawing itself is done by an artist | tools ready |
 | later | Turrets, team deathmatch / infected | |
@@ -493,6 +494,23 @@ tests, including simulated two-client plasma hit reporting. Browser rendering
 and a live room on your Python server still need a playtest. A useful first
 check is to place a barricade, walk out, fire at it, then try C4 and mines with
 a second player. Run the logic checks with `node --test tests/*.test.mjs`.
+
+### Step 16: player options in the lobby
+
+Click a name in the player list or in the chat:
+
+* **your own name**: **View Stats** (bounty points, kills, deaths, wins and rounds);
+* **anyone else's**: **Private Message**, **View Stats**, **Add Friend** (then
+  Remove Friend) and **Block** (then Unblock), under their Moderator! or
+  Wanted! status.
+
+A private message opens a tab next to MAIN CHATROOM (up to five show at once,
+with arrows for more); a tab lights up when a message arrives while you are
+elsewhere, and its x closes it. Double-clicking a name opens the conversation
+straight away. Friends are listed first with the friend icon, blocked players
+last with the blocked icon; their chat and private messages are hidden. The
+lists are kept in this browser, like the original. Private messages use the
+original `00<id>9...` packet, which your server already relays.
 
 ### Step 14: lighting
 
