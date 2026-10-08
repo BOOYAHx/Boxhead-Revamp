@@ -16,6 +16,7 @@ const EXPAND_TIME = 5000;
 const GLOW = [{ type: 'glow', color: [0xb0, 0xb0, 0x40, 255], blurX: 6, blurY: 6, strength: 4, passes: 1 }];
 const AMMO_TICK = 'assets/game/images/WeaponSliderDisplay_AMMO_TICK.png';
 const TICK_WIDTH = 2;
+const TICK_HEIGHT = 5;
 
 export class GameUi {
   /**
@@ -259,9 +260,24 @@ class WeaponSlider {
       const d = lib.create('boxhead.ui.weaponSlider.WeaponSliderDisplay');
       d.el.style.cursor = 'pointer';
       d.on('click', () => d.weapon && this.select(d.weapon));
-      d.ticks = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-      d.ticks.setAttribute('href', AMMO_TICK);
-      d.el.appendChild(d.ticks);
+      // The tick art is one tick and its gap, repeated across the bar (a bitmap fill).
+      const SVGNS = 'http://www.w3.org/2000/svg';
+      const id = 'ammoTicks' + Math.random().toString(36).slice(2);
+      d.tickPattern = document.createElementNS(SVGNS, 'pattern');
+      d.tickPattern.id = id;
+      d.tickPattern.setAttribute('patternUnits', 'userSpaceOnUse');
+      d.tickPattern.setAttribute('width', TICK_WIDTH);
+      d.tickPattern.setAttribute('height', TICK_HEIGHT);
+      const tick = document.createElementNS(SVGNS, 'image');
+      tick.setAttribute('href', AMMO_TICK);
+      tick.setAttribute('width', TICK_WIDTH);
+      tick.setAttribute('height', TICK_HEIGHT);
+      tick.style.imageRendering = 'pixelated';
+      d.tickPattern.appendChild(tick);
+      d.ticks = document.createElementNS(SVGNS, 'rect');
+      d.ticks.setAttribute('fill', `url(#${id})`);
+      d.ticks.setAttribute('height', TICK_HEIGHT);
+      d.el.append(d.tickPattern, d.ticks);
       d.visible = false;
       this.clip.addChild(d);
       return d;
@@ -371,10 +387,11 @@ class WeaponSlider {
     let n = Math.max(0, Math.floor((end - start) / TICK_WIDTH));
     start = end - n * TICK_WIDTH;
     if (w.ammo) n = Math.round((n * w.ammo.count) / w.ammo.max);
+    const y = Math.trunc(field.y + 4);
+    d.tickPattern.setAttribute('x', start);
+    d.tickPattern.setAttribute('y', y);
     d.ticks.setAttribute('x', start);
-    d.ticks.setAttribute('y', Math.trunc(field.y + 4));
+    d.ticks.setAttribute('y', y);
     d.ticks.setAttribute('width', Math.max(0, n * TICK_WIDTH));
-    d.ticks.setAttribute('height', 6);
-    d.ticks.setAttribute('preserveAspectRatio', 'none');
   }
 }
