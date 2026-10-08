@@ -100,22 +100,11 @@ export class GameScene extends Phaser.Scene {
     this.showHits = false;
     this.accumulator = 0;
 
-    this.status = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, '', { ...TEXT_STYLE, fontSize: '14px' }).setOrigin(0.5).setScrollFactor(0).setDepth(HUD_DEPTH);
+    this.status = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, '', { ...TEXT_STYLE, fontSize: '14px' }).setOrigin(0.5).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
     this.coords = this.add.text(WINDOW_WIDTH - 8, WINDOW_HEIGHT - 8, '', { ...TEXT_STYLE, fontFamily: 'monospace' }).setOrigin(1, 1).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
     this.shadows = new ShadowLayer(this);
     this.effects = new Effects(this);
     this.hud = new Hud(this);
-    const help =
-      this.mode === 'offline'
-        ? 'Offline practice · Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · C spin · Ctrl auto-run · B shop · R refill · M model · V colour · H head · T hit boxes · Esc menu'
-        : 'Arrows/WASD move · Space fire · Shift strafe · Q/E or 1-8 weapons · C spin · Ctrl auto-run · B shop · R refill · Enter chat · Tab scores · Esc menu';
-    // Not in the original: a short reminder of the keys that fades after a while.
-    this.help = this.add
-      .text(4, 4, help, { ...TEXT_STYLE, fontSize: '10px', backgroundColor: 'rgba(0,0,0,0.4)', wordWrap: { width: 260 } })
-      .setScrollFactor(0)
-      .setDepth(HUD_DEPTH)
-      .setAlpha(0.8);
-    this.tweens.add({ targets: this.help, alpha: 0, delay: 30000, duration: 2000 });
 
     this.events.once('shutdown', () => this.shutdown());
     // Browsers stop drawing hidden or fully covered windows. Keep the network
@@ -196,7 +185,7 @@ export class GameScene extends Phaser.Scene {
 
   startOnline() {
     const c = this.connection;
-    this.status.setText(`Joining ${this.room}…`);
+    this.setStatus(`Joining ${this.room}…`);
     const on = (type, fn) => this.unsubscribe.push(c.on(type, fn));
     on(ServerEvent.ROOM_INFO, (info) => this.receiveRoomInfo(info));
     on(ServerEvent.ROUND_TIME, ({ seconds }) => this.setRoundTime(seconds));
@@ -218,7 +207,7 @@ export class GameScene extends Phaser.Scene {
     const { signal } = this.mapLoad;
     const maps = this.app.maps;
     const entry = maps[info.mapID] || maps.find(Boolean);
-    this.status.setText(`Loading ${entry?.name || 'map'}…`);
+    this.setStatus(`Loading ${entry?.name || 'map'}…`);
     let map;
     try {
       const data = await fetchMap(entry, signal);
@@ -227,7 +216,7 @@ export class GameScene extends Phaser.Scene {
     } catch (error) {
       if (signal.aborted) return;
       console.error('Could not load map', entry, error);
-      this.status.setText('Could not load this map; using the bundled one.');
+      this.setStatus('Could not load this map; using the bundled one.');
       map = parseMap(FALLBACK_MAPS[0].data);
     }
     await this.loadingPaint();
@@ -1104,7 +1093,7 @@ export class GameScene extends Phaser.Scene {
     const { borderRect } = map;
     this.cameraBounds = { x: borderRect.x * CELL_WIDTH, y: borderRect.y * CELL_HEIGHT, width: borderRect.width * CELL_WIDTH, height: borderRect.height * CELL_HEIGHT };
     this.cameras.main.setRoundPixels(true);
-    this.status.setText('');
+    this.setStatus('');
     this.loadingMap = false;
     this.hideMapLoading();
     window.boxhead = { scene: this, player: this.player, map };
@@ -1294,6 +1283,12 @@ export class GameScene extends Phaser.Scene {
         if (this.map && !this.gameOver) this.tick();
       }, PROCESS_INTERVAL);
     }
+  }
+
+  /** The message in the middle of the screen ("Loading map…"); hidden when empty, so no empty dark box shows. */
+  setStatus(text) {
+    this.status.setText(text);
+    this.status.setVisible?.(!!text);
   }
 
   shutdown() {
