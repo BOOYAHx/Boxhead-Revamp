@@ -416,7 +416,8 @@ export class ShopScreen {
   /** Shop.handleKeyDown. Returns true when the key was used. */
   keyDown(event) {
     if (this.tab === 'refund') return this.refundPage.keyDown(event);
-    if (this.ammoPanel.visible && this.ammoPanel.keyDown(event)) return true;
+    // The ammo buttons belong to the Weapons tab (they stay set up behind the Equipment tab).
+    if (this.tab === 'weapons' && this.ammoPanel.visible && this.ammoPanel.keyDown(event)) return true;
     const rows = this.rows;
     const index = rows.indexOf(this.selected);
     if (is(event, 'buy')) {
