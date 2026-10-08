@@ -369,13 +369,25 @@ python tools/upscale_textures.py
   suggests `--tile 64`, `--model fast`, or `--cpu` (slow, an hour or more, but
   it always works). Already have broken files from before? Run
   `python tools/hd_sprites.py` and they are dropped.
-* Sprites use the "anime" model (clean outlines); the ground uses the
-  "photo" model, because the anime one smooths grass and gravel into flat
-  colour. If you upscaled before this change and the floor looks blurry, run
-  `python tools/upscale_textures.py --only images --redo`.
-* `--model fast` is quicker and a little softer; `--model photo` is the
-  realistic model. `--redo` upscales everything again (for example after
-  trying another model).
+* Sprites use **4x-UltraSharp** (sharp, keeps the shading, wood grain and
+  leaves). The ground uses the "photo" model, which keeps grass and gravel
+  natural. The earlier "anime" default flattened detail and painted a yellow
+  edge where faces meet collars. Files made with another model are redone
+  automatically the next time you run the command.
+* Compare the models on your own screen first if you like:
+  `python tools/upscale_textures.py --compare` upscales two characters, a car,
+  a crate, a tree, grass and tiles with every model and saves them side by side
+  in `tools/.realesrgan/compare.png`. Then pick one with `--model` (sprites) or
+  `--ground-model` (ground): `ultrasharp`, `photo`, `anime`, `hifi` (High
+  Fidelity, a little softer), `remacri` (most texture, can look noisy),
+  `ultramix` (in between) or `fast` (quick, soft).
+* UltraSharp, High Fidelity, Remacri and UltraMix are downloaded from Upscayl the
+  first time they are used. UltraSharp, Remacri and UltraMix are free under
+  CC BY-NC-SA 4.0: fine for this non-commercial fan project, not for selling.
+* Using another upscaler (Upscayl, chaiNNer…)? Save its 2x/3x/4x results under
+  the same names in `client/assets/game/sprites-hd/` and `images-hd/`, then
+  run `python tools/hd_sprites.py`; broken results are left out.
+* `--redo` upscales everything again.
 * Run it again after rebuilding the assets; files already done are skipped.
   Delete `client/assets/game/sprites-hd/` and `images-hd/` to go back to the
   original art (or untick Enhanced Graphics).

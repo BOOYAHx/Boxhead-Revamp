@@ -13,21 +13,38 @@ takes a few minutes. Every result is checked against its original; some
 graphics drivers make Real-ESRGAN output noise, and those files are left out
 (try --tile 64, another --gpu, or --cpu, which is slow but always works).
 
-Run it again after rebuilding the assets; files already done are skipped
-(--redo does them all again). Delete client/assets/game/sprites-hd/ and
-images-hd/ to go back to the original art.
+Run it again after rebuilding the assets; files already done with the same
+model are skipped (--redo does them all again; a different model redoes them by
+itself). Delete client/assets/game/sprites-hd/ and images-hd/ to go back to the
+original art.
 
 Models (--model for the sprites, --ground-model for the ground textures):
-  anime  realesrgan-x4plus-anime: sharp, clean outlines (default for sprites;
-         it smooths fine grain away, so grass turns into flat green)
-  photo  realesrgan-x4plus: keeps and sharpens texture detail (default for the ground)
-  fast   realesr-animevideov3: much faster, a little softer
+  ultrasharp  4x-UltraSharp: sharp and faithful, keeps the shading, wood grain
+              and leaves (default for sprites)
+  photo       realesrgan-x4plus: natural texture detail (default for the ground)
+  anime       realesrgan-x4plus-anime: very clean, but flattens fine detail and
+              paints a yellow edge where faces meet collars
+  hifi        High Fidelity: like ultrasharp, a little softer
+  remacri     Remacri: the most texture, can look noisy
+  ultramix    UltraMix Balanced: between remacri and ultrasharp
+  fast        realesr-animevideov3: much faster, softer
+The last four and ultrasharp come from Upscayl (github.com/upscayl/upscayl) and
+are downloaded the first time they are used. 4x-UltraSharp, Remacri and UltraMix
+are by Kim2091 and Foolhardy under CC BY-NC-SA 4.0: free for this non-commercial
+fan project, not for selling.
+
+    python tools/upscale_textures.py --compare
+
+upscales a few samples (two characters, a car, a crate, a tree, grass, tiles)
+with every model and saves them side by side in tools/.realesrgan/compare.png,
+so you can pick with your own eyes before upscaling everything.
 
 Requires Pillow (pip install pillow).
 """
 
 import argparse
 import io
+import json
 import os
 import platform
 import stat
@@ -37,14 +54,26 @@ import tempfile
 import urllib.request
 import zipfile
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hd_sprites  # noqa: E402
 
 RELEASE = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-{}.zip'
 PLATFORMS = {'Windows': 'windows', 'Linux': 'ubuntu', 'Darwin': 'macos'}
-MODELS = {'anime': 'realesrgan-x4plus-anime', 'fast': 'realesr-animevideov3', 'photo': 'realesrgan-x4plus'}
+MODELS = {
+    'ultrasharp': 'ultrasharp-4x',
+    'photo': 'realesrgan-x4plus',
+    'anime': 'realesrgan-x4plus-anime',
+    'hifi': 'high-fidelity-4x',
+    'remacri': 'remacri-4x',
+    'ultramix': 'ultramix-balanced-4x',
+    'fast': 'realesr-animevideov3',
+}
+EXTRA_MODELS = 'https://raw.githubusercontent.com/upscayl/upscayl/main/resources/models/{}'  # not in the Real-ESRGAN zip
+RECORD = '.models.json'  # in each -hd folder: which model made each file
+DEFAULT_MODEL = {'sprites': 'ultrasharp', 'images': 'photo'}
+EARLIER_DEFAULT = {'sprites': 'anime', 'images': 'photo'}  # what made files from before the record existed
 SCALE = 4
 MAX_SIDE = 4096  # bigger textures don't load on every graphics card
 PAD = 8  # pixels of the pattern wrapped around ground textures so their edges still tile
@@ -73,6 +102,47 @@ def find_upscaler(cache):
             os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             return path
     sys.exit('The Real-ESRGAN download did not contain ' + exe)
+
+
+def ensure_model(exe, model):
+    """Model files next to the executable, downloading Upscayl's ones the first time."""
+    folder = os.path.join(os.path.dirname(exe), 'models')
+    for ext in ('param', 'bin'):
+        path = os.path.join(folder, f'{model}.{ext}')
+        if os.path.exists(path) or model.startswith('realesr'):
+            continue
+        print(f'Downloading the {model} model ...')
+        os.makedirs(folder, exist_ok=True)
+        with urllib.request.urlopen(EXTRA_MODELS.format(f'{model}.{ext}'), timeout=300) as response:
+            data = response.read()
+        with open(path + '.part', 'wb') as f:
+            f.write(data)
+        os.replace(path + '.part', path)
+
+
+def run_upscaler(exe, model, src, dest, gpu, tile):
+    """Real-ESRGAN over every PNG of `src` into `dest`; False if it failed."""
+    ensure_model(exe, model)
+    os.makedirs(dest, exist_ok=True)  # Real-ESRGAN only writes into an existing folder
+    cmd = [exe, '-i', src, '-o', dest, '-n', model, '-s', str(SCALE), '-f', 'png', '-m', os.path.join(os.path.dirname(exe), 'models')]
+    if gpu is not None:
+        cmd += ['-g', str(gpu)]
+    if tile:
+        cmd += ['-t', str(tile)]
+    return subprocess.run(cmd, cwd=os.path.dirname(exe)).returncode == 0
+
+
+def load_record(dest_dir):
+    try:
+        with open(os.path.join(dest_dir, RECORD)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_record(dest_dir, record):
+    with open(os.path.join(dest_dir, RECORD), 'w') as f:
+        json.dump(record, f, indent=1, sort_keys=True)
 
 
 def is_tile(name):
@@ -117,10 +187,11 @@ def finish(name, out_dir, dest_dir, pad, original_size):
 
 
 def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
-    """Upscale one folder; returns (files done, files that came out broken)."""
+    """Upscale one folder with `model` (a MODELS key); returns (files done, files that came out broken)."""
     src_dir = os.path.join(game, src)
     dest_dir = os.path.join(game, dest)
     os.makedirs(dest_dir, exist_ok=True)
+    record = load_record(dest_dir)
     names = []
     sizes = {}
     for file in sorted(os.listdir(src_dir)):
@@ -130,8 +201,9 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         with Image.open(os.path.join(src_dir, file)) as f:
             sizes[name] = f.size
         done = os.path.join(dest_dir, file)
-        # Skip files already done well, unless the asset build has replaced the original since.
-        if not redo and os.path.exists(done) and os.path.getmtime(done) >= os.path.getmtime(os.path.join(src_dir, file)):
+        # Skip files already done well with this model, unless the asset build has replaced the original since.
+        same_model = record.get(name, EARLIER_DEFAULT[src]) == model
+        if not redo and same_model and os.path.exists(done) and os.path.getmtime(done) >= os.path.getmtime(os.path.join(src_dir, file)):
             with Image.open(done) as f, Image.open(os.path.join(src_dir, file)) as original:
                 if f.width % sizes[name][0] == 0 and f.width // sizes[name][0] in (2, 3, 4) and hd_sprites.looks_right(original, f):
                     continue
@@ -141,20 +213,16 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         return 0, []
     total = sum(sizes[n][0] * sizes[n][1] for n in names)
     print(f'{src}: upscaling {len(names)} files ({total / 1e6:.1f} million pixels) with {model} ...')
+    if model in ('ultrasharp', 'photo', 'hifi', 'remacri', 'ultramix'):
+        print('  (a large model: on a graphics card a few minutes, with --cpu much longer)')
     with tempfile.TemporaryDirectory() as tmp:
         work = os.path.join(tmp, 'in')
         out = os.path.join(tmp, 'out')
         os.makedirs(work)
         os.makedirs(out)
         pads = prepare(src_dir, names, work, wrap=src == 'images')
-        cmd = [exe, '-i', work, '-o', out, '-n', model, '-s', str(SCALE), '-f', 'png', '-m', os.path.join(os.path.dirname(exe), 'models')]
-        if gpu is not None:
-            cmd += ['-g', str(gpu)]
-        if tile:
-            cmd += ['-t', str(tile)]
-        result = subprocess.run(cmd, cwd=os.path.dirname(exe))
-        if result.returncode != 0:
-            sys.exit('Real-ESRGAN failed. Is the graphics driver up to date? (--gpu picks another card, --model fast uses less memory)')
+        if not run_upscaler(exe, MODELS[model], work, out, gpu, tile):
+            sys.exit('Real-ESRGAN failed. Is the graphics driver up to date? (--gpu picks another card, --tile 64 or --model fast use less memory)')
         broken = []
         for name in names:
             if not os.path.exists(os.path.join(out, name + '.png')):
@@ -169,14 +237,107 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
             if not ok:
                 os.remove(path)  # so the next run tries it again
                 broken.append(name)
+                record.pop(name, None)
+            else:
+                record[name] = model
+        save_record(dest_dir, record)
         return len(names), broken
+
+
+# --- side-by-side comparison of the models ----------------------------------------------
+
+COMPARE_CHARACTERS = (('Bond', (90, 90, 90), (70, 45, 30)), ('Swat', (30, 30, 200), (30, 30, 120)))
+COMPARE_PROPS = ('Car1', 'Crate1', 'Tree1')
+COMPARE_GROUND = ('Grass1', 'Tiles')
+
+
+def compare_samples(game, folder):
+    """Small pictures of the game's art to upscale: two whole characters, props and ground."""
+    with open(os.path.join(game, 'atlas.json')) as f:
+        atlas = json.load(f)
+
+    def frame(name, index):
+        x, y, w, h, dx, dy = atlas[name]['frames'][index]
+        with Image.open(os.path.join(game, 'sprites', atlas[name]['image'] + '.png')) as sheet:
+            return sheet.convert('RGBA').crop((x, y, x + w, y + h)), dx, dy
+
+    def tinted(img, rgb):
+        # The *Custom layers carry the costume colour: multiplied in, like the game does.
+        out = ImageChops.multiply(img.convert('RGB'), Image.new('RGB', img.size, rgb))
+        out.putalpha(img.getchannel('A'))
+        return out
+
+    samples = []
+    for model, body, head in COMPARE_CHARACTERS:
+        if model + 'Body' not in atlas:
+            continue
+        canvas = Image.new('RGBA', (48, 48), (0, 0, 0, 0))
+        body_frame = 42 * 1 + 9  # facing south-west, holding a pistol
+        for name, tint, index in ((model + 'BodyCustom', body, body_frame), (model + 'Body', None, body_frame), ('Pistol', None, 9),
+                                  (model + 'HeadCustom', head, body_frame), (model + 'Head', None, body_frame)):
+            if name not in atlas:
+                continue
+            img, dx, dy = frame(name, index)
+            canvas.alpha_composite(tinted(img, tint) if tint else img, (24 + dx, 40 + dy))
+        samples.append(('1_' + model, canvas))
+    for name in COMPARE_PROPS:
+        if name in atlas:
+            samples.append(('2_' + name, frame(name, 0)[0]))
+    for name in COMPARE_GROUND:
+        path = os.path.join(game, 'images', name + '.png')
+        if os.path.exists(path):
+            with Image.open(path) as img:
+                samples.append(('3_' + name, img.convert('RGBA').crop((0, 0, min(80, img.width), min(56, img.height)))))
+    os.makedirs(folder, exist_ok=True)
+    for name, img in samples:
+        img.save(os.path.join(folder, name + '.png'))
+    return [name for name, _ in samples]
+
+
+def compare(exe, game, gpu, tile, out_path):
+    """Upscale the samples with every model and save them side by side."""
+    from PIL import ImageDraw  # noqa: PLC0415 (only the comparison draws text)
+    columns = [('no AI', None)] + [(key, key) for key in MODELS]
+    with tempfile.TemporaryDirectory() as tmp:
+        names = compare_samples(game, os.path.join(tmp, 'in'))
+        for key in MODELS:
+            print(f'Comparing: {key} ...')
+            if not run_upscaler(exe, MODELS[key], os.path.join(tmp, 'in'), os.path.join(tmp, key), gpu, tile):
+                print(f'  {key} failed; its column stays empty')
+        cell = 200
+        sheet = Image.new('RGB', (cell * len(columns), 30 + cell * len(names)), (52, 48, 46))
+        draw = ImageDraw.Draw(sheet)
+        for c, (label, _) in enumerate(columns):
+            draw.text((c * cell + 8, 9), label + (' (sprites)' if label == DEFAULT_MODEL['sprites'] else ' (ground)' if label == DEFAULT_MODEL['images'] else ''), fill=(240, 230, 210))
+        for r, name in enumerate(names):
+            with Image.open(os.path.join(tmp, 'in', name + '.png')) as original:
+                original = original.convert('RGBA')
+            for c, (_, key) in enumerate(columns):
+                path = os.path.join(tmp, key, name + '.png') if key else None
+                if key is None:
+                    img = original.resize((original.width * SCALE, original.height * SCALE), Image.LANCZOS)
+                elif os.path.exists(path):
+                    with Image.open(path) as f:
+                        img = f.convert('RGBA')
+                else:
+                    continue
+                k = min(cell / img.width, cell / img.height)
+                img = img.resize((max(1, int(img.width * k)), max(1, int(img.height * k))), Image.LANCZOS)
+                tile_img = Image.new('RGBA', (cell, cell), (52, 48, 46, 255))
+                tile_img.alpha_composite(img, ((cell - img.width) // 2, (cell - img.height) // 2))
+                sheet.paste(tile_img.convert('RGB'), (c * cell, 30 + r * cell))
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        sheet.save(out_path)
+    print(f'Saved {out_path}: one row per sample, one column per model.')
+    print('Pick one, then for example:  python tools/upscale_textures.py --model hifi')
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game', default=os.path.join('client', 'assets', 'game'), help='the built game assets')
-    ap.add_argument('--model', choices=sorted(MODELS), default='anime', help='for the sprites (default anime)')
-    ap.add_argument('--ground-model', choices=sorted(MODELS), default='photo', help='for the ground textures (default photo)')
+    ap.add_argument('--model', choices=list(MODELS), default=DEFAULT_MODEL['sprites'], help=f"for the sprites (default {DEFAULT_MODEL['sprites']})")
+    ap.add_argument('--ground-model', choices=list(MODELS), default=DEFAULT_MODEL['images'], help=f"for the ground textures (default {DEFAULT_MODEL['images']})")
+    ap.add_argument('--compare', action='store_true', help='upscale a few samples with every model, side by side, and stop')
     ap.add_argument('--only', choices=['sprites', 'images'], help='just one of the two folders')
     ap.add_argument('--redo', action='store_true', help='upscale everything again')
     ap.add_argument('--gpu', type=int, help='graphics card number, if you have several')
@@ -189,11 +350,14 @@ def main():
     cache = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.realesrgan')
     exe = args.upscaler or find_upscaler(cache)
     gpu = -1 if args.cpu else args.gpu
+    if args.compare:
+        compare(exe, args.game, gpu, args.tile, os.path.join(cache, 'compare.png'))
+        return
     done, broken = 0, []
     for src, dest in hd_sprites.FOLDERS:
         if args.only and args.only != src:
             continue
-        model = MODELS[args.ground_model if src == 'images' else args.model]
+        model = args.ground_model if src == 'images' else args.model
         n, bad = upscale_folder(exe, model, args.game, src, dest, args.redo, gpu, args.tile)
         done += n
         broken += bad
