@@ -7,6 +7,7 @@ import { FlashLibrary, Stage } from './flash.js';
 import { LobbyScreen } from './lobby.js';
 import { installWidgets } from './widgets.js';
 import { FOOTSTEPS, Preferences, resetPreferences, savePreferences } from '../game/preferences.js';
+import { MAX_NPCS } from '../game/npc.js';
 
 // MainMenuScreen fade, in frames at 30 fps.
 const PRE_FADE = 5;
@@ -491,11 +492,19 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
     screen.addChild(tick);
     return { key, label, tick };
   });
+  // "Practice NPCs": how many computer players join offline practice, under the footsteps.
+  const npcs = lib.create('MMOcha.lobby.OptionSelector');
+  npcs.matrix = [...footsteps.matrix];
+  npcs.y = footsteps.y + row;
+  for (const name of ['controlsButton', 'weaponsButton']) screen.child(name).y += row;
+  screen.addChild(npcs);
+  const npcChoices = Array.from({ length: MAX_NPCS + 1 }, (_, i) => i);
   const display = () => {
     volume.displayOptions('Volume', Preferences.volume);
     for (const [name, [label, key]] of Object.entries(ticks)) screen.child(name)?.displayOption(label, Preferences[key]);
     for (const { key, label, tick } of extras) tick.displayOption(label, Preferences[key]);
     footsteps.displayOptions('Footstep Sounds', [FOOTSTEPS.OFF, FOOTSTEPS.PLAYER, FOOTSTEPS.ON], Preferences.footsteps);
+    npcs.displayOptions('Practice NPCs', npcChoices, Preferences.npcs);
   };
   display();
   const changed = () => {
@@ -503,11 +512,13 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
     for (const [name, [, key]] of Object.entries(ticks)) Preferences[key] = !!screen.child(name)?.ticked;
     for (const { key, tick } of extras) Preferences[key] = tick.ticked;
     Preferences.footsteps = footsteps.selectedOption;
+    Preferences.npcs = npcs.selectedOption;
     savePreferences();
     onChange();
   };
   volume.on('change', changed);
   footsteps.on('change', changed);
+  npcs.on('change', changed);
   for (const { tick } of extras) tick.on('change', changed);
   for (const name of Object.keys(ticks)) screen.child(name)?.on('change', changed);
   // OptionsScreen: the Controls and Weapon Banks screens.

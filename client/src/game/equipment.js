@@ -199,10 +199,10 @@ export class EquipmentWorld {
 
   pulse(p, from) {
     for (const ch of this.characters()) {
-      if (!ch.local || ch === p.owner || !ch.active || ch.dead || p.damaged.has(ch)) continue;
+      if (!(ch.local || ch.npc) || ch === p.owner || !ch.active || ch.dead || p.damaged.has(ch)) continue;
       if (segmentDistance(ch.pos, from, p.pos) <= 0.6 + ch.moveHit.radius && clearBlastPath(this.map, p.pos, ch.pos, p.altitude)) {
         p.damaged.add(ch);
-        this.hurt(p.owner, { id: p.weaponID, damage: p.damage }, Math.atan2(p.vy, p.vx));
+        this.hurt(p.owner, { id: p.weaponID, damage: p.damage }, Math.atan2(p.vy, p.vx), ch);
       }
     }
     for (const d of [...this.deployables.values()]) {
@@ -217,9 +217,9 @@ export class EquipmentWorld {
   explode(p) {
     this.effect({ type: 'explosion', pos: { ...p.pos }, altitude: p.altitude, radius: p.radius, weaponID: p.weaponID });
     for (const ch of this.characters()) {
-      if (!ch.local || !ch.active || ch.dead || p.altitude > ch.height) continue;
+      if (!(ch.local || ch.npc) || !ch.active || ch.dead || p.altitude > ch.height) continue; // offline the computer players are judged here too
       const damage = blastDamage(p.damage, Math.hypot(ch.pos.x - p.pos.x, ch.pos.y - p.pos.y), p.radius, p.inner);
-      if (damage > 0 && clearBlastPath(this.map, p.pos, ch.pos, p.altitude)) this.hurt(p.owner, { id: p.weaponID, damage }, Math.atan2(ch.pos.y - p.pos.y, ch.pos.x - p.pos.x));
+      if (damage > 0 && clearBlastPath(this.map, p.pos, ch.pos, p.altitude)) this.hurt(p.owner, { id: p.weaponID, damage }, Math.atan2(ch.pos.y - p.pos.y, ch.pos.x - p.pos.x), ch);
     }
     for (const d of [...this.deployables.values()]) {
       if (!d.solid || d.ownerID !== this.localID || p.altitude > d.height) continue;

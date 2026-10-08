@@ -5,13 +5,14 @@
 // menus (ui/Screens.js) are used instead.
 
 import { BRIDGE_URL, SERVER_NAME } from './config.js';
-import { Preferences } from './game/preferences.js';
+import { Preferences, savePreferences } from './game/preferences.js';
+import { MAX_NPCS } from './game/npc.js';
 import { Connection, ServerEvent } from './net/Connection.js';
 import { fetchMapList } from './net/MapService.js';
 import { applyDisplay } from './render/display.js';
 import { drawPortrait } from './render/portrait.js';
 import { cleanLook, saveLook } from './game/profile.js';
-import { GameConsole } from './ui/console.js';
+import { GameConsole, print } from './ui/console.js';
 import { FlashMenus } from './ui/menus.js';
 import { Screens } from './ui/Screens.js';
 
@@ -93,8 +94,17 @@ export class App {
     try {
       this.console = new GameConsole(this.flashRoot.parentElement, this.menus.lib, this.connection, {
         opened: () => scene()?.releaseKeys?.(),
-        command: (name) => {
+        command: (name, args) => {
           if ((name === 'exit' || name === 'quit') && scene()) this.leaveGame();
+          // "npcs 12": how many computer players join offline practice (also in Options).
+          if (name === 'npcs' || name === 'bots') {
+            const n = parseInt(args[0], 10);
+            if (!(n >= 0 && n <= MAX_NPCS)) return print(`npcs: ${Preferences.npcs} (0 to ${MAX_NPCS}, e.g. "npcs 12")`);
+            Preferences.npcs = n;
+            savePreferences();
+            scene()?.setNpcCount(n);
+            print(`Practice NPCs: ${n}`);
+          }
         },
       });
     } catch (error) {

@@ -1,5 +1,5 @@
 // The playing field.
-//   offline: bundled map, local character only (graphics / movement check)
+//   offline: bundled map, practice against up to 15 computer players (game/npc.js)
 //   online:  a game room on the server; the map comes from the room info
 
 import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, ROUND_START_TIME, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
@@ -15,6 +15,7 @@ import { FREE_GUNS } from '../config.js';
 import { loadLook } from '../game/profile.js';
 import { PISTOL_ID, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { EquipmentWorld } from '../game/equipment.js';
+import { MAX_NPCS, NavGrid, NpcBrain, createNpc } from '../game/npc.js';
 import { EquipmentView } from '../render/EquipmentView.js';
 import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
@@ -41,6 +42,8 @@ const MAX_CHAT_LENGTH = 120;
 const LEADER_COLOR = 0xffffff;
 const AUTO_SHOP_DELAY = 3000; // ShopGame.AUTO_SHOP_DELAY
 const OFFLINE_MONEY = 1000000; // practice: enough to try everything
+const KILL_SCORE = 500; // practice: score for a kill (online, the victim's bounty crates)
+const NPC_NAME_COLOR = '#ffb0a0';
 const TEXT_STYLE = { fontFamily: 'Verdana, sans-serif', fontSize: '11px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.55)', padding: { x: 6, y: 3 } };
 
 export class GameScene extends Phaser.Scene {
@@ -88,6 +91,9 @@ export class GameScene extends Phaser.Scene {
     this.equipmentView = null;
     this.spy = null;
     this.equipmentActivations = [];
+    this.npcs = []; // computer players' brains (offline)
+    this.npcCount = 0;
+    this.nav = null;
   }
 
   create() {
@@ -461,14 +467,14 @@ export class GameScene extends Phaser.Scene {
    * character can be hurt here; every client judges hits on itself.
    */
   executeShot(shooter, shot) {
-    const victim = this.player;
     const weapon = shooter.weapon;
     if (weapon.kind !== 'gun') this.equipment.fire(shooter, weapon, shot);
+    // Offline the computer players are judged here too; online only we are.
+    const judged = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== shooter && c.active && !c.dead);
     const distances = shot.tracers.map((t) => {
-      const targets = shooter !== victim && victim.active && !victim.dead ? [victim] : [];
-      const result = traceShot(this.map, t.start, t.angle, t.altitude, t.range, targets, shooter, { penetrates: weapon.penetrates });
-      // Every ray (shotgun pellet, flame) that reaches us does the full damage.
-      if (result.characters.length) this.localHurt(shooter, weapon, t.angle);
+      const result = traceShot(this.map, t.start, t.angle, t.altitude, t.range, judged, shooter, { penetrates: weapon.penetrates });
+      // Every ray (shotgun pellet, flame) that reaches someone does the full damage; only the Railgun goes through.
+      for (const hit of weapon.penetrates ? result.characters : result.characters.slice(0, 1)) this.hurtCharacter(hit.target, shooter, weapon, t.angle);
       for (const hit of result.deployables) {
         if (!weapon.penetrates && result.characters.length && result.characters[0].distance < hit.distance) break;
         this.equipment.damage(hit.target, shooter, weapon.damage);
@@ -476,6 +482,34 @@ export class GameScene extends Phaser.Scene {
       return result.distance;
     });
     weapon.queueEffects(shot, distances);
+  }
+
+  hurtCharacter(victim, shooter, weapon, angle = null) {
+    if (victim.npc) this.npcHurt(victim, shooter, weapon, angle);
+    else this.localHurt(shooter, weapon, angle);
+  }
+
+  /** Character.hurt for a computer player. */
+  npcHurt(victim, shooter, weapon, angle = null) {
+    if (!victim.active || victim.dead) return;
+    let lost = 0;
+    this.healthChanged(victim, victim.hp, () => (lost = victim.hurt(Math.min(victim.hp, weapon.damage))));
+    if (!lost) return;
+    this.effects.addBlood(victim, lost, angle);
+    if (victim.dead) {
+      this.addKillMessage(shooter, victim);
+      this.countKill(victim, shooter);
+    }
+  }
+
+  /** Practice scoring: a death for the victim; a kill and KILL_SCORE for the killer. */
+  countKill(victim, killer) {
+    victim.stats.deaths++;
+    if (killer && killer !== victim) {
+      killer.stats.kills++;
+      killer.stats.score += KILL_SCORE;
+    }
+    this.updateScores();
   }
 
   /** Character.hurt + Game.characterHurt for the local player. */
@@ -490,6 +524,7 @@ export class GameScene extends Phaser.Scene {
     // ScreenShake(pos, 1.5, 200); Phaser scales the shake by the zoom twice.
     if (Preferences.shake) this.cameras.main.shake(200, 0.006 / (Display.scale * Display.scale));
     if (p.dead) this.localDeath(shooter);
+    if (p.dead && this.mode === 'offline') this.countKill(p, shooter);
     if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, Math.min(99, lost)));
   }
 
@@ -717,6 +752,7 @@ export class GameScene extends Phaser.Scene {
     this.shadows.texture.setVisible(Preferences.shadows);
     this.shadows.dirty = true;
     this.lighting.setEnabled(Preferences.enhanced);
+    this.setNpcCount(Preferences.npcs);
     this.mapView?.refresh();
     this.hud.fps.setVisible(Preferences.showFPS);
   }
@@ -1068,7 +1104,7 @@ export class GameScene extends Phaser.Scene {
       localID: this.player.id,
       online: this.mode === 'online',
       characters: () => [this.player, ...[...this.remotes.values()].map((r) => r.character)],
-      hurt: (owner, weapon, angle) => this.localHurt(owner, weapon, angle),
+      hurt: (owner, weapon, angle, victim) => (victim?.npc ? this.npcHurt(victim, owner, weapon, angle) : this.localHurt(owner, weapon, angle)),
       send: (message) => this.outQueue.push(message),
       activate: (message) => { if (this.mode === 'online') this.chatOutQueue.push(message); },
       effect: (event) => this.effects.equipmentEffect(event),
@@ -1101,7 +1137,63 @@ export class GameScene extends Phaser.Scene {
     this.loadingMap = false;
     this.hideMapLoading();
     window.boxhead = { scene: this, player: this.player, map };
+    if (this.mode === 'offline') {
+      this.nav = new NavGrid(map);
+      this.setNpcCount(Preferences.npcs);
+    }
     this.updateScores();
+  }
+
+  // --- computer players (offline practice) -------------------------------------------
+
+  /** Add or remove computer players until there are `count` (0 to MAX_NPCS). */
+  setNpcCount(count) {
+    if (this.mode !== 'offline' || !this.map) return;
+    count = Math.max(0, Math.min(MAX_NPCS, Math.trunc(count) || 0));
+    while (this.npcs.length > count) this.removeRemote(this.npcs.pop().ch.id);
+    const used = new Set(this.npcs.map((b) => b.ch.name));
+    while (this.npcs.length < count) {
+      const ch = createNpc(this.npcCount++, Math.random, used);
+      used.add(ch.name);
+      ch.stats = newStats();
+      const brain = new NpcBrain(ch);
+      this.npcs.push(brain);
+      this.remotes.set(ch.id, { id: ch.id, character: ch, view: new CharacterView(this, ch, NPC_NAME_COLOR), ping: 0, pings: [], npc: brain });
+      this.respawnNpc(brain, false);
+    }
+    this.updateScores();
+  }
+
+  /** Back in, as far from everyone as the spawn points allow (Map.spawnCharacter). */
+  respawnNpc(brain, sound = true) {
+    const ch = brain.ch;
+    const others = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== ch && c.active && !c.dead);
+    const spawn = chooseSpawn(this.map.spawns, others) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
+    ch.respawn(spawn.x, spawn.y);
+    ch.selectWeapon(ch.weapons.find((w) => w.id !== PISTOL_ID) || ch.weapon);
+    brain.reset();
+    if (sound) this.effects.playSound('CharacterRespawn', ch.pos);
+  }
+
+  /** Each tick: respawn the dead after their wait, then let every brain decide. */
+  thinkNpcs() {
+    if (!this.npcs.length) return;
+    const world = { map: this.map, nav: this.nav, characters: [this.player, ...this.npcs.map((b) => b.ch)], now: performance.now() };
+    for (const brain of this.npcs) {
+      const ch = brain.ch;
+      if (ch.dead && ch.active) {
+        ch.respawnTime -= PROCESS_INTERVAL;
+        if (ch.respawnTime <= 0) this.respawnNpc(brain);
+      }
+      brain.update(world);
+    }
+  }
+
+  /** A computer player's shot, like fireLocal (its guns never run dry). */
+  fireNpc(ch) {
+    const w = ch.weapon;
+    const param = w.fireParam(Math.random, ch.speed);
+    this.executeShot(ch, w.shoot(ch, w.fireAngle(ch), param));
   }
 
   update(time, delta) {
@@ -1146,7 +1238,7 @@ export class GameScene extends Phaser.Scene {
     this.effects.update();
     this.lighting.update();
     this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
-    const tab = this.keyState.isDown('scores') && this.chatInput === null && this.mode === 'online';
+    const tab = this.keyState.isDown('scores') && this.chatInput === null && (this.mode === 'online' || this.npcs.length > 0);
     if (this.ui) this.ui.showScoreboard(tab ? this.scoreRows(this.players()) : null);
     else this.hud.showScoreboard(`${this.room} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
     this.drawDebug();
@@ -1227,9 +1319,11 @@ export class GameScene extends Phaser.Scene {
         this.updateScores();
       }
     }
-    for (const { character } of this.remotes.values()) {
+    this.thinkNpcs();
+    for (const { character, npc } of this.remotes.values()) {
       if (character.active) character.move(this.map);
       character.processTimers();
+      if (npc && character.weapon.fireInput(character.firing, false, character.active && !character.dead)) this.fireNpc(character);
       this.processWeapons(character);
     }
     this.equipment.tick();

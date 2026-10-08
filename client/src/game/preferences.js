@@ -16,6 +16,7 @@ const DEFAULTS = Object.freeze({
   autoShop: true,
   autoReload: false, // added by the patched game (boxhead.options.AutoReload)
   enhanced: true, // browser edition: sharper picture and extra effects ("Classic" when off)
+  npcs: 8, // computer players in offline practice (0 to 15)
 });
 
 export const Preferences = { ...DEFAULTS };
