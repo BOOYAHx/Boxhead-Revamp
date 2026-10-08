@@ -33,39 +33,59 @@
     <div class="play-hazard" aria-hidden="true"></div>
 
     <main class="play-main">
-      <div class="play-frame">
-        <!-- The boxhead.com game frame: a silver window with the nameplate on top and the hunters peeking over it. -->
-        <div class="play-plate" aria-hidden="true">
-          <img class="play-peek" src="assets/site/hunters-logo.png" alt="" width="542" height="296" />
-          <span>BOXHEAD</span>
-        </div>
-        <div class="play-stage" id="play-stage">
-          <div id="game"></div>
-          <div id="game-ui" hidden></div>
-          <div id="flash-ui" hidden></div>
-          <div id="overlay" hidden></div>
-          <div id="map-loading" hidden aria-label="Loading game">
-            <div class="map-loading-copy">
-              <p role="status">Loading Map</p>
-              <button type="button" aria-label="Cancel loading map">cancel</button>
+      <aside class="play-community" aria-label="Discord community">
+        <a class="discord-banner" href="https://discord.gg/KnupeW5Zp" target="_blank" rel="noopener noreferrer" aria-label="Join The Discord Channel (opens in a new tab)">
+          <svg class="discord-banner-art" viewBox="0 96 186 155" aria-hidden="true">
+            <image href="assets/site/discord-banner-art.webp" width="186" height="572" />
+          </svg>
+          <div class="discord-banner-copy">
+            <h2>Join The<br />Discord Channel</h2>
+            <p>Meet other players.<br />Share feedback.<br />Follow the revamp.</p>
+            <span class="discord-banner-cta">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 5 4 6C2 10 1 14 2 18l5 2 1-2c3 1 5 1 8 0l1 2 5-2c1-4 0-8-2-12l-3-1-1 2c-3-1-5-1-8 0Z" />
+                <circle cx="8" cy="13" r="1.7" /><circle cx="16" cy="13" r="1.7" />
+              </svg>
+              Join Discord <span aria-hidden="true">↗</span>
+            </span>
+          </div>
+        </a>
+      </aside>
+      <div class="play-console">
+        <div class="play-frame">
+          <!-- The boxhead.com game frame: a silver window with the nameplate on top and the hunters peeking over it. -->
+          <div class="play-plate" aria-hidden="true">
+            <img class="play-peek" src="assets/site/hunters-logo.png" alt="" width="542" height="296" />
+            <span>BOXHEAD</span>
+          </div>
+          <div class="play-stage" id="play-stage">
+            <div id="game"></div>
+            <div id="game-ui" hidden></div>
+            <div id="flash-ui" hidden></div>
+            <div id="overlay" hidden></div>
+            <div id="map-loading" hidden aria-label="Loading game">
+              <div class="map-loading-copy">
+                <p role="status">Loading Map</p>
+                <button type="button" aria-label="Cancel loading map">cancel</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="play-bar">
-        <ul class="play-keys" aria-label="Default controls">
-          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
-          <li><kbd class="wide">Space</kbd> Fire</li>
-          <li><kbd class="wide">Shift</kbd> Strafe</li>
-          <li><kbd>Q</kbd><kbd>E</kbd> Weapons</li>
-          <li><kbd>B</kbd> Shop</li>
-          <li><kbd class="wide">Tab</kbd> Scores</li>
-          <li><kbd class="wide">Esc</kbd> Menu</li>
-        </ul>
-        <button class="play-fullscreen" type="button" id="play-fullscreen">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
-          <span>Fullscreen</span>
-        </button>
+        <div class="play-bar">
+          <ul class="play-keys" aria-label="Default controls">
+            <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
+            <li><kbd class="wide">Space</kbd> Fire</li>
+            <li><kbd class="wide">Shift</kbd> Strafe</li>
+            <li><kbd>Q</kbd><kbd>E</kbd> Weapons</li>
+            <li><kbd>B</kbd> Shop</li>
+            <li><kbd class="wide">Tab</kbd> Scores</li>
+            <li><kbd class="wide">Esc</kbd> Menu</li>
+          </ul>
+          <button class="play-fullscreen" type="button" id="play-fullscreen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+            <span>Fullscreen</span>
+          </button>
+        </div>
       </div>
     </main>
 

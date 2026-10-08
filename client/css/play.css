@@ -159,12 +159,82 @@
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 18px;
   padding: 50px 16px 8px; /* room above for the hunters peeking over the frame */
 }
+
+.play-console {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* A community banner beside the console, styled like the original side ad. */
+.play-community {
+  flex: 0 0 164px;
+  width: 164px;
+}
+
+.discord-banner {
+  display: block;
+  overflow: hidden;
+  border: 2px solid #ded9d2;
+  border-radius: 3px;
+  background: #090807;
+  box-shadow: 0 0 0 2px #33302c, 0 12px 32px #0009;
+  color: #f5f0e7;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.discord-banner:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px #33302c, 0 0 24px #e2a93b33;
+}
+
+.discord-banner:focus-visible { outline: 3px solid var(--gold); outline-offset: 5px; }
+.discord-banner-art { display: block; width: 100%; height: auto; }
+.discord-banner-copy { padding: 12px 10px 16px; }
+
+.discord-banner h2 {
+  margin: 0;
+  font: 28px/1.2 var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  text-shadow: 0 2px 0 #000;
+}
+
+.discord-banner p {
+  margin: 14px 0 18px;
+  color: #bfb7aa;
+  font: 12px/1.65 Verdana, sans-serif;
+  letter-spacing: 0;
+}
+
+.discord-banner-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 5px;
+  border: 1px solid #958774;
+  border-radius: 5px;
+  background: linear-gradient(#342c23, #171310);
+  color: #fff;
+  font: 16px/1 var(--display);
+  letter-spacing: 0.3px;
+}
+
+.discord-banner-cta svg { width: 22px; height: 22px; fill: currentColor; }
+.discord-banner-cta circle { fill: #211b15; }
+.discord-banner:hover .discord-banner-cta { border-color: var(--gold); color: var(--gold); }
 
 .play-frame {
   position: relative;
@@ -232,7 +302,7 @@
 /* The 700 x 490 game, as large as fits between the header and the controls strip. */
 .play-stage {
   position: relative;
-  width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490));
+  width: min(calc(100vw - 234px), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490));
   aspect-ratio: 700 / 490;
   background: #000;
   overflow: hidden;
@@ -302,7 +372,7 @@
 .play-bar {
   flex: 0 0 auto;
   min-height: var(--bar);
-  width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490 + 18px));
+  width: min(calc(100vw - 214px), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490 + 18px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -442,13 +512,13 @@
 
 /* --- wide windows: the controls stand beside the game, so it can use nearly the full height --- */
 @media (min-aspect-ratio: 3/2) and (min-width: 1100px) {
-  .play-main {
+  .play-console {
     flex-direction: row;
     gap: 18px;
   }
 
   .play-stage {
-    width: min(calc(100vw - 52px - 210px), calc((100svh - var(--header) - 8px - 100px) * 700 / 490));
+    width: min(calc(100vw - 234px - 210px), calc((100svh - var(--header) - 8px - 100px) * 700 / 490));
   }
 
   .play-bar {
@@ -473,6 +543,32 @@
 }
 
 /* --- small windows ------------------------------------------------------------------------------- */
+@media (max-width: 900px), (max-height: 600px) {
+  .play-main { flex-direction: column; gap: 12px; }
+  .play-community { order: 1; flex: 0 0 auto; width: min(100%, 480px); }
+  .discord-banner { display: flex; align-items: center; text-align: left; }
+  .discord-banner-art { width: 72px; flex: 0 0 72px; }
+  .discord-banner-copy { display: flex; align-items: center; gap: 12px; flex: 1; padding: 10px; }
+  .discord-banner h2 { flex: 1; font-size: 18px; }
+  .discord-banner h2 br { display: none; }
+  .discord-banner p { display: none; }
+  .discord-banner-cta { font-size: 14px; padding: 0 8px; }
+  .discord-banner-cta svg { display: none; }
+  .play-console { flex-direction: column; gap: 8px; }
+  .play-stage {
+    width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 188px) * 700 / 490));
+  }
+  .play-bar {
+    width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 188px) * 700 / 490 + 18px));
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 14px;
+    margin-top: 0;
+  }
+  .play-keys { flex-direction: row; align-items: center; gap: 6px 10px; }
+}
+
 @media (max-width: 1200px) {
   .play-nav {
     display: none;
@@ -520,4 +616,6 @@
   .play-back {
     transition: none;
   }
+
+  .discord-banner { transition: none; }
 }
