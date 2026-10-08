@@ -319,7 +319,7 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
   spawn. Offline practice gives $1,000,000 so you can try everything.
 - Buy guns, ammo packs or a full refill, and the two upgrades per gun. The
   **Refund** tab returns a gun (with its upgrades) within a minute of buying it.
-- In game: **Q / E** next / previous weapon, **1-8** weapon banks, **R** (or
+- In game: **Q** next weapon (heaviest first: Minigun, AK47, Shotgun… Pistol), **E** previous weapon, **1-8** weapon banks, **R** (or
   Delete) buys ammo for the gun in hand, **B** or the Shop button opens the shop.
   The weapon bar at the top left shows the bank and the ammo left.
 - After dying the shop opens by itself after 3 s ("Open shop on death"); you

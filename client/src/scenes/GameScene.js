@@ -667,8 +667,10 @@ export class GameScene extends Phaser.Scene {
     const p = this.player;
     const press = (action) => this.keyState.newPress(action);
     let changed = null;
-    if (press('weaponDown')) changed = p.prevWeapon();
-    if (press('weaponUp')) changed = p.nextWeapon() || changed;
+    // Next Weapon (Q) goes from the heaviest gun down (Minigun, AK47, Shotgun, Pistol);
+    // Previous Weapon (E) goes back up.
+    if (press('weaponDown')) changed = p.nextWeapon();
+    if (press('weaponUp')) changed = p.prevWeapon() || changed;
     for (let n = 1; n <= 8; n++) if (press('weapon' + n)) changed = p.selectWeaponBank(n) || changed;
     if (changed) this.weaponChanged(p, true);
   }
