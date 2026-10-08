@@ -12,6 +12,9 @@ It uses the graphics card (any card with Vulkan: NVIDIA, AMD or Intel), and
 takes a few minutes. Every result is checked against its original; some
 graphics drivers make Real-ESRGAN output noise, and those files are left out
 (try --tile 64, another --gpu, or --cpu, which is slow but always works).
+Files go through in small batches; if the graphics driver crashes on one
+("vkQueueSubmit failed -4"), its files are tried again one at a time in
+smaller pieces, and any left over are finished on the processor.
 
 Run it again after rebuilding the assets; files already done with the same
 model are skipped (--redo does them all again; a different model redoes them by
@@ -48,6 +51,7 @@ import json
 import os
 import platform
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -132,6 +136,9 @@ def run_upscaler(exe, model, src, dest, gpu, tile):
         cmd += ['-t', str(tile)]
     return subprocess.run(cmd, cwd=os.path.dirname(exe)).returncode == 0
 
+
+BATCH = 12  # files per Real-ESRGAN run
+RETRY_TILES = (64, 32)  # piece sizes for files that failed in a batch
 
 # Graphics cards Real-ESRGAN lists as "[1 NVIDIA GeForce RTX 4060 Laptop GPU]  queueC=...".
 DEVICE_LINE = re.compile(r'^\[(\d+) ([^\]]+)\]')
@@ -254,31 +261,55 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         print('  (a large model: on a graphics card a few minutes, with --cpu much longer)')
     with tempfile.TemporaryDirectory() as tmp:
         work = os.path.join(tmp, 'in')
-        out = os.path.join(tmp, 'out')
         os.makedirs(work)
-        os.makedirs(out)
         pads = prepare(src_dir, names, work, wrap=src == 'images')
-        if not run_upscaler(exe, MODELS[model], work, out, gpu, tile):
-            sys.exit('Real-ESRGAN failed. Is the graphics driver up to date? (--gpu picks another card, --tile 64 or --model fast use less memory)')
-        broken = []
-        for name in names:
-            if not os.path.exists(os.path.join(out, name + '.png')):
-                print(f'  {name}: not upscaled, keeping the original')
-                continue
-            if finish(name, out, dest_dir, pads[name], sizes[name]) is None:
-                print(f'  {name}: too large to enlarge, keeping the original')
-                continue
-            path = os.path.join(dest_dir, name + '.png')
-            with Image.open(path) as hd, Image.open(os.path.join(src_dir, name + '.png')) as original:
-                ok = hd_sprites.looks_right(original, hd)
-            if not ok:
-                os.remove(path)  # so the next run tries it again
-                broken.append(name)
-                record.pop(name, None)
-            else:
-                record[name] = model
+        runs = [0]
+
+        def attempt(batch, card, pieces):
+            """One Real-ESRGAN run over `batch`; returns the names that did not come out right."""
+            runs[0] += 1
+            run_in = os.path.join(tmp, f'run{runs[0]}', 'in')
+            run_out = os.path.join(tmp, f'run{runs[0]}', 'out')
+            os.makedirs(run_in)
+            for name in batch:
+                shutil.copy(os.path.join(work, name + '.png'), run_in)
+            run_upscaler(exe, MODELS[model], run_in, run_out, card, pieces)  # judged by its files, not its exit code
+            bad = []
+            for name in batch:
+                if not os.path.exists(os.path.join(run_out, name + '.png')):
+                    bad.append(name)
+                    continue
+                if finish(name, run_out, dest_dir, pads[name], sizes[name]) is None:
+                    print(f'  {name}: too large to enlarge, keeping the original')
+                    continue
+                path = os.path.join(dest_dir, name + '.png')
+                with Image.open(path) as hd, Image.open(os.path.join(src_dir, name + '.png')) as original:
+                    ok = hd_sprites.looks_right(original, hd)
+                if ok:
+                    record[name] = model
+                else:
+                    os.remove(path)  # so a later try (or run) does it again
+                    bad.append(name)
+            return bad
+
+        # Small batches: when the graphics driver crashes ("vkQueueSubmit failed -4",
+        # device lost) only that batch is lost, and it is tried again below.
+        left = []
+        for i in range(0, len(names), BATCH):
+            left += attempt(names[i:i + BATCH], gpu, tile)
+            print(f'  {min(i + BATCH, len(names))} of {len(names)} done' + (f', {len(left)} to try again' if left else ''))
+        for pieces in RETRY_TILES:
+            if not left or gpu == -1:
+                break
+            print(f'{src}: trying {len(left)} files again, one at a time in {pieces} px pieces ...')
+            left = [bad for name in left for bad in attempt([name], gpu, pieces)]
+        if left and gpu != -1:
+            print(f'{src}: finishing {len(left)} files on the processor (slower) ...')
+            left = [bad for name in left for bad in attempt([name], -1, tile)]
+        for name in left:
+            record.pop(name, None)
         save_record(dest_dir, record)
-        return len(names), broken
+        return len(names), left
 
 
 # --- side-by-side comparison of the models ----------------------------------------------
