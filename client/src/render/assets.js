@@ -51,9 +51,26 @@ export function frameCount(name) {
   return atlas?.[name]?.frames.length ?? 0;
 }
 
+// A costume's sheets (Bond: BondBody, BondBodyCustom, BondHead, BondHeadCustom)
+// are drawn on top of each other, so they must all be upscaled or none.
+const COSTUME_SHEET = /^(.+?)(?:Head|Body)(?:Custom)?$/;
+
+/** Drop the HD copies of a costume that is only partly upscaled. */
+export function matchCostumes(images) {
+  const costumes = new Map();
+  for (const image of images) {
+    const costume = COSTUME_SHEET.exec(image)?.[1];
+    if (costume) costumes.set(costume, [...(costumes.get(costume) || []), image]);
+  }
+  for (const sheets of costumes.values()) {
+    if (!sheets.every((sheet) => hd[sheet])) for (const sheet of sheets) delete hd[sheet];
+  }
+}
+
 /** Queue every sheet referenced by the atlas on a Phaser loader. */
 export function loadSheets(loader) {
   const images = new Set(Object.values(atlas).map((entry) => entry.image));
+  matchCostumes(images);
   for (const image of images) loader.image('sheet:' + image, ASSET_ROOT + (hd[image] ? 'sprites-hd/' : 'sprites/') + image + '.png');
 }
 
