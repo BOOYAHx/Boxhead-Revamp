@@ -765,6 +765,11 @@ export class TextField extends DisplayObject {
     this.object.setAttribute('width', n(Math.max(1, width)));
   }
 
+  /** ActionScript's TextField.textWidth: the width of the text itself, not of its box. */
+  get textWidth() {
+    return measureText(this.text, this.box.style.font);
+  }
+
   /** ActionScript's TextField.x: auto-sizing moves the field, not just its text. */
   get fieldX() {
     return this.x + ((this.fitted || this.def.bounds)[0] - this.def.bounds[0]);

@@ -365,7 +365,7 @@ class WeaponSlider {
     field.alpha = alpha;
     name.alpha = alpha;
     field.text = w.ammo ? String(count) : 'INF';
-    const right = field.x + (field.def.bounds[0] + 4 + field.box.scrollWidth);
+    const right = field.x + (field.def.bounds[0] + 4 + field.textWidth);
     const end = SPACING / 2 - 1;
     let start = Math.ceil(right / 4) * 4;
     let n = Math.max(0, Math.floor((end - start) / TICK_WIDTH));
