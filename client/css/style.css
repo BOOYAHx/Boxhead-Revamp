@@ -366,3 +366,55 @@ form.host {
   fill-opacity: 0.04;
   stroke-opacity: 0.12;
 }
+
+/* The shop (ui/shop.js): the original art and colours with frosted glass behind
+   the panel and hover feedback on its rows, buy panels and tabs. */
+.shop-glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.shop-glass[hidden] {
+  display: none;
+}
+
+.shop-glass > div {
+  position: absolute;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+#game-ui .flash-stage > svg {
+  position: relative; /* above the glass */
+}
+
+.shop-row {
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+
+.shop-row:hover {
+  filter: brightness(1.45);
+}
+
+.shop-panel {
+  transition: filter 140ms ease;
+}
+
+.shop-panel.can-buy:hover {
+  filter: brightness(1.4) drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
+}
+
+.shop-panel.can-buy:active {
+  filter: brightness(0.92);
+}
+
+.shop-tab-hover {
+  filter: brightness(1.6);
+  transition: filter 120ms ease;
+}
+
+.shop-meters rect {
+  shape-rendering: geometricPrecision;
+}

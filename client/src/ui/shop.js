@@ -4,6 +4,7 @@
 // a pack or a full gun) and Refund page. The rules are in game/shop.js.
 
 import { isKey } from '../game/controls.js';
+import { Preferences } from '../game/preferences.js';
 import { damageDescription, maxAmmoDescription, rateOfFireDescription, upgradeDescription } from '../game/weapons.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -18,6 +19,17 @@ const DOUBLE_CLICK = 400; // ms
 const REFUND_TICK = 200; // ms (RefundPage clock)
 const WHEEL_STEP = 25; // px per wheel notch
 const PANE = { x: 25, y: 126, width: 610, height: 290 }; // the premiums scroll pane, reused for refunds
+// This build's look over the original art (same colours and font): frosted glass
+// behind the panel, stat meters, a counting cash display and short fades.
+const GLASS = [
+  // [x, y, width, height, radius] in stage units: the panel body and its three tabs.
+  [14, 47, 672, 429, 14],
+  [61, 12, 166, 40, 10],
+  [268, 12, 166, 40, 10],
+  [474, 12, 166, 40, 10],
+];
+const FADE = 160; // ms
+const CASH_COUNT = 350; // ms
 const ROW_TOP = 23;
 const ROW_STEP = 93;
 const KeySel = { NONE: 0, WEAPON: 1, UPGRADE1: 2, UPGRADE2: 3 };
@@ -91,6 +103,9 @@ export class ShopScreen {
     this.keySelection = KeySel.NONE;
     this.gameStarted = false;
     this.respawnSounded = true;
+    this.meters = new StatMeters(this.weaponDisplay.child('statsField'));
+    this.cash = { shown: state.money, target: state.money, frame: 0 };
+    this.decorate();
     this.reset();
   }
 
@@ -125,6 +140,66 @@ export class ShopScreen {
       });
     }
     this.equipmentDisplay.child('buyDisplay.button')?.on('click', () => this.buySelected());
+  }
+
+  /** Hover feedback: rows, the buy and upgrade panels, and the labels of the other tabs. */
+  decorate() {
+    for (const row of [...this.weaponRows, ...this.equipmentRows]) row.clip.el.classList.add('shop-row');
+    const panels = [this.weaponDisplay.child('buyDisplay'), this.equipmentDisplay.child('buyDisplay'), this.weaponDisplay.child('upgrade1Display'), this.weaponDisplay.child('upgrade2Display')];
+    for (const panel of panels) panel?.el.classList.add('shop-panel');
+    for (const tab of Object.values(this.tabs)) {
+      if (!tab) continue;
+      // The tab's label is drawn by the background (one per tab frame): find it under the tab.
+      const label = () => {
+        const r = tab.el.getBoundingClientRect();
+        return (this.background.children || []).find((ch) => {
+          if (!ch.box) return false;
+          const b = ch.el.getBoundingClientRect();
+          return b.left + b.width / 2 > r.left && b.left + b.width / 2 < r.right;
+        });
+      };
+      tab.el.addEventListener('pointerenter', () => label()?.box.classList.add('shop-tab-hover'));
+      tab.el.addEventListener('pointerleave', () => label()?.box.classList.remove('shop-tab-hover'));
+      tab.el.addEventListener('click', () => label()?.box.classList.remove('shop-tab-hover'));
+    }
+  }
+
+  /**
+   * Frosted glass under the panel (Enhanced Graphics only: the blur is redrawn
+   * with every frame of the game behind it). frame: the element holding the stage's SVG.
+   */
+  attachGlass(frame) {
+    this.glass = document.createElement('div');
+    this.glass.className = 'shop-glass';
+    this.glass.hidden = true;
+    for (const [, , , , radius] of GLASS) {
+      const pane = document.createElement('div');
+      pane.dataset.radius = radius;
+      this.glass.appendChild(pane);
+    }
+    frame.prepend(this.glass);
+    this.glassFrame = frame;
+    this.layoutGlass = () => {
+      const svgEl = frame.querySelector('svg');
+      if (!svgEl || this.glass.hidden) return;
+      const outer = frame.getBoundingClientRect();
+      const stage = svgEl.getBoundingClientRect();
+      const k = Math.min(stage.width / 700, stage.height / 490); // the stage's "meet" scale
+      const left = stage.left - outer.left + (stage.width - 700 * k) / 2;
+      const top = stage.top - outer.top + (stage.height - 490 * k) / 2;
+      [...this.glass.children].forEach((pane, i) => {
+        const [x, y, w, h, r] = GLASS[i];
+        Object.assign(pane.style, { left: `${left + x * k}px`, top: `${top + y * k}px`, width: `${w * k}px`, height: `${h * k}px`, borderRadius: `${r * k}px` });
+      });
+    };
+    window.addEventListener('resize', this.layoutGlass);
+  }
+
+  /** The shop was opened (true) or closed. */
+  setOpen(open) {
+    if (!this.glass) return;
+    this.glass.hidden = !(open && Preferences.enhanced);
+    this.layoutGlass();
   }
 
   /** Shop.setNotice: a bar along the bottom (here: what is not for sale yet). */
@@ -179,6 +254,7 @@ export class ShopScreen {
     this.weaponsPage.visible = name === 'weapons';
     this.equipmentPage.visible = name === 'equipment';
     this.refundPage.show(name === 'refund');
+    if (sound) fadeIn(name === 'weapons' ? this.weaponsPage.el : name === 'equipment' ? this.equipmentPage.el : this.premiumsPage?.el);
     if (name === 'equipment') this.select(this.equipmentSelected || this.equipmentRows[0], false);
     else if (name === 'weapons') this.select(this.weaponSelected || this.weaponRows[0], false);
     this.refresh();
@@ -186,7 +262,11 @@ export class ShopScreen {
 
   select(row, sound) {
     if (!row) return;
-    if (sound && row !== this.selected) this.handlers.playSound('ClickShort');
+    if (sound && row !== this.selected) {
+      this.handlers.playSound('ClickShort');
+      const display = row.equipment ? this.equipmentDisplay : this.weaponDisplay;
+      for (const part of ['portraits', 'nameField', 'descriptionField']) fadeIn(display.child(part)?.el);
+    }
     if (row.equipment) this.equipmentSelected = row;
     else this.weaponSelected = row;
     this.selected = row;
@@ -224,6 +304,7 @@ export class ShopScreen {
     if (result.ok) {
       this.handlers.purchased(result);
       this.checkKeySelection();
+      pulse(this.moneyField?.box);
     }
     this.refresh();
     return result;
@@ -257,7 +338,7 @@ export class ShopScreen {
   // --- drawing --------------------------------------------------------------------------
 
   refresh() {
-    this.moneyField.text = 'Your Cash: $' + this.state.money;
+    this.showCash(this.state.money);
     for (const row of this.weaponRows) this.updateWeaponRow(row);
     for (const row of this.equipmentRows) this.updateEquipmentRow(row);
     if (this.tab === 'weapons') this.updateWeaponInfo();
@@ -265,6 +346,29 @@ export class ShopScreen {
     const blocked = this.tab !== 'refund' && this.selected?.item.blocked;
     this.setNotice(blocked ? 'This item is not available in this version.' : '');
     if (this.tab === 'refund') this.refundPage.refresh();
+  }
+
+  /** "Your Cash: $..." counting to `money` after a purchase or refund, instead of jumping. */
+  showCash(money) {
+    const cash = this.cash;
+    const field = this.moneyField;
+    if (money === cash.target && cash.frame) return;
+    cash.target = money;
+    cancelAnimationFrame(cash.frame);
+    cash.frame = 0;
+    const from = cash.shown;
+    const draw = (value) => {
+      cash.shown = value;
+      field.text = 'Your Cash: $' + value;
+    };
+    if (from === money || !this.clip.el.isConnected || matchMedia('(prefers-reduced-motion: reduce)').matches) return draw(money);
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / CASH_COUNT);
+      draw(Math.round(from + (money - from) * (1 - (1 - t) ** 3)));
+      cash.frame = t < 1 ? requestAnimationFrame(step) : 0;
+    };
+    cash.frame = requestAnimationFrame(step);
   }
 
   /** ShopWeaponButton.update. */
@@ -311,6 +415,7 @@ export class ShopScreen {
     name.text = weapon.name;
     shrinkToFit(name, name.def.size || 32);
     wd.child('statsField').text = `Damage: ${damageDescription(weapon)}\nRate of Fire: ${rateOfFireDescription(weapon)}\nMax Ammo: ${maxAmmoDescription(weapon)}`;
+    this.meters.show(weapon, this.state.weapons.map((i) => i.weapon));
     // BuyWeaponDisplay, or the ammo panel for an owned gun with ammo.
     const buy = wd.child('buyDisplay');
     const ammoPanel = item.owned && !!weapon.ammo;
@@ -326,6 +431,7 @@ export class ShopScreen {
       }
       buy.child('costField').text = cost > 0 ? '$' + cost : item.owned ? '' : 'Free';
       buy.child('selectionOverlay').visible = this.keySelection === KeySel.WEAPON;
+      buy.el.classList.toggle('can-buy', !item.owned && !item.blocked && money >= cost);
       const button = buy.child('button');
       if (button) button.el.style.cursor = !item.owned && !item.blocked && money >= cost ? 'pointer' : 'default';
     } else {
@@ -339,7 +445,9 @@ export class ShopScreen {
     if (!display) return;
     display.visible = !!upgrade;
     if (!upgrade) return;
-    display.gotoAndStop(upgrade.owned ? 'Owned' : weaponOwned && money >= upgrade.cost && !blocked ? 'Buy' : 'CannotBuy');
+    const canBuy = !upgrade.owned && weaponOwned && money >= upgrade.cost && !blocked;
+    display.gotoAndStop(upgrade.owned ? 'Owned' : canBuy ? 'Buy' : 'CannotBuy');
+    display.el.classList.toggle('can-buy', canBuy);
     display.child('upgradeField').text = 'Upgrade ' + n;
     display.child('descriptionField').text = upgradeDescription(upgrade.type);
     display.child('costField').text = upgrade.owned ? 'Purchased!' : upgrade.cost > 0 ? '$' + upgrade.cost : 'Free';
@@ -374,6 +482,7 @@ export class ShopScreen {
       cost = ammo.buyCount * weapon.price.ammoCost;
       buy.gotoAndStop(money >= cost && !item.blocked ? 'Buy' : 'CannotBuy');
     } else buy.gotoAndStop(ammo ? 'FullAmmo' : 'Purchased');
+    buy.el.classList.toggle('can-buy', (!owned || (ammo && !ammo.full)) && money >= cost && !item.blocked);
     buy.child('costField').text = cost > 0 ? '$' + cost : '';
     buy.child('selectionOverlay').visible = this.keySelection === KeySel.WEAPON;
   }
@@ -459,8 +568,84 @@ export class ShopScreen {
   }
 
   destroy() {
+    cancelAnimationFrame(this.cash.frame);
+    if (this.layoutGlass) window.removeEventListener('resize', this.layoutGlass);
+    this.glass?.remove();
     this.refundPage.destroy();
     this.clip.destroy();
+  }
+}
+
+/** A short fade in, when the item or tab changes. */
+function fadeIn(el) {
+  if (!el?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: FADE, easing: 'ease-out' });
+}
+
+/** A short swell of the cash display after a purchase. */
+function pulse(box) {
+  if (!box?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  box.style.transformOrigin = 'left center';
+  box.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+}
+
+/**
+ * The weapon's Damage, Rate of Fire and Max Ammo as meters, in place of the
+ * three lines of text (the words stay, beside each meter).
+ */
+class StatMeters {
+  constructor(field) {
+    this.field = field;
+    // Inside the stats field's box, clear of long guns' pictures on the left and the buy panel below.
+    const [fx0, y0, x1] = field.def.bounds;
+    const x0 = fx0 + 24;
+    const width = x1 - x0;
+    const rowHeight = 30;
+    const size = 15;
+    const font = { 'font-family': `"${field.def.fontFamily || 'BBH Myriad Pro'}", Arial, sans-serif`, 'font-size': size, fill: '#ffffff' };
+    this.g = svg('g', { class: 'shop-meters' });
+    this.g.style.pointerEvents = 'none';
+    this.rows = ['Damage', 'Rate of Fire', 'Max Ammo'].map((name, i) => {
+      const y = y0 + i * rowHeight + 1;
+      const label = svg('text', { ...font, x: x0 + 6, y: y + size, 'fill-opacity': 0.85 });
+      label.textContent = name;
+      const value = svg('text', { ...font, x: x1 - 6, y: y + size, 'text-anchor': 'end', 'font-weight': 'bold' });
+      const barY = y + size + 5;
+      const track = svg('rect', { x: x0 + 6, y: barY, width: width - 12, height: 4, rx: 2, fill: '#ffffff', 'fill-opacity': 0.14 });
+      const bar = svg('rect', { x: x0 + 6, y: barY, width: 0, height: 4, rx: 2, fill: '#ffffff', 'fill-opacity': 0.9 });
+      bar.style.transition = 'width 220ms ease-out';
+      this.g.append(label, value, track, bar);
+      return { value, bar, full: width - 12 };
+    });
+    field.el.after(this.g);
+    this.sync();
+  }
+
+  /** Follow the stats field (same place, same visibility). */
+  sync() {
+    const transform = this.field.el.getAttribute('transform');
+    if (transform) this.g.setAttribute('transform', transform);
+    else this.g.removeAttribute('transform');
+  }
+
+  show(weapon, all) {
+    this.sync();
+    this.field.visible = false;
+    const levels = { Low: 1 / 3, Slow: 1 / 3, Medium: 2 / 3, High: 1, Fast: 1 };
+    const damage = damageDescription(weapon);
+    const rate = rateOfFireDescription(weapon);
+    // Ammo on a log scale against the gun that holds the most, so small clips still show.
+    const most = Math.max(...all.map((w) => w.ammo?.max || 0), 2);
+    const ammo = weapon.ammo ? Math.max(0.08, Math.log(weapon.ammo.max) / Math.log(most)) : 1;
+    [
+      [damage, levels[damage] ?? 0.5],
+      [rate, levels[rate] ?? 0.5],
+      [maxAmmoDescription(weapon), ammo],
+    ].forEach(([text, level], i) => {
+      const row = this.rows[i];
+      row.value.textContent = text;
+      row.bar.style.width = `${Math.round(row.full * Math.min(1, level) * 10) / 10}px`; // as a style, so it slides
+    });
   }
 }
 

@@ -43,6 +43,7 @@ export class GameUi {
     });
     this.stage.addChild(this.shopButton);
     this.shop = shopState ? new ShopScreen(lib, shopState, handlers) : null;
+    this.shop?.attachGlass(frame);
     this.shopOpen = false;
     this.menu = null; // the Esc menu while it is open
     this.screens = []; // the menu and the screens opened from it, the last one showing
@@ -149,6 +150,7 @@ export class GameUi {
     if (this.shopOpen || !this.shop) return;
     this.shopOpen = true;
     this.stage.addChild(this.shop.clip);
+    this.shop.setOpen(true);
     this.shop.refresh();
     this.setHudVisible(false);
   }
@@ -157,6 +159,7 @@ export class GameUi {
     if (!this.shopOpen) return;
     this.shopOpen = false;
     this.shop.closed();
+    this.shop.setOpen(false);
     this.stage.removeChild(this.shop.clip);
     this.setHudVisible(true);
   }
