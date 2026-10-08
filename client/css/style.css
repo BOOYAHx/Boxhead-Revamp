@@ -418,3 +418,51 @@ form.host {
 .shop-meters rect {
   shape-rendering: geometricPrecision;
 }
+
+/* Lobby (ui/lobby.js, ui/widgets.js): slim scrollbars, rounded row highlights
+   and a soft glow on the text box being typed in, in the original greys. */
+.slim-scroll .slim-track {
+  fill: #ffffff;
+  fill-opacity: 0.06;
+}
+
+.slim-scroll .slim-thumb {
+  fill: #8c8c8c;
+  transition: fill 120ms ease;
+}
+
+.slim-scroll.is-hover .slim-thumb {
+  fill: #c4c4c4;
+}
+
+.list-row .row-glow {
+  fill: #ffffff;
+  fill-opacity: 0;
+  stroke: #ffffff;
+  stroke-opacity: 0;
+  stroke-width: 1;
+  transition: fill-opacity 120ms ease, stroke-opacity 120ms ease;
+}
+
+.list-row.is-hover .row-glow {
+  fill-opacity: 0.08;
+}
+
+.list-row.is-selected .row-glow {
+  fill-opacity: 0.14;
+  stroke-opacity: 0.55;
+}
+
+.lobby-input {
+  border-radius: 2px;
+  transition: box-shadow 150ms ease;
+}
+
+.lobby-input:focus {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), inset 0 0 6px rgba(255, 255, 255, 0.12);
+}
+
+.lobby-input::placeholder {
+  color: #5e5e5e;
+  opacity: 1;
+}

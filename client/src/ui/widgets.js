@@ -316,6 +316,41 @@ function optionSlider() {
 }
 
 const SCROLL_HEIGHT = 100; // ScrollBar.DEFAULT_HEIGHT
+const SLIM_TRACK = 4; // stage pixels
+const SLIM_THUMB = 6;
+
+/**
+ * The slim scrollbar drawn over a ScrollBar clip, in stage pixels (the clip
+ * itself is stretched to its height): parts keep working but are not drawn.
+ */
+function slimScrollBar(clip, parts, sx, sy) {
+  const make = (tag, attrs) => {
+    const el = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+  };
+  for (const part of parts) part.el.setAttribute('opacity', '0');
+  const g = make('g', { class: 'slim-scroll', transform: `scale(${1 / sx} ${1 / sy})` });
+  g.style.pointerEvents = 'none';
+  const middle = 5 * sx; // the middle of the 10-wide clip, in stage pixels
+  const track = make('rect', { class: 'slim-track', x: middle - SLIM_TRACK / 2, width: SLIM_TRACK, rx: SLIM_TRACK / 2 });
+  const thumb = make('rect', { class: 'slim-thumb', x: middle - SLIM_THUMB / 2, width: SLIM_THUMB, rx: SLIM_THUMB / 2 });
+  g.append(track, thumb);
+  clip.el.appendChild(g);
+  clip.el.addEventListener('pointerenter', () => g.classList.add('is-hover'));
+  clip.el.addEventListener('pointerleave', () => g.classList.remove('is-hover'));
+  return {
+    place(background, handle) {
+      const top = 2 * sy;
+      track.setAttribute('y', top);
+      track.setAttribute('height', Math.max(0, SCROLL_HEIGHT * sy - 2 * top));
+      thumb.setAttribute('y', handle.y * sy);
+      thumb.setAttribute('height', Math.max(SLIM_THUMB, handle.height * sy));
+      // A list that fits needs no thumb.
+      thumb.style.display = background.height - handle.height < 0.5 ? 'none' : '';
+    },
+  };
+}
 
 /**
  * ScrollBar: arrows, a track and a handle sized to the visible share.
@@ -341,9 +376,13 @@ function scrollBar(ui) {
     background.y = up.height;
     let scrollValue = 0;
     let handleSize = 0.4;
+    // This build's look: a slim rounded track and thumb drawn over the original
+    // parts, which stay (invisible) for dragging, clicking the track and the arrows.
+    const slim = slimScrollBar(clip, [background, handle, up, down], sx, sy);
     const place = () => {
       handle.scaleY = Math.max(0.05, (background.height * handleSize) / handleNatural);
       handle.y = background.y + scrollValue * (background.height - handle.height);
+      slim.place(background, handle);
     };
     const emit = (type, detail) => clip.el.dispatchEvent(new CustomEvent(type, { detail }));
     Object.defineProperty(clip, 'handleSize', {
@@ -406,15 +445,33 @@ function listEntry(labels) {
     clip.gotoAndStop(labels.up);
     clip.selected = false;
     clip.el.style.cursor = 'pointer';
-    clip.on('pointerenter', () => !clip.selected && clip.gotoAndStop(labels.over));
-    clip.on('pointerleave', () => !clip.selected && clip.gotoAndStop(labels.up));
-    clip.select = () => {
-      clip.selected = true;
+    clip.el.classList.add('list-row');
+    // This build's look: a rounded highlight (soft on hover, with a ring when
+    // selected) where the original frames drew a square grey bar.
+    let glow = null;
+    const highlight = () => {
+      if (glow) return;
+      // The original selection bar (a shape stretched across the row), in the row's coordinates.
       clip.gotoAndStop(labels.selected);
+      const bar = clip.children.find((c) => !c.box && !c.def?.frames && c.el.getBBox().width > 20);
+      const b = bar?.el.getBBox();
+      const box = b ? { x: bar.x + b.x * bar.scaleX, y: bar.y + b.y * bar.scaleY, width: b.width * bar.scaleX, height: b.height * bar.scaleY } : { x: 0, y: 0, width: 140, height: 16 };
+      clip.gotoAndStop(labels.up);
+      glow = document.createElementNS(SVGNS, 'rect');
+      glow.setAttribute('class', 'row-glow');
+      for (const [k, v] of Object.entries({ x: box.x + 1, y: box.y + 0.5, width: Math.max(0, box.width - 2), height: Math.max(0, box.height - 1), rx: 3 })) glow.setAttribute(k, v);
+      clip.el.insertBefore(glow, clip.el.firstChild);
+    };
+    clip.on('pointerenter', () => (highlight(), clip.el.classList.add('is-hover')));
+    clip.on('pointerleave', () => clip.el.classList.remove('is-hover'));
+    clip.select = () => {
+      highlight();
+      clip.selected = true;
+      clip.el.classList.add('is-selected');
     };
     clip.deselect = () => {
       clip.selected = false;
-      clip.gotoAndStop(labels.up);
+      clip.el.classList.remove('is-selected');
     };
   };
 }

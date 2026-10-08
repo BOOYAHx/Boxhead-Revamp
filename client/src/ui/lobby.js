@@ -24,6 +24,15 @@ const AUTO_REFRESH = 6000; // GameBrowserWindow.AUTO_REFRESH_TIME
 const ROOM_RESTRICT = /[^0-9 a-zA-Z,.]/g; // HostGameWindow.RESTRICT
 const MODES = [{ name: 'FFA', code: 'A' }]; // GAME_MODE_NAMES / CODES: the browser game plays free-for-all so far
 const MAP_ROW = 18;
+const NAME_INDENT = 15; // room for a player's icon (friend, moderator, most wanted...) before the name
+const CHAT_HINT = 'Type a message… (↑ recalls your last one)';
+const FADE = 160; // ms: tabs and windows fade in
+
+/** A short fade in (the Lobby / Most Wanted tabs, the lower-left windows). */
+function fadeIn(el) {
+  if (!el?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE, easing: 'ease-out' });
+}
 
 const capitalize = (name) => (name ? name.charAt(0).toUpperCase() + name.substr(1) : '');
 const nameColor = (user) => (user?.wanted ? NAME_COLORS.wanted : user?.level > 0 ? NAME_COLORS.moderator : NAME_COLORS.normal);
@@ -72,6 +81,7 @@ export class LobbyScreen {
     this.setupUserPopups();
     this.setupMostWanted();
     this.setupCustomization();
+    this.setupInputs();
     this.showTab('lobby');
     this.showBrowser();
   }
@@ -108,6 +118,7 @@ export class LobbyScreen {
     this.background.gotoAndStop(lobby ? LOBBY_FRAME : MOST_WANTED_FRAME);
     this.windows.visible = lobby;
     this.mostWantedPage.visible = !lobby;
+    fadeIn((lobby ? this.windows : this.mostWantedPage).el);
     if (!lobby) this.loadMostWanted();
   }
 
@@ -135,6 +146,7 @@ export class LobbyScreen {
   /** MMOchaLobby.openWindow: one window at a time in the lower left. */
   openWindow(win) {
     if (this.current && this.current !== win) this.closeWindow();
+    if (this.current !== win) fadeIn(win.el);
     this.current = win;
     win.visible = true;
     this.windows.content.appendChild(win.el);
@@ -151,6 +163,13 @@ export class LobbyScreen {
     if (w === this.host) this.hostButton?.enable();
     if (w === this.custom) this.customizeButton?.enable();
     this.current = null;
+  }
+
+  /** Every text box glows softly while typing in it; the chat and private-game boxes say what they are for. */
+  setupInputs() {
+    for (const box of this.root.el.querySelectorAll('input, textarea')) box.classList.add('lobby-input');
+    this.chatInput.box.placeholder = CHAT_HINT;
+    this.privateField.box.placeholder = 'Room name';
   }
 
   // --- customization (MMOcha.lobby.CustomizationWindow) ----------------------------------------
@@ -635,7 +654,9 @@ export class LobbyScreen {
     // UserDisplay: a click opens the player's options, a double click a private conversation.
     for (const row of this.userRows) {
       row.el.style.cursor = 'pointer';
-      row.child('_nameField').box.style.pointerEvents = 'auto';
+      const name = row.child('_nameField');
+      name.box.style.pointerEvents = 'auto';
+      name.box.style.paddingLeft = `${2 + NAME_INDENT + (name.def.leftMargin || 0)}px`; // the icon sat on the first letter
       row.on('click', (event) => {
         if (!row.user) return;
         const p = this.windows.localPoint(event);
@@ -653,7 +674,38 @@ export class LobbyScreen {
       this.showUsers(this.userIndex + (event.deltaY > 0 ? 1 : -1));
       event.preventDefault();
     });
+    this.setupOnlineTab(win);
     this.showUsers(0);
+  }
+
+  /** "N ONLINE" on a tab over the players list, drawn like the chat's MAIN CHATROOM tab. */
+  setupOnlineTab(list) {
+    const model = this.lobbyTab;
+    if (!model) return;
+    const tab = (this.onlineTab = this.lib.create('MMOcha.lobby.ChatTab'));
+    tab.child('_closeButton') && (tab.child('_closeButton').visible = false);
+    tab.child('_background')?.gotoAndStop('Unselected');
+    tab.el.style.pointerEvents = 'none';
+    model.el.parentNode.appendChild(tab.el);
+    this.onlineTabList = list;
+    this.placeOnlineTab();
+  }
+
+  /** Over the players list's top left as the chat tab is over the chat's (measured once it is drawn). */
+  placeOnlineTab() {
+    const tab = this.onlineTab;
+    if (!tab || tab.placed) return;
+    const list = this.onlineTabList.el.getBoundingClientRect();
+    const chat = this.chatScroll?.el.getBoundingClientRect();
+    const model = this.lobbyTab.el.getBoundingClientRect();
+    const ctm = tab.el.parentNode.getScreenCTM?.();
+    if (!list.width || !chat?.height || !ctm) return; // not drawn yet: next time
+    tab.x = this.lobbyTab.x;
+    tab.y = this.lobbyTab.y;
+    const scale = ctm.a || 1;
+    tab.x += (list.left + 3 - model.left) / scale;
+    tab.y += (list.top - chat.top) / scale;
+    tab.placed = true;
   }
 
   setPlayers(users) {
@@ -667,6 +719,9 @@ export class LobbyScreen {
       else if (before.some((p) => sameName(p, page.user))) this.print([[`${capitalize(page.user.name)} left the lobby.`, null]], null, page);
     }
     this.showUsers(this.userIndex);
+    this.placeOnlineTab();
+    const online = this.onlineTab?.child('_nameField');
+    if (online) online.text = `${this.players.length} ONLINE`;
   }
 
   showUsers(index, moveBar = true) {
