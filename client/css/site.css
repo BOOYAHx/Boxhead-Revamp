@@ -303,6 +303,64 @@ kbd:active { transform: translateY(3px); border-bottom-width: 1px; }
 .is-opening .shutter { visibility: visible; }
 .is-opening .shutter-half { transition: transform .7s .15s var(--ease-out); }
 
+/* --- the main menu's lettering everywhere ------------------------------------------------------ */
+/* The game's menu words (LOGIN, QUICKPLAY...) are heavy condensed capitals in grey stone with black
+   chips and a dark glow. Anton gives the shape; this fills every piece of text with the same stone
+   (assets/site/stone-text.png, made to the menu art's colours: grey ~#707070 with lighter mottling).
+   Highlighted words keep their red or gold, carved in the same stone. Red buttons stay white to read. */
+:root { --stone: url('../assets/site/stone-text.png'); }
+h1, h2, h3, p, dt, dd, small, strong, em, li, .nav-link, .text-link, .eyebrow, .brand-type, .footer-brand,
+.footer-inner nav a, .hero-kicker, .card-label, .card-note, .case-no, .shutter-badge span, .feature-inner > div > span,
+.control-list dt, .control-list dd span, .section-heading > p, .nav-repo {
+  background-image: var(--stone);
+  background-size: 120px;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  text-shadow: none;
+  filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 1px 1px #000c);
+}
+/* Paragraph-sized text: the same stone with fewer chips, so letters stay whole. */
+p, dd, small, li, .card-note, .section-heading > p, .control-list dd span {
+  background-image: url('../assets/site/stone-text-soft.png');
+  background-size: 140px;
+}
+.arsenal-grid li, .wanted-poster *, .stamp, .kicker-tag, .button, .button * { /* own backgrounds or print: left as they were */
+  background-image: none;
+  color: inherit !important;
+  filter: none;
+}
+.arsenal-grid li { color: var(--text) !important; }
+.wanted-poster .wanted-word { color: #2b1d10 !important; }
+.wanted-poster .wanted-reward { color: #8d1b12 !important; }
+.button { color: #fff !important; }
+.button-ghost { color: var(--text) !important; }
+.kicker-tag { color: #fff !important; }
+.stamp { color: #6fc174 !important; }
+.stamp-hot { color: var(--blood-hot) !important; }
+/* Red and gold words: the same stone, in colour. */
+h2 span, h1 span, .brand-type > span, .footer-brand span {
+  background-image: linear-gradient(var(--blood-hot), var(--blood-hot)), var(--stone);
+  background-size: auto, 120px;
+  background-blend-mode: color;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+em, .eyebrow, .text-link, .hero-stats dd {
+  background-image: linear-gradient(var(--gold), var(--gold)), var(--stone);
+  background-size: auto, 120px;
+  background-blend-mode: color;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+}
+.text-link .icon { color: var(--gold); }
+/* Hover and the current section: the stone catches the light. */
+.nav-link:hover, .nav-link.is-active, .footer-inner nav a:hover, .nav-repo:hover, .text-link:hover { filter: brightness(1.45) drop-shadow(0 0 1.5px #000); }
+.nav-repo .icon { color: #8f8f8f; }
+
 /* --- small screens --------------------------------------------------------------------------- */
 @media (max-width: 1100px) {
   .menu-toggle { display: block; }

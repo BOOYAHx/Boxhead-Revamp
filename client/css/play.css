@@ -371,6 +371,26 @@
   }
 }
 
+/* The main menu's stone lettering (see css/site.css). */
+.play-brand span, .play-brand small, .play-nav a, .play-keys li {
+  background-image: url('../assets/site/stone-text.png');
+  background-size: 120px;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 1.5px #000);
+}
+
+.play-brand small {
+  background-image: linear-gradient(var(--blood-hot), var(--blood-hot)), url('../assets/site/stone-text.png');
+  background-size: auto, 120px;
+  background-blend-mode: color;
+}
+
+.play-nav a:hover {
+  filter: brightness(1.45) drop-shadow(0 0 1.5px #000);
+}
+
 /* --- small windows ------------------------------------------------------------------------------- */
 @media (max-width: 900px) {
   .play-nav {

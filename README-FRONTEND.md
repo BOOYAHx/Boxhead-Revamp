@@ -48,10 +48,19 @@ Back button to return from the game to the homepage.
 - **Title:** the hero shows the Boxhead: Bounty Hunter title logo
   (`client/assets/site/boxhead-title.png`), cut out and recoloured for the dark
   page: BOXHEAD in off-white, BOUNTY HUNTER in red.
-- **Font:** Anton for all text. It is the closest free match to the heavy,
-  condensed lettering of the game's main menu. Headings get the menu's
-  scratched, worn look. The game's menu text is drawn artwork, not a font,
-  so it can't be reused directly.
+- **Lettering:** the main menu's look everywhere. The game's LOGIN /
+  QUICKPLAY words are drawn art, not a font: heavy condensed capitals in grey
+  stone with black chips and a dark glow. All text on the website and the
+  game page copies that look:
+  - Anton gives the letter shapes (the closest free match to them).
+  - It is filled with `assets/site/stone-text.png`, a stone texture made to
+    the menu art's colours (grey around #707070 with lighter mottling and
+    black chips).
+  - Paragraph-sized text uses `stone-text-soft.png` (fewer chips) so letters
+    stay whole.
+  - Highlighted words keep their red or gold in the same stone.
+  - Red buttons, the WANTED tag, the wanted poster and the status stamps keep
+    plain colours so they stay readable.
 - **Boxhead after dark:** charcoal concrete, blood red and bounty gold, with
   hazard-tape dividers, crate cards in steel frames, keycap controls,
   case-file update cards with rubber stamps and a wanted poster.
