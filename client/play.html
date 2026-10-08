@@ -9,6 +9,7 @@
     <link rel="preload" href="assets/site/Anton-Regular.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/play.css" />
+    <link rel="preload" href="assets/site/loading-arena.webp" as="image" />
   </head>
   <body class="play-page">
     <!-- The steel shutters lifting, like leaving the homepage closed them. -->
@@ -43,6 +44,12 @@
           <div id="game-ui" hidden></div>
           <div id="flash-ui" hidden></div>
           <div id="overlay" hidden></div>
+          <div id="map-loading" hidden aria-label="Loading game">
+            <div class="map-loading-copy">
+              <p role="status">Loading Map</p>
+              <button type="button" aria-label="Cancel loading map">cancel</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="play-bar">

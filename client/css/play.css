@@ -249,6 +249,55 @@
   background: #000;
 }
 
+/* Match the original map-loading layout with the new arena artwork. */
+#map-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  container-type: inline-size;
+  background: linear-gradient(180deg, transparent 52%, #0008 100%),
+    url('../assets/site/loading-arena.webp') center / cover no-repeat, #080808;
+  font-family: Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+#map-loading[hidden] { display: none; }
+
+.map-loading-copy {
+  position: absolute;
+  top: 69%;
+  left: 0;
+  width: 100%;
+  text-align: center;
+}
+
+.map-loading-copy p {
+  margin: 0 0 1.2cqw;
+  color: #c4140e;
+  font-size: 4.2cqw;
+  font-weight: 800;
+  line-height: 1.2;
+  text-shadow: 0 2px 5px #000;
+}
+
+.map-loading-copy button {
+  min-height: 44px;
+  padding: 4px 18px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: #bcbcb8;
+  font: 700 clamp(14px, 2.3cqw, 24px)/1.2 Arial, sans-serif;
+  text-transform: none;
+  letter-spacing: 0;
+  text-shadow: 0 2px 3px #000;
+  cursor: pointer;
+}
+
+.map-loading-copy button:hover { color: #fff; background: #0004; }
+.map-loading-copy button:focus-visible { outline: 2px solid #eee; outline-offset: 2px; }
+.map-loading-copy button:disabled { opacity: 0.5; cursor: wait; }
+
 /* --- the controls strip ------------------------------------------------------------------ */
 .play-bar {
   flex: 0 0 auto;

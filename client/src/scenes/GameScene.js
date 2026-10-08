@@ -55,6 +55,7 @@ export class GameScene extends Phaser.Scene {
     this.connection = this.mode === 'online' ? this.app.connection : null;
     this.map = null;
     this.loadingMap = false; // Phaser reuses the scene object for every game
+    this.mapLoad = new AbortController();
     this.mapName = null;
     this.roundTime = -1;
     this.gameOver = false;
@@ -150,8 +151,45 @@ export class GameScene extends Phaser.Scene {
     window.addEventListener('blur', this.onBlur);
     window.boxhead = { scene: this };
 
+    this.showMapLoading();
     if (this.mode === 'online') this.startOnline();
-    else this.loadMap(parseMap(FALLBACK_MAPS[0].data));
+    else this.loadOfflineMap();
+  }
+
+  showMapLoading() {
+    this.loadingScreen = document.getElementById('map-loading');
+    if (!this.loadingScreen) return;
+    this.loadingScreen.hidden = false;
+    const button = this.loadingScreen.querySelector('button');
+    button.disabled = false;
+    button.onclick = () => this.cancelMapLoad();
+  }
+
+  hideMapLoading() {
+    if (!this.loadingScreen) return;
+    const button = this.loadingScreen.querySelector('button');
+    button.onclick = null;
+    button.blur();
+    this.loadingScreen.hidden = true;
+    this.loadingScreen = null;
+  }
+
+  cancelMapLoad() {
+    if (this.mapLoad.signal.aborted) return;
+    this.mapLoad.abort();
+    if (this.loadingScreen) this.loadingScreen.querySelector('button').disabled = true;
+    this.app.leaveGame();
+  }
+
+  async loadOfflineMap() {
+    const { signal } = this.mapLoad;
+    // Give the browser a paint before constructing the locally bundled map.
+    await this.loadingPaint();
+    if (!signal.aborted) this.loadMap(parseMap(FALLBACK_MAPS[0].data));
+  }
+
+  loadingPaint() {
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   }
 
   // --- online room -------------------------------------------------------------
@@ -175,20 +213,25 @@ export class GameScene extends Phaser.Scene {
 
   async receiveRoomInfo(info) {
     this.setRoundTime(info.roundTime);
-    if (this.map || this.loadingMap) return;
+    if (this.map || this.loadingMap || this.mapLoad.signal.aborted) return;
     this.loadingMap = true;
+    const { signal } = this.mapLoad;
     const maps = this.app.maps;
     const entry = maps[info.mapID] || maps.find(Boolean);
     this.status.setText(`Loading ${entry?.name || 'map'}…`);
     let map;
     try {
-      map = parseMap(await fetchMap(entry));
+      const data = await fetchMap(entry, signal);
+      if (signal.aborted) return;
+      map = parseMap(data);
     } catch (error) {
+      if (signal.aborted) return;
       console.error('Could not load map', entry, error);
       this.status.setText('Could not load this map; using the bundled one.');
       map = parseMap(FALLBACK_MAPS[0].data);
     }
-    if (!this.sys.isActive()) return;
+    await this.loadingPaint();
+    if (signal.aborted || !this.sys.isActive()) return;
     this.mapName = entry?.name || 'Warehouse';
     this.loadMap(map);
     this.addCrates(this.connection.existingPickups); // crates already lying around
@@ -1062,6 +1105,8 @@ export class GameScene extends Phaser.Scene {
     this.cameraBounds = { x: borderRect.x * CELL_WIDTH, y: borderRect.y * CELL_HEIGHT, width: borderRect.width * CELL_WIDTH, height: borderRect.height * CELL_HEIGHT };
     this.cameras.main.setRoundPixels(true);
     this.status.setText('');
+    this.loadingMap = false;
+    this.hideMapLoading();
     window.boxhead = { scene: this, player: this.player, map };
     this.updateScores();
   }
@@ -1070,7 +1115,8 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC) && !this.ui) {
       if (this.swallowEscape) this.swallowEscape = false;
       else if (this.chatInput === null) {
-        this.app.leaveGame();
+        if (!this.map) this.cancelMapLoad();
+        else this.app.leaveGame();
         return;
       }
     }
@@ -1251,6 +1297,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   shutdown() {
+    this.mapLoad.abort();
+    this.hideMapLoading();
     // Captured keys are blocked page-wide: release them so the menus can be typed in.
     this.input.keyboard.clearCaptures();
     document.removeEventListener('visibilitychange', this.onVisibility);

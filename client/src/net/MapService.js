@@ -8,9 +8,9 @@ import { FALLBACK_MAPS } from '../game/maps.js';
 
 const ACCOUNT = 'BBHBOUNTYMAPS';
 
-async function request(params) {
+async function request(params, signal) {
   const url = API_URL + '?' + new URLSearchParams({ username: ACCOUNT, ...params });
-  const response = await fetch(url, { cache: 'no-store' });
+  const response = await fetch(url, { cache: 'no-store', signal });
   if (!response.ok) throw new Error(`${params.method}: HTTP ${response.status}`);
   const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
   const rsp = xml.documentElement;
@@ -36,9 +36,9 @@ export async function fetchMapList() {
 }
 
 /** Map string for one slot. */
-export async function fetchMap(info) {
+export async function fetchMap(info, signal) {
   if (!info.online) return info.data;
-  const rsp = await request({ method: 'xgen.stickarena.maps.get', slot_id: String(info.slot) });
+  const rsp = await request({ method: 'xgen.stickarena.maps.get', slot_id: String(info.slot) }, signal);
   const data = rsp.querySelector('maps > map > data')?.textContent;
   if (!data) throw new Error('map has no data');
   return data.trim();
