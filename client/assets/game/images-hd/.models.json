@@ -1,1 +1,10 @@
-{}
+{
+ "Asphalt1": "photo",
+ "Asphalt2": "photo",
+ "Cracks": "photo",
+ "Curb": "photo",
+ "GUI_BountyPointsIcon": "photo",
+ "Grass1": "photo",
+ "GrassBits": "photo",
+ "GrassRockEdge": "photo"
+}
