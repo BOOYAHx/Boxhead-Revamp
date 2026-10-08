@@ -11,7 +11,7 @@ game uses them when "Enhanced Graphics" is on in Options; press Ctrl+F5.
 It uses the graphics card (any card with Vulkan: NVIDIA, AMD or Intel), and
 takes a few minutes. Every result is checked against its original; some
 graphics drivers make Real-ESRGAN output noise, and those files are left out
-(try --tile 64, another --gpu, or --cpu, which is slow but always works).
+(try --tile 64, another --gpu, or --cpu, which is slow).
 Files go through in small batches; if the graphics driver crashes on one
 ("vkQueueSubmit failed -4"), its files are tried again one at a time in
 smaller pieces, and any left over are finished on the processor.
@@ -58,6 +58,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.request
 import zipfile
 
@@ -140,7 +141,7 @@ def run_upscaler(exe, model, src, dest, gpu, tile):
                                   text=True, errors='replace', bufsize=1), STALL_CPU if gpu == -1 else STALL)
 
 
-STALL = 90  # seconds without a word from Real-ESRGAN on a graphics card before it counts as stuck
+STALL = 120  # seconds without a word from Real-ESRGAN on a graphics card before it counts as stuck
 STALL_CPU = 600
 DEVICE_LOST = re.compile(r'failed -4\b|device lost', re.I)
 device_losses = [0]  # graphics driver crashes so far this run
@@ -173,13 +174,17 @@ def watch(proc, stall):
     if lost:
         device_losses[0] += 1
     proc.kill()
-    proc.wait()
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        print('  (it will not close; carrying on without it)')
     return False
 
 
 BATCH = 12  # files per Real-ESRGAN run
 RETRY_TILES = (64, 32)  # piece sizes for files that failed in a batch
-GIVE_UP = 4  # graphics driver crashes before the rest goes to the processor
+RECOVER = 20  # seconds to let Windows restart the graphics driver after a crash
+ROUNDS = 4  # passes over files that keep failing before they are left for the next run
 
 # Graphics cards Real-ESRGAN lists as "[1 NVIDIA GeForce RTX 4060 Laptop GPU]  queueC=...".
 DEVICE_LINE = re.compile(r'^\[(\d+) ([^\]]+)\]')
@@ -309,8 +314,6 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         def attempt(batch, card, pieces):
             """One Real-ESRGAN run over `batch`; returns the names that did not come out right."""
             runs[0] += 1
-            if device_losses[0] >= GIVE_UP:
-                card = -1  # the graphics card keeps crashing
             run_in = os.path.join(tmp, f'run{runs[0]}', 'in')
             run_out = os.path.join(tmp, f'run{runs[0]}', 'out')
             os.makedirs(run_in)
@@ -336,23 +339,34 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
             return bad
 
         # Small batches: when the graphics driver crashes ("vkQueueSubmit failed -4",
-        # device lost) only that batch is lost, and it is tried again below.
+        # device lost) only that batch is lost. The driver gets a moment to restart,
+        # the rest goes in smaller pieces (lighter on the card) and the lost files
+        # are tried again one at a time.
+        pieces = [tile]
+
+        def run(batch):
+            losses = device_losses[0]
+            bad = attempt(batch, gpu, pieces[0])
+            if device_losses[0] > losses and gpu != -1:
+                if not pieces[0] or pieces[0] > RETRY_TILES[-1]:
+                    pieces[0] = next(t for t in RETRY_TILES if not pieces[0] or t < pieces[0])
+                print(f'  The graphics driver crashed; waiting {RECOVER} s for it to restart, then going on in {pieces[0]} px pieces ...')
+                time.sleep(RECOVER)
+            save_record(dest_dir, record)  # stopping now keeps what is done
+            return bad
+
         left = []
         for i in range(0, len(names), BATCH):
-            card = -1 if device_losses[0] >= GIVE_UP else gpu
-            left += attempt(names[i:i + BATCH], gpu, tile)
-            save_record(dest_dir, record)  # stopping now keeps what is done
+            left += run(names[i:i + BATCH])
             print(f'  {min(i + BATCH, len(names))} of {len(names)} done' + (f', {len(left)} to try again' if left else ''))
-            if card != -1 and device_losses[0] >= GIVE_UP:
-                print(f'  The graphics driver crashed {device_losses[0]} times; doing the rest on the processor (slower).')
-        for pieces in RETRY_TILES:
-            if not left or gpu == -1 or device_losses[0] >= GIVE_UP:
+        for round in range(ROUNDS):
+            if not left:
                 break
-            print(f'{src}: trying {len(left)} files again, one at a time in {pieces} px pieces ...')
-            left = [bad for name in left for bad in attempt([name], gpu, pieces)]
-        if left and gpu != -1:
-            print(f'{src}: finishing {len(left)} files on the processor (slower) ...')
-            left = [bad for name in left for bad in attempt([name], -1, tile)]
+            print(f'{src}: trying {len(left)} files again, one at a time ...')
+            before = len(left)
+            left = [bad for name in left for bad in run([name])]
+            if len(left) == before and round:
+                break  # no headway
         for name in left:
             record.pop(name, None)
         save_record(dest_dir, record)
@@ -456,7 +470,7 @@ def main():
     ap.add_argument('--only', choices=['sprites', 'images'], help='just one of the two folders')
     ap.add_argument('--redo', action='store_true', help='upscale everything again')
     ap.add_argument('--gpu', type=int, help='graphics card number, if you have several')
-    ap.add_argument('--cpu', action='store_true', help='use the processor instead of the graphics card (slow, but works everywhere)')
+    ap.add_argument('--cpu', action='store_true', help='use the processor instead of the graphics card (slow; not every Real-ESRGAN build supports it)')
     ap.add_argument('--tile', type=int, help='work in smaller pieces, e.g. 64 (helps some graphics cards)')
     ap.add_argument('--upscaler', help='path to an existing realesrgan-ncnn-vulkan executable')
     args = ap.parse_args()
@@ -471,21 +485,22 @@ def main():
         compare(exe, args.game, gpu, args.tile, os.path.join(cache, 'compare.png'))
         return
     done, broken = 0, []
-    for src, dest in hd_sprites.FOLDERS:
-        if args.only and args.only != src:
-            continue
-        model = args.ground_model if src == 'images' else args.model
-        n, bad = upscale_folder(exe, model, args.game, src, dest, args.redo, gpu, args.tile)
-        done += n
-        broken += bad
-    hd_sprites.register(args.game, log=lambda *a: None)
+    try:
+        for src, dest in hd_sprites.FOLDERS:
+            if args.only and args.only != src:
+                continue
+            model = args.ground_model if src == 'images' else args.model
+            n, bad = upscale_folder(exe, model, args.game, src, dest, args.redo, gpu, args.tile)
+            done += n
+            broken += bad
+    finally:
+        hd_sprites.register(args.game, log=lambda *a: None)  # hd.json lists what is done, even when stopped
     if broken:
-        print(f'\n{len(broken)} of {done} files came out broken (noise instead of a picture) and were left out.')
-        print('Real-ESRGAN does this with some graphics drivers. Run it again with one of these:')
-        print('  python tools/upscale_textures.py --tile 64')
+        print(f'\n{len(broken)} of {done} files did not come out right and were left out.')
+        print('Files that worked are kept: run it again and only the missing ones are done.')
+        print('If they keep failing, try:')
+        print('  python tools/upscale_textures.py --tile 32')
         print('  python tools/upscale_textures.py --model fast')
-        print('  python tools/upscale_textures.py --cpu      (slow: an hour or more, but it always works)')
-        print('Files that worked are kept; only the broken ones are done again.')
     else:
         print('Done. Turn on "Enhanced Graphics" in Options and press Ctrl+F5 in the game.')
 
