@@ -180,6 +180,12 @@ em { color: var(--gold); font-style: normal; }
   border: 6px solid #3a3d40; box-shadow: inset 0 0 0 2px #0008, 0 20px 40px -20px #000;
   transition: transform .35s var(--ease-out), box-shadow .35s, border-color .35s;
 }
+.mode-grid > .crate-card {
+  background:
+    linear-gradient(180deg, #08090973, #080909bd),
+    url('../assets/site/feature-parking-lot.webp') center / cover no-repeat,
+    #171817;
+}
 .crate-card::before { /* steel corner brackets */
   content: ''; position: absolute; inset: -6px; pointer-events: none;
   background:
