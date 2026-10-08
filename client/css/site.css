@@ -113,12 +113,19 @@ em { color: var(--gold); font-style: normal; }
 .header-play { min-height: 46px; padding: 12px 20px; font-size: 16px; }
 .button.header-play,
 .button.hero-play {
+  background: #000;
+  box-shadow: inset 0 0 0 1px #ffffff1f, 0 10px 30px -10px #000c;
   font-family: Arial, Helvetica, sans-serif;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
   color: #939393 !important;
   text-shadow: 0 1px 2px #000, 0 0 2px #aaaaaa55;
+}
+.button.header-play:hover,
+.button.hero-play:hover {
+  background: #000;
+  box-shadow: inset 0 0 0 1px #ffffff40, 0 14px 40px -10px #000c;
 }
 .menu-toggle { display: none; width: 46px; height: 46px; padding: 11px; background: transparent; color: #fff; border: 2px solid #3a332c; border-radius: 2px; }
 .menu-toggle span { display: block; height: 3px; width: 20px; margin: 3px auto; background: currentColor; transition: transform .3s var(--ease-out), opacity .2s; }
