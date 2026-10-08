@@ -22,6 +22,27 @@ test('default keys are the original ones, two per action', () => {
   assert.deepEqual([keyName(38), keyName(32), keyName(46), keyName(NO_KEY), keyName(70)], ['Up', 'Space', 'Del', '', 'F']);
 });
 
+test('Q is the next weapon and E the previous; older saves are switched over unless changed', () => {
+  const storage = memory();
+  defaultBindings();
+  assert.equal(getBind('weaponUp'), 81); // Q: next
+  assert.equal(getBind('weaponDown'), 69); // E: previous
+  const v5 = (up, down) => {
+    defaultBindings();
+    setBind('weaponUp', true, up);
+    setBind('weaponDown', true, down);
+    saveBindings(storage);
+    const saved = JSON.parse(storage.getItem('bbh.keys'));
+    storage.setItem('bbh.keys', JSON.stringify({ ...saved, version: 5 }));
+    defaultBindings();
+    loadBindings(storage);
+    return [getBind('weaponUp'), getBind('weaponDown')];
+  };
+  assert.deepEqual(v5(69, 81), [81, 69]); // the old defaults: swapped
+  assert.deepEqual(v5(90, 88), [90, 88]); // the player's own keys: kept
+  defaultBindings();
+});
+
 test('bindings are saved and loaded; old or broken saves are ignored', () => {
   const storage = memory();
   defaultBindings();

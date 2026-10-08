@@ -4,7 +4,7 @@
 // Flash's. Also tracks which keys are down, for "held" and "new press".
 
 export const NO_KEY = 258; // Input.NO_KEYCODE
-const KEYS_VERSION = 5; // Input.KEYS_VERSION: older saved bindings are ignored
+const KEYS_VERSION = 6; // Input.KEYS_VERSION: older saved bindings are ignored (5 is updated, see loadBindings)
 const STORAGE_KEY = 'bbh.keys';
 
 /** The configurable actions, in Input's order (the Controls screen's rows). */
@@ -43,8 +43,9 @@ const DEFAULTS = {
   autoRun: [17, 73], // Control, I
   spin: [67, 76], // C, L
   fire: [32, 74], // Space, J
-  weaponUp: [69, NO_KEY], // E
-  weaponDown: [81, NO_KEY], // Q
+  // The original had E for the next weapon and Q for the previous; this edition swaps them.
+  weaponUp: [81, NO_KEY], // Q: next weapon
+  weaponDown: [69, NO_KEY], // E: previous weapon
   weapon1: [49, NO_KEY],
   weapon2: [50, NO_KEY],
   weapon3: [51, NO_KEY],
@@ -86,10 +87,14 @@ export function loadBindings(storage = globalThis.localStorage) {
   defaultBindings();
   try {
     const saved = JSON.parse(storage?.getItem(STORAGE_KEY) || 'null');
-    if (!saved || saved.version < KEYS_VERSION || !Array.isArray(saved.bindings)) return;
+    if (!saved || saved.version < KEYS_VERSION - 1 || !Array.isArray(saved.bindings)) return;
     saved.bindings.forEach((code, i) => {
       if (i < binds.length && Number.isInteger(code)) binds[i] = code;
     });
+    // Version 5 had E next and Q previous: swap them unless the player had changed them.
+    const up = index.weaponUp * 2;
+    const down = index.weaponDown * 2;
+    if (saved.version === KEYS_VERSION - 1 && binds[up] === 69 && binds[down] === 81) [binds[up], binds[down]] = [81, 69];
   } catch {
     // unreadable storage: keep the defaults
   }
