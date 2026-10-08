@@ -2,6 +2,7 @@
 
 import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
+import { loadHdSheets } from '../render/hdLoader.js';
 import { ASSET_ROOT, imageURL, isHdTexture, loadSheets, registerFrames, setAtlas, setHdSheets } from '../render/assets.js';
 import { applyFilters, fitCamera } from '../render/display.js';
 import { buildFxTextures } from '../render/fxTextures.js';
@@ -59,8 +60,12 @@ export class BootScene extends Phaser.Scene {
       this.registry.set('fx', await buildFxTextures(this, await fx, 1));
       if (original) await intro.toBlack();
       this.scene.start('menu');
-      await this.registry.get('app').start();
+      const app = this.registry.get('app');
+      await app.start();
       if (original) intro.reveal();
+      // The HD sprite sheets, in the background from here (render/hdLoader.js).
+      const game = this.game;
+      loadHdSheets(game, () => game.scene.isActive('game') || game.scene.isPaused('game') || game.scene.isSleeping('game'));
     });
     this.load.start();
   }

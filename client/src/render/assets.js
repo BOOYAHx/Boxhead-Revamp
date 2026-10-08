@@ -6,7 +6,8 @@
 export const ASSET_ROOT = 'assets/game/';
 
 let atlas = null;
-let hd = {}; // sheet -> scale of its upscaled copy in sprites-hd/ (tools/hd_sprites.py)
+let hd = {}; // sheet -> scale of its upscaled copy in use (swapSheet)
+let hdWanted = {}; // sheet -> scale of its upscaled copy in sprites-hd/ (tools/hd_sprites.py), loaded after start-up
 let hdImages = {}; // image -> scale of its upscaled copy in images-hd/
 
 export function setAtlas(data) {
@@ -20,8 +21,35 @@ export function setAtlas(data) {
 export function setHdSheets(map) {
   map = map || {};
   const split = map.sprites || map.images;
-  hd = (split ? map.sprites : map) || {};
+  hdWanted = { ...((split ? map.sprites : map) || {}) };
+  hd = {};
   hdImages = (split ? map.images : null) || {};
+}
+
+/** Upscaled sheets still to load: [[sheet, scale, url]], characters first. */
+export function pendingHdSheets() {
+  const character = (image) => (COSTUME_SHEET.test(image) ? 0 : 1);
+  return Object.entries(hdWanted)
+    .filter(([image]) => !hd[image])
+    .sort((a, b) => character(a[0]) - character(b[0]) || a[0].localeCompare(b[0]))
+    .map(([image, scale]) => [image, scale, ASSET_ROOT + 'sprites-hd/' + image + '.png']);
+}
+
+/**
+ * Replace sheet `image` with its upscaled copy (`source`, `scale` times the
+ * original). Only while nothing is drawn from it: between matches.
+ */
+export function swapSheet(textures, image, source, scale) {
+  const key = 'sheet:' + image;
+  textures.remove(key);
+  const texture = source instanceof HTMLCanvasElement ? textures.addCanvas(key, source) : textures.addImage(key, source);
+  hd[image] = scale;
+  for (const [name, entry] of Object.entries(atlas)) {
+    if (entry.image !== image) continue;
+    entry.frames.forEach(([x, y, w, h], index) => texture.add(`${name}:${index}`, 0, x * scale, y * scale, w * scale, h * scale));
+  }
+  texture.setFilter(Phaser.Textures.FilterMode.LINEAR); // drawn smaller than its pixels
+  return texture;
 }
 
 export const hdScale = (image) => hd[image] || 1;
@@ -63,13 +91,14 @@ export function matchCostumes(images) {
     if (costume) costumes.set(costume, [...(costumes.get(costume) || []), image]);
   }
   for (const sheets of costumes.values()) {
-    if (!sheets.every((sheet) => hd[sheet])) for (const sheet of sheets) delete hd[sheet];
+    if (!sheets.every((sheet) => hdWanted[sheet])) for (const sheet of sheets) delete hdWanted[sheet];
   }
 }
 
-/** Queue every sheet referenced by the atlas on a Phaser loader. */
+/** Queue every sheet referenced by the atlas on a Phaser loader (the originals: HD ones follow later). */
 export function loadSheets(loader) {
   const images = new Set(Object.values(atlas).map((entry) => entry.image));
+  for (const image of Object.keys(hdWanted)) if (!images.has(image)) delete hdWanted[image];
   matchCostumes(images);
   for (const image of images) loader.image('sheet:' + image, ASSET_ROOT + (hd[image] ? 'sprites-hd/' : 'sprites/') + image + '.png');
 }
