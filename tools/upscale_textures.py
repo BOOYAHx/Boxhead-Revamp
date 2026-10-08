@@ -12,9 +12,13 @@ It uses the graphics card (any card with Vulkan: NVIDIA, AMD or Intel), and
 takes a few minutes. Every result is checked against its original; some
 graphics drivers make Real-ESRGAN output noise, and those files are left out
 (try --tile 64, another --gpu, or --cpu, which is slow).
-Files go through in small batches; if the graphics driver crashes on one
-("vkQueueSubmit failed -4"), its files are tried again one at a time in
-smaller pieces, and any left over are finished on the processor.
+Files go through in small batches, and large sheets (the character bodies) in
+pieces that are joined again afterwards, so no single job runs long. If the
+graphics driver crashes ("vkQueueSubmit failed -4"), Real-ESRGAN is stopped,
+the driver gets time to restart and the lost files are tried again one at a
+time; finished pieces are kept (tools/.realesrgan/pieces/), so running it
+again carries on where it stopped. Files of a few pixels and shadows (the game
+blurs those and draws them at their original size) are left as they are.
 
 Run it again after rebuilding the assets; files already done with the same
 model are skipped (--redo does them all again; a different model redoes them by
@@ -46,6 +50,7 @@ Requires Pillow (pip install pillow).
 """
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -183,6 +188,51 @@ def watch(proc, stall):
 
 BATCH = 12  # files per Real-ESRGAN run
 RETRY_TILES = (64, 32)  # piece sizes for files that failed in a batch
+# Large sheets go in pieces, so one job never runs long (graphics drivers crash on
+# long jobs) and a crash only loses one piece. Finished pieces are kept between runs.
+PIECES_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.realesrgan', 'pieces')
+PIECES_ABOVE = 256  # sheets wider or taller than this (original pixels) are done in pieces
+PIECE = 128  # about this many original pixels a side
+PIECE_CONTEXT = 8  # pixels of the neighbouring pieces each piece sees, cut off when they are joined
+# Not worth upscaling: the AI cannot add anything to a few pixels (and cannot be
+# judged on them), and the game blurs shadows and draws them at their original size.
+MIN_SIDE = 12
+
+
+def worth_upscaling(name, size):
+    return min(size) >= MIN_SIDE and 'Shadow' not in name
+
+
+def piece_boxes(w, h):
+    """[(piece, outer box, inner box)]: the inner boxes cover the w x h sheet; each outer one adds the context."""
+    cols, rows = -(-w // PIECE), -(-h // PIECE)
+    xs = [round(i * w / cols) for i in range(cols + 1)]
+    ys = [round(j * h / rows) for j in range(rows + 1)]
+    boxes = []
+    for j in range(rows):
+        for i in range(cols):
+            inner = (xs[i], ys[j], xs[i + 1], ys[j + 1])
+            outer = (max(0, inner[0] - PIECE_CONTEXT), max(0, inner[1] - PIECE_CONTEXT), min(w, inner[2] + PIECE_CONTEXT), min(h, inner[3] + PIECE_CONTEXT))
+            boxes.append((f'{i}_{j}', outer, inner))
+    return boxes
+
+
+def join_pieces(size, boxes, piece_file):
+    """The upscaled sheet from its upscaled pieces (piece_file(piece) -> path)."""
+    w, h = size
+    sheet = Image.new('RGBA', (w * SCALE, h * SCALE))
+    for piece, outer, inner in boxes:
+        with Image.open(piece_file(piece)) as f:
+            img = f.convert('RGBA')
+        want = ((outer[2] - outer[0]) * SCALE, (outer[3] - outer[1]) * SCALE)
+        if img.size != want:
+            img = img.resize(want, Image.LANCZOS)
+        x, y = (inner[0] - outer[0]) * SCALE, (inner[1] - outer[1]) * SCALE
+        part = img.crop((x, y, x + (inner[2] - inner[0]) * SCALE, y + (inner[3] - inner[1]) * SCALE))
+        sheet.paste(part, (inner[0] * SCALE, inner[1] * SCALE))
+    return sheet
+
+
 RECOVER = 20  # seconds to let Windows restart the graphics driver after a crash
 ROUNDS = 4  # passes over files that keep failing before they are left for the next run
 
@@ -298,8 +348,12 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
                 if f.width % sizes[name][0] == 0 and f.width // sizes[name][0] in (2, 3, 4) and hd_sprites.looks_right(original, f):
                     continue
         names.append(name)
+    skipped = [n for n in names if not worth_upscaling(n, sizes[n])]
+    names = [n for n in names if worth_upscaling(n, sizes[n])]
+    if skipped:
+        print(f'{src}: {len(skipped)} files stay as they are (too small to gain anything, or shadows, which the game blurs anyway).')
     if not names:
-        print(f'{src}: everything already upscaled (use --redo to do it again).')
+        print(f'{src}: everything worth upscaling is done (use --redo to do it again).')
         return 0, []
     total = sum(sizes[n][0] * sizes[n][1] for n in names)
     print(f'{src}: upscaling {len(names)} files ({total / 1e6:.1f} million pixels) with {model} ...')
@@ -311,66 +365,115 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         pads = prepare(src_dir, names, work, wrap=src == 'images')
         runs = [0]
 
-        def attempt(batch, card, pieces):
-            """One Real-ESRGAN run over `batch`; returns the names that did not come out right."""
+        # Large sheets in pieces (see PIECES_ABOVE), kept in pieces_dir until their sheet is done.
+        pieces_dir = os.path.join(PIECES_CACHE, src, model)
+        os.makedirs(pieces_dir, exist_ok=True)
+        in_pieces = {}  # sheet -> [(piece, outer, inner)]
+        piece_of = {}  # unit -> (sheet, cached file)
+        units = []
+        for name in names:
+            if pads[name] or max(sizes[name]) <= PIECES_ABOVE:
+                units.append(name)
+                continue
+            in_pieces[name] = piece_boxes(*sizes[name])
+            with Image.open(os.path.join(work, name + '.png')) as f:
+                sheet = f.convert('RGBA')
+            for piece, outer, _ in in_pieces[name]:
+                unit = f'{name}~{piece}'
+                img = sheet.crop(outer)
+                img.save(os.path.join(work, unit + '.png'))
+                with open(os.path.join(work, unit + '.png'), 'rb') as f:
+                    key = hashlib.md5(f.read()).hexdigest()[:10]  # a changed original makes new pieces
+                piece_of[unit] = (name, os.path.join(pieces_dir, f'{unit}~{key}.png'))
+                if not os.path.exists(piece_of[unit][1]):
+                    units.append(unit)
+        if in_pieces:
+            print(f'  {len(in_pieces)} large sheets go in {sum(len(b) for b in in_pieces.values())} pieces'
+                  f' ({len(piece_of) - sum(u in piece_of for u in units)} already done in an earlier run)')
+
+        def accept(unit, run_out):
+            """Keep a finished file or piece if it came out right."""
+            out = os.path.join(run_out, unit + '.png')
+            if unit in piece_of:
+                with Image.open(out) as hd, Image.open(os.path.join(work, unit + '.png')) as original:
+                    if not hd_sprites.looks_right(original, hd):
+                        return False
+                shutil.copy(out, piece_of[unit][1])
+                return True
+            if finish(unit, run_out, dest_dir, pads[unit], sizes[unit]) is None:
+                print(f'  {unit}: too large to enlarge, keeping the original')
+                return True
+            return check(unit)
+
+        def check(name):
+            path = os.path.join(dest_dir, name + '.png')
+            with Image.open(path) as hd, Image.open(os.path.join(src_dir, name + '.png')) as original:
+                ok = hd_sprites.looks_right(original, hd)
+            if ok:
+                record[name] = model
+            else:
+                os.remove(path)  # so a later try (or run) does it again
+            return ok
+
+        def attempt(batch, card, tile_size):
+            """One Real-ESRGAN run over `batch`; returns the files and pieces that did not come out right."""
             runs[0] += 1
             run_in = os.path.join(tmp, f'run{runs[0]}', 'in')
             run_out = os.path.join(tmp, f'run{runs[0]}', 'out')
             os.makedirs(run_in)
-            for name in batch:
-                shutil.copy(os.path.join(work, name + '.png'), run_in)
-            run_upscaler(exe, MODELS[model], run_in, run_out, card, pieces)  # judged by its files, not its exit code
-            bad = []
-            for name in batch:
-                if not os.path.exists(os.path.join(run_out, name + '.png')):
-                    bad.append(name)
-                    continue
-                if finish(name, run_out, dest_dir, pads[name], sizes[name]) is None:
-                    print(f'  {name}: too large to enlarge, keeping the original')
-                    continue
-                path = os.path.join(dest_dir, name + '.png')
-                with Image.open(path) as hd, Image.open(os.path.join(src_dir, name + '.png')) as original:
-                    ok = hd_sprites.looks_right(original, hd)
-                if ok:
-                    record[name] = model
-                else:
-                    os.remove(path)  # so a later try (or run) does it again
-                    bad.append(name)
-            return bad
+            for unit in batch:
+                shutil.copy(os.path.join(work, unit + '.png'), run_in)
+            run_upscaler(exe, MODELS[model], run_in, run_out, card, tile_size)  # judged by its files, not its exit code
+            return [unit for unit in batch if not (os.path.exists(os.path.join(run_out, unit + '.png')) and accept(unit, run_out))]
 
         # Small batches: when the graphics driver crashes ("vkQueueSubmit failed -4",
         # device lost) only that batch is lost. The driver gets a moment to restart,
-        # the rest goes in smaller pieces (lighter on the card) and the lost files
+        # the rest goes in smaller tiles (lighter on the card) and the lost files
         # are tried again one at a time.
-        pieces = [tile]
+        tiles = [tile]
 
         def run(batch):
             losses = device_losses[0]
-            bad = attempt(batch, gpu, pieces[0])
+            bad = attempt(batch, gpu, tiles[0])
             if device_losses[0] > losses and gpu != -1:
-                if not pieces[0] or pieces[0] > RETRY_TILES[-1]:
-                    pieces[0] = next(t for t in RETRY_TILES if not pieces[0] or t < pieces[0])
-                print(f'  The graphics driver crashed; waiting {RECOVER} s for it to restart, then going on in {pieces[0]} px pieces ...')
+                if not tiles[0] or tiles[0] > RETRY_TILES[-1]:
+                    tiles[0] = next(t for t in RETRY_TILES if not tiles[0] or t < tiles[0])
+                print(f'  The graphics driver crashed; waiting {RECOVER} s for it to restart, then going on in {tiles[0]} px tiles ...')
                 time.sleep(RECOVER)
             save_record(dest_dir, record)  # stopping now keeps what is done
             return bad
 
         left = []
-        for i in range(0, len(names), BATCH):
-            left += run(names[i:i + BATCH])
-            print(f'  {min(i + BATCH, len(names))} of {len(names)} done' + (f', {len(left)} to try again' if left else ''))
+        for i in range(0, len(units), BATCH):
+            left += run(units[i:i + BATCH])
+            print(f'  {min(i + BATCH, len(units))} of {len(units)} done' + (f', {len(left)} to try again' if left else ''))
         for round in range(ROUNDS):
             if not left:
                 break
-            print(f'{src}: trying {len(left)} files again, one at a time ...')
+            print(f'{src}: trying {len(left)} again, one at a time ...')
             before = len(left)
-            left = [bad for name in left for bad in run([name])]
+            left = [bad for unit in left for bad in run([unit])]
             if len(left) == before and round:
                 break  # no headway
-        for name in left:
+
+        # Join the pieces of each large sheet that has all of them.
+        failed = [unit for unit in left if unit not in piece_of]
+        joined = os.path.join(tmp, 'joined')
+        os.makedirs(joined)
+        for name, boxes in in_pieces.items():
+            files = {piece: piece_of[f'{name}~{piece}'][1] for piece, _, _ in boxes}
+            if not all(os.path.exists(f) for f in files.values()):
+                failed.append(name)  # the pieces done so far are kept for the next run
+                continue
+            join_pieces(sizes[name], boxes, files.get).save(os.path.join(joined, name + '.png'))
+            if finish(name, joined, dest_dir, 0, sizes[name]) is not None and not check(name):
+                failed.append(name)
+            for f in files.values():
+                os.remove(f)  # done, or to be made again
+        for name in failed:
             record.pop(name, None)
         save_record(dest_dir, record)
-        return len(names), left
+        return len(names), failed
 
 
 # --- side-by-side comparison of the models ----------------------------------------------
