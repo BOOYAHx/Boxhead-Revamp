@@ -162,8 +162,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 62px 16px 12px; /* room above for the hunters peeking over the frame */
+  gap: 8px;
+  padding: 50px 16px 8px; /* room above for the hunters peeking over the frame */
 }
 
 .play-frame {
@@ -232,7 +232,7 @@
 /* The 700 x 490 game, as large as fits between the header and the controls strip. */
 .play-stage {
   position: relative;
-  width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 134px) * 700 / 490));
+  width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490));
   aspect-ratio: 700 / 490;
   background: #000;
   overflow: hidden;
@@ -302,7 +302,7 @@
 .play-bar {
   flex: 0 0 auto;
   min-height: var(--bar);
-  width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 134px) * 700 / 490 + 18px));
+  width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490 + 18px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -438,6 +438,38 @@
 
 .play-nav a:hover {
   filter: brightness(1.45) drop-shadow(0 0 1.5px #000);
+}
+
+/* --- wide windows: the controls stand beside the game, so it can use nearly the full height --- */
+@media (min-aspect-ratio: 3/2) and (min-width: 1100px) {
+  .play-main {
+    flex-direction: row;
+    gap: 18px;
+  }
+
+  .play-stage {
+    width: min(calc(100vw - 52px - 210px), calc((100svh - var(--header) - 8px - 100px) * 700 / 490));
+  }
+
+  .play-bar {
+    width: 168px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px 14px;
+    margin-top: 40px; /* level with the game, below the nameplate */
+  }
+
+  .play-keys {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 9px;
+  }
+
+  .play-fullscreen {
+    justify-content: center;
+  }
 }
 
 /* --- small windows ------------------------------------------------------------------------------- */
