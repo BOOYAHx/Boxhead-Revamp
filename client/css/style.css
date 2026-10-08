@@ -307,3 +307,38 @@ form.host {
   position: absolute;
   inset: 0;
 }
+
+/* The lobby's round buttons (ui/widgets.js modernPill): the original colours, a crisper pill,
+   a glow on hover, a press and a faded disabled look. */
+.pill-button .pill-ring {
+  stroke: #6c6c6c;
+  transition: stroke 120ms ease, opacity 120ms ease;
+}
+.pill-button .pill,
+.pill-button > g {
+  transition: transform 90ms ease, filter 120ms ease;
+}
+.pill-button.is-hover .pill-ring {
+  stroke: #d8d8d8;
+}
+.pill-button.is-hover .pill {
+  filter: drop-shadow(0 0 3px rgba(216, 216, 216, 0.45));
+}
+.pill-button.is-hover > g:not(.pill) {
+  transform: translateY(-0.5px);
+}
+.pill-button.is-down .pill,
+.pill-button.is-down > g {
+  transform: scale(0.97);
+  filter: none;
+}
+.pill-button.is-down .pill-body {
+  fill: #262626;
+}
+.pill-button.is-disabled .pill-ring {
+  stroke: #4a4a4a;
+  stroke-dasharray: 3 3;
+}
+.pill-button.is-disabled .pill-light {
+  opacity: 0;
+}

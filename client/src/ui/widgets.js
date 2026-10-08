@@ -87,8 +87,50 @@ function textButton(ui) {
 function roundButton(ui) {
   return (button) => {
     unstretch(button);
+    modernPill(button);
     addButtonApi(button, ui, { disabledColor: ROUND_DISABLED });
   };
+}
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const PILL = { width: 148, height: 24, x: 0.1, y: 0.1 }; // the original's 9-slice pill bitmap (148 x 24)
+
+/**
+ * RoundLobbyButton, redrawn: the same dark fill (#303030) and grey ring
+ * (#6c6c6c) as the original bitmap, as a crisp vector pill with a faint top
+ * light; it glows on hover, sinks when pressed and fades when disabled
+ * (css/style.css .pill-button). The label is the original text field.
+ */
+function modernPill(button) {
+  const art = button.stateChildren.up.find((c) => !c.box);
+  if (!art) return;
+  const width = PILL.width * (art.scaleX || 1);
+  const { height, x, y } = PILL;
+  for (const state of ['up', 'over', 'down']) for (const child of button.stateChildren[state]) if (!child.box) child.visible = false;
+  const id = button.lib.newID('pill');
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'pill');
+  g.innerHTML =
+    `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
+    '<stop offset="0" stop-color="#3a3a3a"/><stop offset="0.5" stop-color="#303030"/><stop offset="1" stop-color="#272727"/>' +
+    '</linearGradient></defs>' +
+    `<rect class="pill-body" x="${x}" y="${y}" width="${width}" height="${height}" rx="${height / 2}" fill="url(#${id})" stroke="#303030" stroke-width="1"/>` +
+    `<rect class="pill-ring" x="${x + 2.5}" y="${y + 2.5}" width="${width - 5}" height="${height - 5}" rx="${(height - 5) / 2}" fill="none" stroke-width="1.2"/>` +
+    `<path class="pill-light" d="M${x + height / 2} ${y + 3.6} H${x + width - height / 2}" stroke="#ffffff" stroke-opacity="0.09" stroke-width="1" stroke-linecap="round"/>`;
+  button.el.insertBefore(g, button.el.firstChild);
+  button.el.classList.add('pill-button');
+  // Pressing sinks the pill and label together, around the middle.
+  const origin = `${x + width / 2}px ${y + height / 2}px`;
+  for (const part of [g, button.groups.up, button.groups.over, button.groups.down]) part.style.transformOrigin = origin;
+  const refresh = button.refresh.bind(button);
+  button.refresh = () => {
+    refresh();
+    const on = button._enabled;
+    button.el.classList.toggle('is-hover', on && button.hover);
+    button.el.classList.toggle('is-down', on && button.pressed);
+    button.el.classList.toggle('is-disabled', !on);
+  };
+  button.refresh();
 }
 
 function lobbyButton(ui) {
