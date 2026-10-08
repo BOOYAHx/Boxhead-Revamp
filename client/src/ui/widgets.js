@@ -71,6 +71,7 @@ function textButton(ui) {
     unstretch(button);
     button.groups.up.style.opacity = '0.5';
     setColor(button.lib, button.groups.down, RED);
+    modernText(button);
     addButtonApi(button, ui);
     /** TextButton.align: the label to the left, right or centre of the button. */
     button.align = (side) => {
@@ -93,6 +94,42 @@ function roundButton(ui) {
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg';
+
+/** Keep classes on a button for its hover, pressed and disabled looks (css/style.css). */
+function trackStates(button) {
+  const refresh = button.refresh.bind(button);
+  button.refresh = () => {
+    refresh();
+    const on = button._enabled;
+    button.el.classList.toggle('is-hover', on && button.hover);
+    button.el.classList.toggle('is-down', on && button.pressed);
+    button.el.classList.toggle('is-disabled', !on);
+  };
+  button.refresh();
+}
+
+/**
+ * TextButton (the player options, Options screen and menu links), modernised:
+ * the same white label, half-lit at rest and red when pressed, now with a soft
+ * capsule behind it on hover, a press and a faded disabled look.
+ */
+function modernText(button) {
+  const hit = button.stateChildren.hit[0];
+  const b = hit?.bounds;
+  if (!b) return;
+  const [x0, y0, x1, y1] = b;
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'text-capsule');
+  const hitTransform = button.groups.hit.getAttribute('transform');
+  if (hitTransform) g.setAttribute('transform', hitTransform);
+  const h = y1 - y0;
+  g.innerHTML = `<rect x="${x0 + 1}" y="${y0 + 1}" width="${Math.max(0, x1 - x0 - 2)}" height="${Math.max(0, h - 2)}" rx="${(h - 2) / 2}"/>`;
+  button.el.insertBefore(g, button.el.firstChild);
+  button.el.classList.add('text-button');
+  const cx = hitTransform ? (x0 + x1) / 2 * (parseFloat(/scale\(([\d.]+)/.exec(hitTransform)?.[1]) || 1) : (x0 + x1) / 2;
+  for (const part of [g, button.groups.up, button.groups.over, button.groups.down]) part.style.transformOrigin = `${cx}px ${(y0 + y1) / 2}px`;
+  trackStates(button);
+}
 const PILL = { width: 148, height: 24, x: 0.1, y: 0.1 }; // the original's 9-slice pill bitmap (148 x 24)
 
 /**
@@ -122,15 +159,7 @@ function modernPill(button) {
   // Pressing sinks the pill and label together, around the middle.
   const origin = `${x + width / 2}px ${y + height / 2}px`;
   for (const part of [g, button.groups.up, button.groups.over, button.groups.down]) part.style.transformOrigin = origin;
-  const refresh = button.refresh.bind(button);
-  button.refresh = () => {
-    refresh();
-    const on = button._enabled;
-    button.el.classList.toggle('is-hover', on && button.hover);
-    button.el.classList.toggle('is-down', on && button.pressed);
-    button.el.classList.toggle('is-disabled', !on);
-  };
-  button.refresh();
+  trackStates(button);
 }
 
 function lobbyButton(ui) {
