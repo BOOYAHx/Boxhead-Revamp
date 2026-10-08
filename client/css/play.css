@@ -22,7 +22,7 @@
   --display: 'Anton', Impact, 'Arial Narrow', sans-serif;
   --header: 64px;
   --bar: 48px;
-  --community-width: 240px;
+  --community-width: 300px;
   display: flex;
   flex-direction: column;
   height: 100svh;
@@ -183,7 +183,10 @@
 }
 
 .discord-banner {
-  display: block;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: min(560px, calc(100svh - var(--header) - 120px));
   overflow: hidden;
   border: 0;
   border-radius: 4px;
@@ -194,13 +197,37 @@
   transition: box-shadow 0.2s;
 }
 
+.discord-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, transparent 20%, #09080799 55%, #090807ed 100%);
+  pointer-events: none;
+}
+
 .discord-banner:hover {
   box-shadow: inset 0 0 0 1px var(--gold);
 }
 
 .discord-banner:focus-visible { outline: 3px solid var(--gold); outline-offset: 5px; }
-.discord-banner-art { display: block; width: 100%; height: auto; }
-.discord-banner-copy { padding: 16px 14px 20px; }
+.discord-banner-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.discord-banner-copy {
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 24px 18px;
+}
 
 .discord-banner h2 {
   margin: 0;
@@ -553,22 +580,22 @@
 
 /* --- small windows ------------------------------------------------------------------------------- */
 @media (max-width: 900px), (max-height: 640px) {
+  .play-page { --bar: 72px; }
   .play-main { flex-direction: column; gap: 12px; }
   .play-community { order: 1; flex: 0 0 auto; width: min(calc(100vw - 32px), 480px); }
-  .discord-banner { display: flex; align-items: center; text-align: left; }
-  .discord-banner-art { width: 72px; flex: 0 0 72px; }
+  .discord-banner { min-height: 96px; align-items: center; text-align: left; }
+  .discord-banner::before { background: #090807c9; }
   .discord-banner-copy { display: flex; align-items: center; gap: 12px; flex: 1; padding: 10px; }
   .discord-banner h2 { flex: 1; }
-  .discord-banner h2 br { display: none; }
   .discord-banner p { display: none; }
   .discord-banner-cta { padding: 0 8px; }
   .discord-banner-cta svg { display: none; }
   .play-console { flex-direction: column; gap: 8px; }
   .play-stage {
-    width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 226px) * 700 / 490));
+    width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 244px) * 700 / 490));
   }
   .play-bar {
-    width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 226px) * 700 / 490 + 18px));
+    width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 244px) * 700 / 490 + 18px));
     flex-direction: row;
     justify-content: space-between;
     gap: 16px;
@@ -591,6 +618,7 @@
 @media (max-width: 560px) {
   .play-page {
     --header: 56px;
+    --bar: 48px;
   }
 
   .play-header {
@@ -606,7 +634,6 @@
     font-size: 18px;
   }
 
-  .discord-banner-art { width: 60px; flex-basis: 60px; }
   .discord-banner-copy { gap: 8px; }
   .discord-banner-cta { padding: 0 6px; }
 
