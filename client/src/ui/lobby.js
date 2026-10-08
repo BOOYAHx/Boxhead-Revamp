@@ -25,7 +25,7 @@ const ROOM_RESTRICT = /[^0-9 a-zA-Z,.]/g; // HostGameWindow.RESTRICT
 const MODES = [{ name: 'FFA', code: 'A' }]; // GAME_MODE_NAMES / CODES: the browser game plays free-for-all so far
 const MAP_ROW = 18;
 const NAME_INDENT = 15; // room for a player's icon (friend, moderator, most wanted...) before the name
-const CHAT_HINT = 'Type a message… (↑ recalls your last one)';
+const CHAT_HINT = 'Type a message…';
 const FADE = 160; // ms: tabs and windows fade in
 
 /** A short fade in (the Lobby / Most Wanted tabs, the lower-left windows). */
@@ -165,11 +165,10 @@ export class LobbyScreen {
     this.current = null;
   }
 
-  /** Every text box glows softly while typing in it; the chat and private-game boxes say what they are for. */
+  /** Every text box glows softly while typing in it; the chat box says what it is for. */
   setupInputs() {
     for (const box of this.root.el.querySelectorAll('input, textarea')) box.classList.add('lobby-input');
     this.chatInput.box.placeholder = CHAT_HINT;
-    this.privateField.box.placeholder = 'Room name';
   }
 
   // --- customization (MMOcha.lobby.CustomizationWindow) ----------------------------------------
