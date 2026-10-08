@@ -43,7 +43,7 @@ const pick = (list, random) => list[Math.floor(random() * list.length)];
 export function createNpc(index, random = Math.random, usedNames = new Set()) {
   const free = NPC_NAMES.filter((n) => !usedNames.has(n));
   const name = free.length ? pick(free, random) : `Bot ${index + 1}`;
-  const ch = new Character({ id: `npc${index + 1}`, name });
+  const ch = new Character({ id: 'n' + String((index % 99) + 1).padStart(2, '0'), name }); // 3 characters, like a server slot id
   ch.npc = true;
   ch.firePos = ch.pos;
   const model = Math.floor(random() * MODELS.length);

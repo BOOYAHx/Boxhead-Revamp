@@ -517,7 +517,9 @@ built to be hard:
 * when you line up on them they usually sidestep off your line;
 * they respawn 5 seconds after dying, away from everyone.
 
-Kills and deaths count on the Tab scoreboard (a kill is worth $500 in
+Rounds last 10 minutes, like on the server: the clock is under your bounty
+points, and at 0:00 the Game Summary shows the awards, then a new round
+starts. Kills and deaths count on the Tab scoreboard (a kill is worth $500 in
 practice). Your explosives hurt them too.
 
 ### Step 16: player options in the lobby

@@ -72,3 +72,12 @@ test('a computer player lines up, waits a moment and fires at an enemy in sight'
   brain.update(world(600));
   assert.equal(npc.firing, false, 'no shooting at the dead');
 });
+
+test('practice awards go to the same players the server would pick', async () => {
+  const { offlineAwards, roundAwards } = await import('../client/src/game/bounty.js');
+  const player = (id, score, kills, deaths, bountyPoints = 0) => ({ id, stats: { score, kills, deaths, bountyPoints } });
+  const players = [player('you', 11500, 3, 1), player('n01', 12500, 4, 4), player('n02', 10000, 0, 6, 2)];
+  const ids = offlineAwards(players);
+  assert.equal(ids, 'n01n02youn01n02');
+  assert.deepEqual(roundAwards(ids, players).map((a) => a.player.id), ['n01', 'n02', 'you', 'n01', 'n02']);
+});

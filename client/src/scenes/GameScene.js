@@ -7,7 +7,7 @@ import { DIRECTIONS, byVector } from '../game/Direction.js';
 import { KeyState, isKey } from '../game/controls.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
-import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
+import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, offlineAwards, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
 import { ShopState } from '../game/shop.js';
@@ -42,6 +42,7 @@ const MAX_CHAT_LENGTH = 120;
 const LEADER_COLOR = 0xffffff;
 const AUTO_SHOP_DELAY = 3000; // ShopGame.AUTO_SHOP_DELAY
 const OFFLINE_MONEY = 1000000; // practice: enough to try everything
+const OFFLINE_ROUND = 600; // practice rounds: 10 minutes, like the server's (round_length 630 with the summary)
 const KILL_SCORE = 500; // practice: score for a kill (online, the victim's bounty crates)
 const NPC_NAME_COLOR = '#ffb0a0';
 const TEXT_STYLE = { fontFamily: 'Verdana, sans-serif', fontSize: '11px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.55)', padding: { x: 6, y: 3 } };
@@ -927,7 +928,7 @@ export class GameScene extends Phaser.Scene {
   /** Everyone in the room, for the leaderboard and summary. */
   players() {
     const list = [];
-    if (this.player) list.push({ id: this.connection?.clientID, name: this.player.name, stats: this.player.stats, local: true, active: this.player.active, character: this.player });
+    if (this.player) list.push({ id: this.player.id, name: this.player.name, stats: this.player.stats, local: true, active: this.player.active, character: this.player });
     for (const r of this.remotes.values()) list.push({ id: r.id, name: r.character.name, stats: r.character.stats, local: false, active: r.character.active, character: r.character, view: r.view });
     return list;
   }
@@ -964,8 +965,9 @@ export class GameScene extends Phaser.Scene {
   second() {
     if (this.roundTime < 0) return;
     this.roundTime -= 1;
-    if (this.roundTime % 20 === 0) this.connection.requestRoundTime();
-    if (this.roundTime === ROUND_START_TIME) this.effects.playSound('GameStart', this.effects.focus);
+    const online = this.mode === 'online';
+    if (online && this.roundTime % 20 === 0) this.connection.requestRoundTime();
+    if (online && this.roundTime === ROUND_START_TIME) this.effects.playSound('GameStart', this.effects.focus);
     this.updateShopTime();
     if (this.gameOver) {
       this.hud.setSummaryCountdown(this.roundTime);
@@ -973,11 +975,15 @@ export class GameScene extends Phaser.Scene {
       // Start the next round once the server has (its "p" jumps back up).
       // Starting on our own countdown can beat the server by a moment, and it
       // ignores gameplay packets, like our spawn, until the new round begins.
-      if (this.roundTime > ROUND_END_TIME) this.newGame();
+      if (!online) {
+        if (this.roundTime <= 0) this.newGame(); // practice: straight into the next round
+      } else if (this.roundTime > ROUND_END_TIME) this.newGame();
       else if (this.roundTime <= 0) this.connection.requestRoundTime();
       return;
     }
     this.hud.setTime(this.roundTime - ROUND_END_TIME);
+    // Practice: time up; the awards are worked out here like the server does.
+    if (!online && this.roundTime <= ROUND_END_TIME) this.endGame(offlineAwards(this.players()));
   }
 
   /** Game.endGame: freeze the round and show the summary with the awards. */
@@ -1009,7 +1015,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Game.newGame: start the next round from scratch with the room's next map. */
   newGame() {
-    this.scene.restart({ mode: 'online', app: this.app, room: this.room, newRound: true, inbox: this.inbox });
+    if (this.mode === 'offline') this.scene.restart({ mode: 'offline', app: this.app });
+    else this.scene.restart({ mode: 'online', app: this.app, room: this.room, newRound: true, inbox: this.inbox });
   }
 
   /** Chat line: Enter opens it, Enter sends, Escape cancels (GUI input). */
@@ -1093,7 +1100,7 @@ export class GameScene extends Phaser.Scene {
     this.map = map;
     this.mapView = new MapView(this, map);
     const user = this.connection?.localUser;
-    this.player = new Character({ id: this.connection?.clientID, name: user?.name || 'You', local: true });
+    this.player = new Character({ id: this.connection ? this.connection.clientID : 'you', name: user?.name || 'You', local: true });
     this.player.stats = newStats(this.app?.roundBonus || 0);
     if (this.mode === 'offline') this.player.stats.money = OFFLINE_MONEY;
     if (this.app) this.app.roundBonus = 0; // Player.newRound spends the bonus
@@ -1142,6 +1149,10 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'offline') {
       this.nav = new NavGrid(map);
       this.setNpcCount(Preferences.npcs);
+      // The round clock, counted here (online the server keeps it).
+      this.participated = true;
+      this.setRoundTime(OFFLINE_ROUND + ROUND_END_TIME);
+      this.secondTimer = this.time.addEvent({ delay: 1000, loop: true, callback: () => this.second() });
     }
     this.updateScores();
   }

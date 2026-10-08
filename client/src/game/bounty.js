@@ -137,6 +137,25 @@ export function roundAwards(awardIDs, players) {
 }
 
 /**
+ * The server's calculate_round_awards, for practice rounds: the ids of the
+ * winner (score), hunter (bounty points), professional (kills per death),
+ * poacher (score earned per kill) and target dummy (deaths), as roundAwards reads them.
+ */
+export function offlineAwards(players) {
+  if (!players.length) return '000'.repeat(5);
+  const best = (value) => players.reduce((a, b) => (value(b) > value(a) ? b : a));
+  const s = (p) => p.stats;
+  const picks = [
+    best((p) => s(p).score),
+    best((p) => s(p).bountyPoints),
+    best((p) => (s(p).deaths ? s(p).kills / s(p).deaths : s(p).kills)),
+    best((p) => (s(p).kills ? (s(p).score - START_SCORE) / s(p).kills : 0)),
+    best((p) => s(p).deaths),
+  ];
+  return picks.map((p) => p.id).join(''); // practice ids are three characters too ('you', 'n01'...)
+}
+
+/**
  * ScoreBoard.update / GameSummary.refreshScores: everyone by score, highest
  * first; on a tie whoever comes first in the list stays ahead.
  */
