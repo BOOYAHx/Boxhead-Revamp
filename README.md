@@ -20,10 +20,11 @@ git pull
 ```
 
 Then refresh the browser with **Ctrl+F5**. The static client server can keep
-running. Your generated `client/assets/game/` files stay in place. Updates
-that require new assets extracted from the original SWFs will explicitly say
-when the asset build must be rerun. A fresh clone still needs the initial asset
-build below.
+running. The game's art, sounds and stats (`client/assets/game/`) are part of
+the repository, used with the copyright holders' permission, so a fresh clone
+plays straight away and `git pull` keeps them up to date; there is no asset
+build to run. Your AI-upscaled HD files (`sprites-hd/`, `images-hd/`,
+`hd.json`) stay on your computer and are left alone.
 
 ## Progress
 
@@ -57,7 +58,7 @@ client/             the browser game (static files, no build step)
   index.html
   src/              ES modules: net/ (protocol), game/ (rules), render/, scenes/, ui/ (menus)
   vendor/           phaser.min.js 3.90 (MIT)
-  assets/game/      GENERATED from the SWFs, not committed (see below)
+  assets/game/      generated from the SWFs and committed, with permission (see below)
 tools/              asset pipeline: SWF extractor, ActionScript decompiler, atlas baker
 tests/              unit tests for the game rules and protocol helpers (node --test)
 docs/PROTOCOL.md    the network protocol, as reverse-engineered from the client
@@ -65,9 +66,13 @@ docs/PROTOCOL.md    the network protocol, as reverse-engineered from the client
 
 ## Building the game assets
 
-Graphics, sounds and weapon stats are taken from the original files, which are
-not stored in this repository because they are XGen Studios' copyrighted
-material. You need:
+Graphics, sounds and weapon stats are taken from the original files. They are
+the copyright holders' material and are included in this repository with their
+permission, already built into `client/assets/game/`, so `git pull` brings them
+and nothing has to be built to play. The AI-upscaled HD copies (step 11) are
+not included: make them on your own computer.
+
+To rebuild the assets (only after the original files change), you need:
 
 * `BBH.swf` — the (patched) game SWF
 * `assets.swf` and `constants.xml` — the files the game downloads from `/_assets/`
@@ -85,8 +90,10 @@ python3 tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants cons
 This writes `client/assets/game/` (about 15 MB): baked sprite sheets plus
 `atlas.json` with every animation frame and draw offset, terrain textures,
 143 sounds, `constants.xml`, and in `ui/` the menus' vector art, text fields
-and fonts from the lobby SWF inside `BBH.swf`. Re-run it whenever the SWFs
-change. Without fontTools the menus still build but use the computer's fonts.
+and fonts from the lobby SWF inside `BBH.swf`, and in `intro/` the loading
+screen. Re-run it whenever the SWFs change and commit the result; rebuilding
+the same files gives identical output. Without fontTools the menus still build
+but use the computer's fonts.
 
 ## Testing step 1 (offline)
 
@@ -502,14 +509,9 @@ While the game loads you now see the original's white BOXHEAD Bounty Hunter
 screen with its loading bar and version number. When it has loaded, the bar
 reads LOADED!, a dark red veil drops over it and the screen fades to black
 and out onto the main menu, like the Flash game (without the Sean Cooper and
-XGen logos). Its art comes from BBH.swf, so export it once:
-
-```
-python tools/export_intro.py --bbh BBH.swf
-```
-
-(`tools/build_assets.py` now does this too.) Without it the plain loading
-bar is shown as before.
+XGen logos). Its art comes from BBH.swf and is included in
+`client/assets/game/intro/` (`tools/export_intro.py` or `tools/build_assets.py`
+rebuild it).
 
 ### Step 17: practice against computer players
 

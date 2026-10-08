@@ -973,6 +973,9 @@ def write_font(font, family, path):
                 usWinAscent=ascent, usWinDescent=descent, usWeightClass=700 if font['bold'] else 400, fsSelection=fs_selection)
     fb.setupPost()
     fb.font['head'].macStyle = (1 if font['bold'] else 0) | (2 if font['italic'] else 0)
+    # A fixed date instead of "now", so rebuilding gives byte-identical files (they are tracked in git).
+    fb.font['head'].created = fb.font['head'].modified = 0
+    fb.font.recalcTimestamp = False
     fb.save(path)
 
 

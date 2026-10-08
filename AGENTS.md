@@ -8,7 +8,10 @@
   Follow applicable repository contribution and branch rules.
 - Keep the normal update procedure to `git pull` and a browser refresh.
   Track new website assets and avoid adding an unnecessary package install or
-  build step. Generated copyrighted game assets remain locally managed.
+  build step. The generated game assets in `client/assets/game/` are tracked
+  (shared with the copyright holders' permission); rebuild them with
+  `tools/build_assets.py` and commit the result. The AI-upscaled HD copies
+  (`sprites-hd/`, `images-hd/`, `hd.json`) remain local to each computer.
 - If an update genuinely requires rebuilding generated game assets or
   restarting a service, explain the specific requirement rather than claiming
   that `git pull` handles it automatically.
