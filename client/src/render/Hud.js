@@ -22,6 +22,7 @@ const BOUNTY_COLOR = '#f0cb25'; // GUI: StoredText(BountyText, 15780645)
 const HUD_FONT = '"BBH Arial", Arial, Helvetica, sans-serif';
 const HUD_ALPHA = 0.8;
 const OUTLINE = { stroke: '#000000', strokeThickness: 4, shadow: { offsetX: 0, offsetY: 0, color: '#000000', blur: 2, stroke: true, fill: true } };
+const SMALL_OUTLINE = { strokeThickness: 3 }; // the same ring around the 12 px kill and chat lines
 const MAX_MESSAGES = 6;
 const MESSAGE_HEIGHT = 16;
 const FLOATER_SPEED = 600; // px per second (ScoreFloater.SPEED)
@@ -46,8 +47,10 @@ export class Hud {
     this.time = stored(WINDOW_WIDTH - 4, 62, 16).setOrigin(1, 0);
     this.fps = stored(WINDOW_WIDTH - 5, 82, 12).setOrigin(1, 0).setVisible(Preferences.showFPS);
     this.fpsUpdated = 0;
-    this.warning = text(WINDOW_WIDTH / 2, WINDOW_HEIGHT * 0.8, 15, { fontStyle: 'bold', color: '#ffe080', backgroundColor: 'rgba(0,0,0,0.45)', padding: { x: 6, y: 3 } }).setOrigin(0.5);
-    this.input = text(5, WINDOW_HEIGHT - 20, 11, { backgroundColor: 'rgba(0,0,0,0.5)', padding: { x: 4, y: 2 } }).setVisible(false);
+    // StoredText_WarningText (respawn countdown, LOW AMMO!...): 20 px, centred at warningPoint (w / 2, h * 0.8).
+    this.warning = stored(WINDOW_WIDTH / 2, WINDOW_HEIGHT * 0.8, 20).setOrigin(0.5, 0).setLetterSpacing(-1).setAlpha(1);
+    // StoredText_ChatText: the chat line being typed.
+    this.input = stored(5, WINDOW_HEIGHT - 20, 12, SMALL_OUTLINE).setAlpha(1).setVisible(false);
     this.messageTexts = [];
     this.messages = [];
     this.floaters = [];
@@ -222,7 +225,8 @@ export class Hud {
 
     this.messages = this.messages.filter((m) => m.endAt > now);
     while (this.messageTexts.length < this.messages.length) {
-      this.messageTexts.push(this.scene.add.text(5, 0, '', { fontFamily: FONT, fontSize: '11px', shadow: SHADOW }).setOrigin(0, 1).setScrollFactor(0).setDepth(DEPTH));
+      // StoredText_KillText / ChatText: 12 px bold, outlined.
+      this.messageTexts.push(this.scene.add.text(5, 0, '', { fontFamily: HUD_FONT, fontSize: '12px', fontStyle: 'bold', ...OUTLINE, ...SMALL_OUTLINE }).setOrigin(0, 1).setScrollFactor(0).setDepth(DEPTH));
     }
     this.messageTexts.forEach((label, i) => {
       const m = this.messages[i];
