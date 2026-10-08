@@ -1,0 +1,20 @@
+{
+ "images": {
+  "Asphalt1": 4,
+  "Asphalt2": 4,
+  "Cracks": 4,
+  "Curb": 4,
+  "GUI_BountyPointsIcon": 4,
+  "Grass1": 4,
+  "GrassBits": 4,
+  "GrassRockEdge": 4
+ },
+ "sprites": {
+  "AirstrikeBeacon": 4,
+  "AirstrikeBeaconHeld": 4,
+  "Scorch1": 4,
+  "Scorch2": 4,
+  "Scorch3": 4,
+  "ScorchCell1": 4
+ }
+}
