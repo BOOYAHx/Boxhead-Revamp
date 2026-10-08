@@ -496,6 +496,21 @@ and a live room on your Python server still need a playtest. A useful first
 check is to place a barricade, walk out, fire at it, then try C4 and mines with
 a second player. Run the logic checks with `node --test tests/*.test.mjs`.
 
+### Step 18: the original loading screen
+
+While the game loads you now see the original's white BOXHEAD Bounty Hunter
+screen with its loading bar and version number. When it has loaded, the bar
+reads LOADED!, a dark red veil drops over it and the screen fades to black
+and out onto the main menu, like the Flash game (without the Sean Cooper and
+XGen logos). Its art comes from BBH.swf, so export it once:
+
+```
+python tools/export_intro.py --bbh BBH.swf
+```
+
+(`tools/build_assets.py` now does this too.) Without it the plain loading
+bar is shown as before.
+
 ### Step 17: practice against computer players
 
 **Quick Play** (offline) now fills the map with computer players, 8 at first.
@@ -594,6 +609,7 @@ the original art and are not tracked by git (`art/templates/`); committing
   draws it back as a small Flash display list).
 * `tools/upscale_textures.py` — makes 4x AI-upscaled copies of the sprites and ground textures (see step 11).
 * `tools/hd_sprites.py` — checks and registers upscaled art (see step 11).
+* `tools/export_intro.py` — exports the original loading screen from BBH.swf (see step 18).
 * `tools/redrawn_art.py` — drawing templates for, and loading of, hand-redrawn 4x art (see step 15).
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound
   (MP3/WAV) from a SWF, including embedded SWFs.

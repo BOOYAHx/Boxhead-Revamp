@@ -35,10 +35,16 @@ export class BootScene extends Phaser.Scene {
     for (const name of manifest.images) this.load.image('img:' + name, imageURL(name));
     for (const [name, file] of Object.entries(manifest.sounds)) this.load.audio('snd:' + name, ASSET_ROOT + 'sounds/' + file);
 
-    const bar = this.add.rectangle(WINDOW_WIDTH / 2 - 150, WINDOW_HEIGHT / 2, 0, 12, 0xffffff).setOrigin(0, 0.5);
-    this.add.rectangle(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 304, 16).setStrokeStyle(2, 0xffffff);
-    const label = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 - 24, 'Loading Boxhead...', { fontFamily: 'Verdana', fontSize: '14px' }).setOrigin(0.5);
-    this.load.on('progress', (value) => (bar.width = 300 * value));
+    // The original's loading screen (ui/intro.js); a plain bar when its art has not been exported.
+    const intro = this.registry.get('intro');
+    const original = intro && (await intro.ready);
+    const bar = this.add.rectangle(WINDOW_WIDTH / 2 - 150, WINDOW_HEIGHT / 2, 0, 12, 0xffffff).setOrigin(0, 0.5).setVisible(!original);
+    this.add.rectangle(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, 304, 16).setStrokeStyle(2, 0xffffff).setVisible(!original);
+    const label = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 - 24, 'Loading Boxhead...', { fontFamily: 'Verdana', fontSize: '14px' }).setOrigin(0.5).setVisible(!original);
+    this.load.on('progress', (value) => {
+      bar.width = 300 * value;
+      intro?.progress(value);
+    });
     // Particle shapes (fx.json, from builds since the graphics step); optional.
     const fx = fetch(ASSET_ROOT + 'fx.json', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
@@ -51,8 +57,10 @@ export class BootScene extends Phaser.Scene {
       // Built at 1x: at the drawing scale they upset the shadow layer's drawing
       // on some graphics drivers (a grey box stamped into the ground).
       this.registry.set('fx', await buildFxTextures(this, await fx, 1));
+      if (original) await intro.toBlack();
       this.scene.start('menu');
-      this.registry.get('app').start();
+      await this.registry.get('app').start();
+      if (original) intro.reveal();
     });
     this.load.start();
   }

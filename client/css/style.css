@@ -292,3 +292,18 @@ form.host {
   color: var(--error);
   margin: 0;
 }
+
+/* The original's loading screen (ui/intro.js), over everything until the menu shows. */
+#intro {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#intro .intro-veil {
+  position: absolute;
+  inset: 0;
+}

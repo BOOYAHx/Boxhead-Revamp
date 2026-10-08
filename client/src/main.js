@@ -8,6 +8,7 @@ import { Display, applyDisplay, canvasSize, sharpenText, softwareRendering, want
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
+import { Intro } from './ui/intro.js';
 
 loadPreferences();
 loadBindings(); // the Controls screen's keys
@@ -16,6 +17,9 @@ loadBanks(); // the Weapon Banks screen's layout
 if (!isSaved('enhanced') && softwareRendering()) Preferences.enhanced = false;
 Display.scale = wantedScale();
 sharpenText();
+
+// The original's loading screen, over the game until the main menu is ready.
+const intro = new Intro(document.getElementById('game').parentElement);
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -35,4 +39,5 @@ window.addEventListener('resize', () => {
 
 const app = new App(game, { overlay: document.getElementById('overlay'), flashRoot: document.getElementById('flash-ui') });
 game.registry.set('app', app);
+game.registry.set('intro', intro);
 window.boxheadApp = app;

@@ -10,7 +10,7 @@ import { DEPTH_CORPSES, DEPTH_SHADOWS } from './MapView.js';
 import { Preferences } from '../game/preferences.js';
 import { snap } from './display.js';
 
-const FLASH_TINT = 0xff5040; // stands in for PlayerCharacter.FLASH_CT (red damage flash)
+const FLASH_TINT = 0xc8141a; // damage flash: blood red (stands in for PlayerCharacter.FLASH_CT)
 const HEALTH_GREEN = 0x00ff00; // HealthBar: white bar tinted by health
 const HEALTH_ORANGE = 0xcc6600;
 const HEALTH_RED = 0xcc0000;

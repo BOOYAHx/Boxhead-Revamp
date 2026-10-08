@@ -8,6 +8,7 @@ Produces (all generated, not committed):
     sprites/*.png     baked sprite sheets (see build_atlas.py)
     atlas.json        frame rectangles and offsets for every sprite
     ui/               the menus' vector art, text fields and fonts (swf_vector.py)
+    intro/            the original loading screen from BBH.swf (export_intro.py)
     sounds/           every game sound (.mp3; .wav for the uncompressed and ADPCM ones)
     constants.xml     weapon and health tuning, read by the game at startup
 
@@ -27,6 +28,7 @@ import abc_decompile  # noqa: E402
 import build_atlas  # noqa: E402
 import swf_extract  # noqa: E402
 import swf_vector  # noqa: E402
+from export_intro import export_intro  # noqa: E402
 
 
 def find_abc(swf_bytes, class_name):
@@ -126,6 +128,8 @@ def main():
         print('Exporting the menu art')
         ui = swf_vector.export(embedded_lobby_swf(bbh), os.path.join(args.out, 'ui'), 'assets/game/ui/')
         print(f'  {len(ui.shapes)} shapes, {len(ui.sprites)} sprites, {len(ui.buttons)} buttons, {len(ui.fonts)} fonts')
+        print('Exporting the loading screen')
+        export_intro(bbh, args.out)
 
         with open(os.path.join(args.out, 'hd.json'), 'w') as f:
             json.dump({}, f)  # upscaled sheets: none until tools/hd_sprites.py runs

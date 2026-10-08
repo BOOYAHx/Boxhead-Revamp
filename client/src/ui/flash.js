@@ -40,7 +40,8 @@ function union(list) {
 }
 
 export class FlashLibrary {
-  constructor(data, defs) {
+  constructor(data, defs, prefix = '') {
+    this.prefix = prefix; // put before every SVG id, so two libraries can share a page
     this.chars = data.characters;
     this.classes = data.classes;
     this.classNames = Object.fromEntries(Object.entries(data.classes).map(([name, id]) => [id, name]));
@@ -52,7 +53,7 @@ export class FlashLibrary {
   }
 
   /** Fetch the exported art, put its <defs> in the page and load the fonts. */
-  static async load(base = 'assets/game/ui/') {
+  static async load(base = 'assets/game/ui/', prefix = '') {
     const [data, text] = await Promise.all([
       fetch(base + 'library.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('library.json ' + r.status)))),
       fetch(base + 'library.svg', { cache: 'no-store' }).then((r) => (r.ok ? r.text() : Promise.reject(new Error('library.svg ' + r.status)))),
@@ -60,9 +61,9 @@ export class FlashLibrary {
     const holder = document.createElement('div');
     holder.setAttribute('aria-hidden', 'true');
     holder.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-    holder.innerHTML = text;
+    holder.innerHTML = prefix ? text.replace(/\bid="/g, `id="${prefix}`).replace(/url\(#/g, `url(#${prefix}`).replace(/href="#/g, `href="#${prefix}`) : text;
     document.body.appendChild(holder);
-    const library = new FlashLibrary(data, holder.querySelector('defs'));
+    const library = new FlashLibrary(data, holder.querySelector('defs'), prefix);
     await library.loadFonts();
     return library;
   }
@@ -110,7 +111,7 @@ export class FlashLibrary {
 
   newID(prefix) {
     this.counter += 1;
-    return prefix + this.counter;
+    return this.prefix + prefix + this.counter;
   }
 
   /**
@@ -408,7 +409,7 @@ export class Shape extends DisplayObject {
   constructor(lib, id, place) {
     super(lib, id, place);
     const use = svg('use');
-    use.setAttribute('href', `#c${id}`);
+    use.setAttribute('href', `#${lib.prefix}c${id}`);
     this.el.appendChild(use);
   }
 
@@ -555,7 +556,7 @@ export class MovieClip extends DisplayObject {
         c.el.setAttribute('transform', `translate(${n(fx(c.x))} ${n(fy(c.y))})`);
         continue;
       }
-      const source = this.lib.defs.querySelector(`#c${c.id}`);
+      const source = this.lib.defs.querySelector(`#${this.lib.prefix}c${c.id}`);
       if (!source) continue;
       const copy = source.cloneNode(true);
       copy.removeAttribute('id');
