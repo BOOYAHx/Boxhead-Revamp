@@ -47,6 +47,7 @@ import io
 import json
 import os
 import platform
+import re
 import stat
 import subprocess
 import sys
@@ -130,6 +131,40 @@ def run_upscaler(exe, model, src, dest, gpu, tile):
     if tile:
         cmd += ['-t', str(tile)]
     return subprocess.run(cmd, cwd=os.path.dirname(exe)).returncode == 0
+
+
+# Graphics cards Real-ESRGAN lists as "[1 NVIDIA GeForce RTX 4060 Laptop GPU]  queueC=...".
+DEVICE_LINE = re.compile(r'^\[(\d+) ([^\]]+)\]')
+DEDICATED = re.compile(r'nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|arc a', re.I)
+
+
+def pick_gpu(exe, model):
+    """
+    The dedicated graphics card when there are several. Real-ESRGAN takes card 0
+    by default, which on many laptops is the weak built-in chip (and that one often
+    turns out noise). Returns the card number, or None to leave the choice to it.
+    """
+    ensure_model(exe, model)
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, 'probe.png')
+        Image.new('RGBA', (8, 8), (128, 128, 128, 255)).save(src)
+        cmd = [exe, '-i', src, '-o', os.path.join(tmp, 'out.png'), '-n', model, '-s', str(SCALE), '-m', os.path.join(os.path.dirname(exe), 'models')]
+        try:
+            run = subprocess.run(cmd, cwd=os.path.dirname(exe), capture_output=True, text=True, errors='replace', timeout=120)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+    cards = {}
+    for line in (run.stderr + run.stdout).splitlines():
+        m = DEVICE_LINE.match(line.strip())
+        if m:
+            cards[int(m.group(1))] = m.group(2).strip()
+    if len(cards) < 2:
+        return None
+    for number, name in sorted(cards.items()):
+        if DEDICATED.search(name):
+            print(f'Using graphics card {number}: {name} (--gpu picks another)')
+            return number
+    return None
 
 
 def load_record(dest_dir):
@@ -352,6 +387,8 @@ def main():
     cache = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.realesrgan')
     exe = args.upscaler or find_upscaler(cache)
     gpu = -1 if args.cpu else args.gpu
+    if gpu is None:
+        gpu = pick_gpu(exe, MODELS[args.model])
     if args.compare:
         compare(exe, args.game, gpu, args.tile, os.path.join(cache, 'compare.png'))
         return
