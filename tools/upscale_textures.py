@@ -19,8 +19,8 @@ the driver gets time to restart and the lost files are tried again one at a
 time; finished pieces are kept (tools/.realesrgan/pieces/), so running it
 again carries on where it stopped. Tiny files (a few pixels a side) get a
 transparent border so the AI has room around them, and a smooth enlargement
-if the AI still cannot do them. Shadows are left as they are: the game blurs
-them and draws them at their original size.
+if the AI still cannot do them. Shadows get a smooth enlargement without the
+AI: they are flat, soft shapes with no detail to add (and the game blurs them).
 
 Run it again after rebuilding the assets; files already done well are skipped,
 whichever model made them, so a retry with other options (--model fast, --tile
@@ -207,9 +207,22 @@ def is_tiny(size):
     return min(size) < TINY_SIDE
 
 
-def worth_upscaling(name, size):
-    """Shadows are not: the game blurs them and draws them at their original size."""
+def for_the_ai(name):
+    """Shadows are flat, soft shapes with no detail to add (and the AI tends to change their transparency)."""
     return 'Shadow' not in name
+
+
+def enlarge_smoothly(src_dir, dest_dir, name):
+    """A 4x enlargement without the AI, kept if it looks right: smooth, or pixel for pixel
+    for the very smallest (the 2 x 5 ammo tick rings when smoothed)."""
+    with Image.open(os.path.join(src_dir, name + '.png')) as f:
+        img = f.convert('RGBA')
+    for resample in (Image.LANCZOS, Image.NEAREST):
+        hd = img.resize((img.width * SCALE, img.height * SCALE), resample)
+        if hd_sprites.looks_right(img, hd):
+            hd.save(os.path.join(dest_dir, name + '.png'), optimize=True)
+            return True
+    return False
 
 
 def piece_boxes(w, h):
@@ -362,13 +375,20 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
                 if f.width % sizes[name][0] == 0 and f.width // sizes[name][0] in (2, 3, 4) and hd_sprites.looks_right(original, f):
                     continue  # (a rebuilt original that changed no longer looks like it, and is done again)
         names.append(name)
-    skipped = [n for n in names if not worth_upscaling(n, sizes[n])]
-    names = [n for n in names if worth_upscaling(n, sizes[n])]
-    if skipped:
-        print(f'{src}: {len(skipped)} shadows stay as they are (the game blurs them and draws them at their original size).')
+    smooth = [n for n in names if not for_the_ai(n)]
+    names = [n for n in names if for_the_ai(n)]
+    smooth_failed = []
+    if smooth:
+        print(f'{src}: {len(smooth)} shadows get a smooth {SCALE}x enlargement (no detail for the AI to add)')
+        for name in smooth:
+            if enlarge_smoothly(src_dir, dest_dir, name):
+                record[name] = SMOOTH
+            else:
+                smooth_failed.append(name)
+        save_record(dest_dir, record)
     if not names:
-        print(f'{src}: everything worth upscaling is done (use --redo to do it again).')
-        return 0, []
+        print(f'{src}: everything is upscaled (use --redo to do it again).')
+        return len(smooth), smooth_failed
     total = sum(sizes[n][0] * sizes[n][1] for n in names)
     print(f'{src}: upscaling {len(names)} files ({total / 1e6:.1f} million pixels) with {model} ...')
     if model in ('ultrasharp', 'photo', 'hifi', 'remacri', 'ultramix'):
@@ -419,12 +439,12 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
                 return True
             return check(unit)
 
-        def check(name, made_by=model):
+        def check(name):
             path = os.path.join(dest_dir, name + '.png')
             with Image.open(path) as hd, Image.open(os.path.join(src_dir, name + '.png')) as original:
                 ok = hd_sprites.looks_right(original, hd)
             if ok:
-                record[name] = made_by
+                record[name] = model
             else:
                 os.remove(path)  # so a later try (or run) does it again
             return ok
@@ -490,18 +510,13 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         if tiny:
             print(f'{src}: {len(tiny)} tiny files the AI could not do get a smooth {SCALE}x enlargement instead')
         for name in tiny:
-            with Image.open(os.path.join(src_dir, name + '.png')) as f:
-                img = f.convert('RGBA')
-            # Smooth; for the very smallest (the 2 x 5 ammo tick) that rings, so pixel for pixel.
-            for resample in (Image.LANCZOS, Image.NEAREST):
-                img.resize((img.width * SCALE, img.height * SCALE), resample).save(os.path.join(dest_dir, name + '.png'), optimize=True)
-                if check(name, SMOOTH):
-                    failed.remove(name)
-                    break
+            if enlarge_smoothly(src_dir, dest_dir, name):
+                record[name] = SMOOTH
+                failed.remove(name)
         for name in failed:
             record.pop(name, None)
         save_record(dest_dir, record)
-        return len(names), failed
+        return len(names) + len(smooth), failed + smooth_failed
 
 
 # --- side-by-side comparison of the models ----------------------------------------------
