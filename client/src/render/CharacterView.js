@@ -6,7 +6,8 @@
 import { CELL_HEIGHT, CELL_WIDTH } from '../game/constants.js';
 import { MODELS, tintFor } from '../game/bodyParts.js';
 import { createSprite, hdImageScale, showFrame } from './assets.js';
-import { DEPTH_CORPSES } from './MapView.js';
+import { DEPTH_CORPSES, DEPTH_SHADOWS } from './MapView.js';
+import { Preferences } from '../game/preferences.js';
 import { snap } from './display.js';
 
 const FLASH_TINT = 0xff5040; // stands in for PlayerCharacter.FLASH_CT (red damage flash)
@@ -14,6 +15,7 @@ const HEALTH_GREEN = 0x00ff00; // HealthBar: white bar tinted by health
 const HEALTH_ORANGE = 0xcc6600;
 const HEALTH_RED = 0xcc0000;
 const OVERHEAD_Y = 55; // health bar this many pixels above the feet
+const CONTACT_ALPHA = 0.5; // enhanced: the soft dark patch right under the feet
 
 export class CharacterView {
   constructor(scene, character, nameColor = '#ffffff') {
@@ -29,6 +31,9 @@ export class CharacterView {
     this.head = createSprite(scene, 'BondHead');
     this.flash = createSprite(scene, 'MuzzleFlashSmall1').setVisible(false);
     this.container.add([this.backpack, this.bodyCustom, this.body, this.weapon, this.headCustom, this.head, this.flash]);
+    // Lit by muzzle flashes and explosions (enhanced); the muzzle flash is the light itself.
+    for (const part of [this.backpack, this.bodyCustom, this.body, this.weapon, this.headCustom, this.head]) scene.lighting?.add(part);
+    this.contact = scene.lighting?.contactShadow(DEPTH_SHADOWS + 0.1, 30, 13, CONTACT_ALPHA);
     this.healthBorder = scene.add.image(0, 0, 'img:HealthBar_BarBorder').setOrigin(0, 0).setDepth(10000).setScale(1 / hdImageScale('HealthBar_BarBorder'));
     this.healthBar = scene.add.image(0, 0, 'img:HealthBar_Bar').setOrigin(0, 0).setDepth(10000).setScale(1 / hdImageScale('HealthBar_Bar'));
     this.shownHealth = -1;
@@ -91,6 +96,7 @@ export class CharacterView {
     const visible = ch.active;
     this.container.setVisible(visible);
     this.scene.shadows.setVisible(this.shadow, visible);
+    this.contact?.setVisible(visible && Preferences.enhanced && Preferences.shadows);
     const overhead = visible && !ch.dead && !ch.local;
     this.nameText.setVisible(overhead);
     this.placingText.setVisible(overhead);
@@ -156,6 +162,7 @@ export class CharacterView {
     if (!order.includes(this.backpack)) this.container.moveTo(this.backpack, order.length);
 
     this.container.setPosition(x, y);
+    this.contact?.setPosition(x, y);
     this.container.setDepth(ch.dead && anim.finished ? DEPTH_CORPSES : y / CELL_HEIGHT);
     this.placingText.setPosition(x, y - OVERHEAD_Y - 5).setDepth(10000);
     this.nameText.setPosition(x, y - OVERHEAD_Y - 17).setDepth(10000);
@@ -170,6 +177,7 @@ export class CharacterView {
     this.placingText.destroy();
     this.scene.shadows.remove(this.shadow);
     this.container.destroy();
+    this.contact?.destroy();
     this.nameText.destroy();
     this.healthBorder.destroy();
     this.healthBar.destroy();

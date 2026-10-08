@@ -44,6 +44,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command) | **ready to test** |
 | 12 | Grenades, Grenade Launcher, Plasma Cannon, C4, mines, airstrikes, barrels, barricades and spy satellite | **ready to playtest** |
 | 13 | Character customization in the lobby | done |
+| 14 | Lighting pass (Enhanced Graphics): lights from muzzle flashes and explosions on walls, props, people and the floor; contact shadows; ambient occlusion where walls meet the floor | **ready to test** |
+| 15 | Hand-redrawn 4x art: templates and loading (`tools/redrawn_art.py`); the drawing itself is done by an artist | tools ready |
 | later | Turrets, team deathmatch / infected | |
 
 ## Repository layout
@@ -292,9 +294,10 @@ Everyone still sees exactly the same 700x490 area of the map.
   where two overlap.
 * **Enhanced** draws at a whole multiple (2x, 3x…) of the original at or above
   your screen's resolution: sharp text, health bars and lines, crisp sprite
-  edges, smoother movement (half-pixel steps or finer), soft shadows, a warm
-  light from muzzle flashes, glowing tracers, sparks and dust where bullets
-  hit walls, and blood spray.
+  edges, smoother movement (half-pixel steps or finer), soft shadows, light
+  from muzzle flashes and explosions on everything around them, contact
+  shadows and ambient occlusion (step 14), glowing tracers, sparks and dust
+  where bullets hit walls, and blood spray.
 
 If the game feels slow, untick Enhanced Graphics.
 
@@ -491,6 +494,53 @@ and a live room on your Python server still need a playtest. A useful first
 check is to place a barricade, walk out, fire at it, then try C4 and mines with
 a second player. Run the logic checks with `node --test tests/*.test.mjs`.
 
+### Step 14: lighting
+
+With **Enhanced Graphics** on (it needs WebGL, which every current browser
+with a graphics card has), nothing has to be rebuilt:
+
+* **Light from muzzle flashes and explosions** reaches the walls, crates,
+  cars, trees, players and the floor around them, warm and brief for a shot,
+  big and flickering for a blast. Unlit, everything looks exactly as before:
+  the light only adds to the original colours.
+* **Contact shadows**: a soft dark patch under each player's feet, under the
+  original's sharper directional shadow.
+* **Ambient occlusion**: the floor darkens softly where walls, buildings,
+  fences, crates, cars, bins, rocks and tree trunks stand on it.
+
+Classic graphics are unchanged.
+
+### Step 15: hand-redrawn high-resolution art
+
+An AI upscaler can only sharpen the original pixels. Art redrawn by hand at 4x
+in the original style looks best, but it has to be drawn by a person (or an
+image tool you trust); there is nothing to generate it automatically. The
+characters alone are 24 sheets of 336 frames each, so start with the
+things that are on screen most: crates and trees (one frame each), then cars
+and walls.
+
+```
+python tools/redrawn_art.py templates crates trees
+```
+
+writes, for each sprite sheet, `art/templates/<Sheet>.png` (the sheet at 4x
+with hard pixels: draw over it) and `<Sheet>.frames.png` (the same with each
+frame's box outlined as a guide: keep each drawing inside its box, with the
+base where it is). Other names: `characters`, or any sheet such as `Car1`,
+`BrickWall1`, `NinjaBody`; `--from-upscaled` starts from the AI-upscaled copy.
+Save the finished sheets with transparency, same name and size, in
+`art/redrawn/`, then:
+
+```
+python tools/redrawn_art.py apply
+```
+
+and press Ctrl+F5 with Enhanced Graphics on. Redrawn sheets replace the
+AI-upscaled ones and `tools/upscale_textures.py` leaves them alone; remove one
+from `art/redrawn/` and run `apply` again to go back. The templates contain
+the original art and are not tracked by git (`art/templates/`); committing
+`art/redrawn/` is your choice.
+
 ## Tools
 
 * `tools/build_assets.py` — the one-step asset build above.
@@ -499,6 +549,7 @@ a second player. Run the logic checks with `node --test tests/*.test.mjs`.
   draws it back as a small Flash display list).
 * `tools/upscale_textures.py` — makes 4x AI-upscaled copies of the sprites and ground textures (see step 11).
 * `tools/hd_sprites.py` — checks and registers upscaled art (see step 11).
+* `tools/redrawn_art.py` — drawing templates for, and loading of, hand-redrawn 4x art (see step 15).
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound
   (MP3/WAV) from a SWF, including embedded SWFs.
 * `tools/abc_decompile.py` — a small ActionScript 3 bytecode decompiler that

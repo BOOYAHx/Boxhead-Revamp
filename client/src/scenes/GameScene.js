@@ -29,6 +29,7 @@ import { Hud } from '../render/Hud.js';
 import { createSprite, showFrame } from '../render/assets.js';
 import { MapView } from '../render/MapView.js';
 import { ShadowLayer } from '../render/ShadowLayer.js';
+import { Lighting } from '../render/Lighting.js';
 import { Display, fitCamera, snap } from '../render/display.js';
 
 const HUD_DEPTH = 10001;
@@ -103,6 +104,7 @@ export class GameScene extends Phaser.Scene {
     this.status = this.add.text(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2, '', { ...TEXT_STYLE, fontSize: '14px' }).setOrigin(0.5).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
     this.coords = this.add.text(WINDOW_WIDTH - 8, WINDOW_HEIGHT - 8, '', { ...TEXT_STYLE, fontFamily: 'monospace' }).setOrigin(1, 1).setScrollFactor(0).setDepth(HUD_DEPTH).setVisible(false);
     this.shadows = new ShadowLayer(this);
+    this.lighting = new Lighting(this);
     this.effects = new Effects(this);
     this.hud = new Hud(this);
 
@@ -714,6 +716,8 @@ export class GameScene extends Phaser.Scene {
     this.app?.applyPreferences();
     this.shadows.texture.setVisible(Preferences.shadows);
     this.shadows.dirty = true;
+    this.lighting.setEnabled(Preferences.enhanced);
+    this.mapView?.refresh();
     this.hud.fps.setVisible(Preferences.showFPS);
   }
 
@@ -823,7 +827,7 @@ export class GameScene extends Phaser.Scene {
       this.claimedCrates.delete(data.index);
       const crate = new BountyCrate(data, from, now);
       const shadow = this.shadows.create('BountyCrate_Shadow');
-      const sprite = createSprite(this, crate.sprite);
+      const sprite = this.lighting.add(createSprite(this, crate.sprite));
       this.crates.set(data.index, { crate, sprite, shadow });
     }
   }
@@ -1140,6 +1144,7 @@ export class GameScene extends Phaser.Scene {
     this.shadows.render();
     this.effects.focus = this.player.renderPos;
     this.effects.update();
+    this.lighting.update();
     this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
     const tab = this.keyState.isDown('scores') && this.chatInput === null && this.mode === 'online';
     if (this.ui) this.ui.showScoreboard(tab ? this.scoreRows(this.players()) : null);
@@ -1324,6 +1329,7 @@ export class GameScene extends Phaser.Scene {
     this.remotes.clear();
     for (const index of [...this.crates.keys()]) this.removeCrate(index);
     this.effects?.destroy();
+    this.lighting?.destroy();
     this.hud?.destroy();
     this.shadows?.destroy();
     this.map = null;

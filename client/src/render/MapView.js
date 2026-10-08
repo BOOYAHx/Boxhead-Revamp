@@ -5,9 +5,17 @@ import { CELL_HEIGHT, CELL_WIDTH, RELIEF_ALPHA } from '../game/constants.js';
 import { TEXTURES } from '../game/world.js';
 import { createSprite, hdImageScale } from './assets.js';
 import { Display } from './display.js';
+import { Preferences } from '../game/preferences.js';
 
 const TERRAIN_CHUNK = 512; // map pixels per piece of ground
 const TERRAIN_BUDGET = 36e6; // most texture pixels for the whole ground (about 144 MB)
+// Enhanced: ambient occlusion, a soft darkening of the floor where walls and props stand on it.
+const OCCLUSION = {
+  wall: { blur: 7, spread: 2, alpha: 0.42 }, // walls, buildings, fences
+  prop: { blur: 5, spread: 1.5, alpha: 0.34 }, // crates, cars, bins, rocks, trees
+};
+const WALLS = new Set(['fence', 'brickwall', 'castlewall', 'factory', 'storefront']);
+const OFFSCREEN = 20000; // device px: the shapes are drawn out of sight, only their blurred shadow lands
 
 export const DEPTH_TERRAIN = -3;
 export const DEPTH_SHADOWS = -2;
@@ -57,6 +65,7 @@ export class MapView {
     const scale = this.terrainScale();
     this.terrain = [];
     const relief = map.relief && this.image(map.relief);
+    this.occluded = Preferences.enhanced;
     for (let top = 0; top < this.pixelHeight; top += TERRAIN_CHUNK) {
       for (let left = 0; left < this.pixelWidth; left += TERRAIN_CHUNK) {
         const width = Math.min(TERRAIN_CHUNK, this.pixelWidth - left);
@@ -90,8 +99,11 @@ export class MapView {
           ctx.drawImage(relief, 0, 0, this.pixelWidth, this.pixelHeight);
           ctx.restore();
         }
+        if (this.occluded) this.drawOcclusion(ctx, scale, left, top, width, height);
         canvas.refresh();
-        this.terrain.push(scene.add.image(left, top, key).setOrigin(0, 0).setScale(1 / scale).setDepth(DEPTH_TERRAIN));
+        const piece = scene.add.image(left, top, key).setOrigin(0, 0).setScale(1 / scale).setDepth(DEPTH_TERRAIN);
+        scene.lighting?.add(piece);
+        this.terrain.push(piece);
       }
     }
   }
@@ -115,13 +127,56 @@ export class MapView {
     }
   }
 
+  /**
+   * Enhanced: each prop's footprint (its hit shapes), a little larger and
+   * blurred, darkens the floor under it. The prop hides the middle, so what
+   * shows is a soft dark edge where its base meets the ground. The shapes go
+   * far off the canvas and only their shadow is placed here, which blurs in
+   * every browser (unlike canvas filters).
+   */
+  drawOcclusion(ctx, scale, left, top, width, height) {
+    ctx.save();
+    ctx.setTransform(scale, 0, 0, scale, -left * scale, -top * scale);
+    for (const prop of this.map.props) {
+      const style = WALLS.has(prop.kind) ? OCCLUSION.wall : OCCLUSION.prop;
+      const reach = style.blur * 2 + style.spread;
+      ctx.shadowColor = `rgba(0, 0, 0, ${style.alpha})`;
+      ctx.shadowBlur = style.blur * scale;
+      ctx.shadowOffsetX = OFFSCREEN;
+      ctx.shadowOffsetY = 0;
+      ctx.fillStyle = '#000';
+      for (let shape = prop.hit; shape; shape = shape.next) {
+        const cx = shape.pos.x * CELL_WIDTH;
+        const cy = shape.pos.y * CELL_HEIGHT;
+        const rx = (shape.radius ?? shape.xRad) * CELL_WIDTH + style.spread;
+        const ry = (shape.radius ?? shape.yRad) * CELL_HEIGHT + style.spread;
+        if (cx + rx + reach < left || cx - rx - reach > left + width || cy + ry + reach < top || cy - ry - reach > top + height) continue;
+        const x = cx - OFFSCREEN / scale;
+        ctx.beginPath();
+        if (shape.radius !== undefined) ctx.ellipse(x, cy, rx, ry, 0, 0, Math.PI * 2);
+        else ctx.rect(x - rx, cy - ry, rx * 2, ry * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** Redraw the ground when Enhanced Graphics is switched (its ambient occlusion). */
+  refresh() {
+    if (this.occluded === Preferences.enhanced) return;
+    for (const piece of this.terrain || []) piece.destroy();
+    this.drawTerrain();
+  }
+
   drawProps() {
     for (const prop of this.map.props) {
       const x = Math.round(prop.renderPos.x * CELL_WIDTH);
       const y = Math.round(prop.renderPos.y * CELL_HEIGHT);
       if (prop.shadow) this.shadows.push(this.scene.shadows.create(prop.shadow, 0, x, y));
       if (prop.display) {
-        this.objects.push(createSprite(this.scene, prop.display, 0, x, y).setDepth(prop.depth));
+        const sprite = createSprite(this.scene, prop.display, 0, x, y).setDepth(prop.depth);
+        this.scene.lighting?.add(sprite);
+        this.objects.push(sprite);
       }
     }
   }

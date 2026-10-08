@@ -201,6 +201,8 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         with Image.open(os.path.join(src_dir, file)) as f:
             sizes[name] = f.size
         done = os.path.join(dest_dir, file)
+        if record.get(name) == hd_sprites.REDRAWN and os.path.exists(done):
+            continue  # redrawn by hand (tools/redrawn_art.py)
         # Skip files already done well with this model, unless the asset build has replaced the original since.
         same_model = record.get(name, EARLIER_DEFAULT[src]) == model
         if not redo and same_model and os.path.exists(done) and os.path.getmtime(done) >= os.path.getmtime(os.path.join(src_dir, file)):

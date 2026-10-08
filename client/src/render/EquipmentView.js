@@ -18,6 +18,7 @@ export class EquipmentView {
     let view = this.views.get(model);
     if (!view) {
       view = { sprite: this.scene.add.image(0, 0, '__DEFAULT').setOrigin(0), fallback: this.scene.add.graphics(), glow: this.scene.add.graphics(), shadow: null };
+      this.scene.lighting?.add(view.sprite);
       this.views.set(model, view);
     }
     return view;

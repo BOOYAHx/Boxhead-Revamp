@@ -32,6 +32,21 @@ SCALES = (2, 3, 4)
 MAX_COLOUR_DIFF = 25  # average colour difference (0-255) after shrinking back; good upscales are under 15
 MAX_ALPHA_DIFF = 30  # the same for transparency, measured where either picture has something drawn
 FOLDERS = (('sprites', 'sprites-hd'), ('images', 'images-hd'))
+RECORD = '.models.json'  # in each -hd folder: what made each file (an upscaler model, or REDRAWN)
+REDRAWN = 'redrawn'  # drawn by hand at 4x (tools/redrawn_art.py): kept as it is, never upscaled over
+
+
+def load_record(hd_dir):
+    try:
+        with open(os.path.join(hd_dir, RECORD)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_record(hd_dir, record):
+    with open(os.path.join(hd_dir, RECORD), 'w') as f:
+        json.dump(record, f, indent=1, sort_keys=True)
 
 
 def difference(original, hd):
@@ -69,6 +84,7 @@ def register_folder(originals, hd_dir, log=print):
     registered = {}
     if not os.path.isdir(hd_dir):
         return registered
+    record = load_record(hd_dir)
     for file in sorted(os.listdir(hd_dir)):
         if not file.lower().endswith('.png'):
             continue
@@ -87,6 +103,9 @@ def register_folder(originals, hd_dir, log=print):
             log(f'  {file}: {hd.width}x{hd.height} is not 2x, 3x or 4x of {original.width}x{original.height}, skipped')
             continue
         scale = int(scale)
+        if record.get(name) == REDRAWN:
+            registered[name] = scale  # new artwork: not expected to match the original pixel for pixel
+            continue
         if hd.mode != 'RGBA' or (hd.getextrema()[3][0] == 255 and original.getextrema()[3][0] < 255):
             # Upscalers often lose transparency: rebuild it from the original.
             alpha = original.getchannel('A').resize(hd.size, Image.LANCZOS)

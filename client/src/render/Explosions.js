@@ -284,6 +284,8 @@ export class Explosions {
 
     // Flash: a white-hot core and a wide warm light over the ground around it.
     this.add({ key: 'xp:light', x, y, altitude: altitude + 10, born: at, life: 110 * s, depth: DEPTH_TOP, add: true, scale: [0.55 * s, 1.1 * s], alpha: [0.95, 0], tint: 0xfff4d8, squash: 0.85 });
+    // The blast lights up the ground, walls and people around it, flickering as it dies down.
+    this.effects.scene.lighting?.flash(x, y - altitude, { radius: (main ? 330 : 200) * s, color: 0xffa050, intensity: main ? 1.6 : 0.9, life: (main ? 750 : 400) * s, flicker: true, delay });
     if (main) this.add({ key: 'xp:light', x, y, altitude: 0, born: at, life: 700 * s, depth: DEPTH_GROUND_GLOW, add: true, scale: [2.2 * s, 2.8 * s], alpha: [0.45, 0], tint: 0xff8a2a, squash: 0.7, flicker: true });
 
     // Shockwave and the ring of dust it kicks up.

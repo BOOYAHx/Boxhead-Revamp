@@ -7,3 +7,6 @@ node_modules/
 
 # Real-ESRGAN, downloaded by tools/upscale_textures.py
 tools/.realesrgan/
+
+# Drawing templates made from the original art (tools/redrawn_art.py)
+art/templates/

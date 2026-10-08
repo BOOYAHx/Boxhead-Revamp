@@ -293,6 +293,8 @@ export class Effects {
     const light = this.scene.add.image(x, y - altitude, 'fx:glow').setBlendMode(Phaser.BlendModes.ADD).setTint(color).setDepth(DEPTH_LIGHT).setScale(0.7, 0.55);
     const floor = this.scene.add.image(x, y, 'fx:glow').setBlendMode(Phaser.BlendModes.ADD).setTint(color === 0xffc060 ? 0xff9a40 : color).setDepth(DEPTH_BLOOD + 0.2).setScale(1.2, 0.85);
     this.fade([light, floor], 110, [0.4 * strength, 0.25 * strength]);
+    // ...which also lights the walls, props and people around it.
+    this.scene.lighting?.flash(x, y - altitude / 2, { radius: 150, color, intensity: 0.7 * strength, life: 90 });
   }
 
   /** Enhanced: sparks and a puff of dust where a bullet hits a wall (`sparks` 0: a random handful). */
