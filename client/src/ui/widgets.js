@@ -117,17 +117,17 @@ function modernText(button) {
   const hit = button.stateChildren.hit[0];
   const b = hit?.bounds;
   if (!b) return;
-  const [x0, y0, x1, y1] = b;
+  // The hit area may be stretched sideways (unstretch); the capsule is drawn already stretched,
+  // since a transform attribute would also be swung round the press's transform-origin.
+  const ratio = parseFloat(/scale\(([\d.]+)/.exec(button.groups.hit.getAttribute('transform') || '')?.[1]) || 1;
+  const [x0, y0, x1, y1] = [b[0] * ratio, b[1], b[2] * ratio, b[3]];
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'text-capsule');
-  const hitTransform = button.groups.hit.getAttribute('transform');
-  if (hitTransform) g.setAttribute('transform', hitTransform);
   const h = y1 - y0;
   g.innerHTML = `<rect x="${x0 + 1}" y="${y0 + 1}" width="${Math.max(0, x1 - x0 - 2)}" height="${Math.max(0, h - 2)}" rx="${(h - 2) / 2}"/>`;
   button.el.insertBefore(g, button.el.firstChild);
   button.el.classList.add('text-button');
-  const cx = hitTransform ? (x0 + x1) / 2 * (parseFloat(/scale\(([\d.]+)/.exec(hitTransform)?.[1]) || 1) : (x0 + x1) / 2;
-  for (const part of [g, button.groups.up, button.groups.over, button.groups.down]) part.style.transformOrigin = `${cx}px ${(y0 + y1) / 2}px`;
+  for (const part of [g, button.groups.up, button.groups.over, button.groups.down]) part.style.transformOrigin = `${(x0 + x1) / 2}px ${(y0 + y1) / 2}px`;
   trackStates(button);
 }
 const PILL = { width: 148, height: 24, x: 0.1, y: 0.1 }; // the original's 9-slice pill bitmap (148 x 24)

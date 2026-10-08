@@ -166,6 +166,7 @@ export class FlashMenus {
     screen.child('rightButton')?.disable?.();
     const connect = screen.child('connectButton');
     connect.text = 'connect';
+    centreButton(connect, field);
     connect.useLongClick?.();
     connect.onClick(() => this.handlers.connect());
     const back = screen.child('closeButton');
@@ -460,6 +461,25 @@ export class FlashMenus {
   lobbyNotice(message) {
     this.lobby?.addChat('', message, 'notice');
   }
+}
+
+/**
+ * Put a text button's label in the middle of its clickable area, and that
+ * area under the middle of `over` (a text field), e.g. "connect" under the
+ * server name; the original art had both off to the right.
+ */
+function centreButton(button, over) {
+  const hit = button.stateChildren?.hit[0]?.bounds;
+  if (!hit || !over) return;
+  const ratio = parseFloat(/scale\(([\d.]+)/.exec(button.groups.hit.getAttribute('transform') || '')?.[1]) || 1;
+  const middle = ((hit[0] + hit[2]) / 2) * ratio; // in the button's own units
+  for (const label of button.allChildren().filter((c) => c.box)) {
+    const [l, , r] = label.def.bounds;
+    label.x = middle - (label.scaleX * (l + r)) / 2;
+    label.box.style.textAlign = 'center';
+  }
+  const [l, , r] = over.def.bounds;
+  button.x = over.x + (l + r) / 2 - middle * button.scaleX;
 }
 
 /**
