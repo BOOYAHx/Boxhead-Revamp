@@ -82,7 +82,7 @@ class AssetGateway:
         if request.headers.get('Upgrade', '').lower() == 'websocket':
             return None
         origin = request.headers.get('Origin')
-        if origin and origin not in self.origins:
+        if origin and self.origins is not None and origin not in self.origins:
             return connection.respond(HTTPStatus.FORBIDDEN, 'Origin is not allowed')
         try:
             body, mime = await asyncio.to_thread(self.resource, request.path)
@@ -140,13 +140,19 @@ async def relay(websocket, game_port):
 
 
 async def run(args):
-    origins = [f'http://127.0.0.1:{args.http_port}', f'http://localhost:{args.http_port}']
+    if args.public:
+        # Players' browsers come from the server's own address (or a domain name), so
+        # any page may connect; the game server still asks every player to log in.
+        host, origins = '0.0.0.0', None
+    else:
+        host, origins = '127.0.0.1', [f'http://127.0.0.1:{args.http_port}', f'http://localhost:{args.http_port}']
     assets = AssetGateway(origins)
     async with serve(functools.partial(relay, game_port=args.game_port),
-                     '127.0.0.1', args.bridge_port, origins=origins,
+                     host, args.bridge_port, origins=origins,
                      compression=None, max_size=1048576, close_timeout=2, open_timeout=45,
                      process_request=assets.request) as bridge:
-        print(f'[BRIDGE] ws://127.0.0.1:{args.bridge_port}/ -> 127.0.0.1:{args.game_port}', flush=True)
+        shown = "<this server's address>" if args.public else '127.0.0.1'
+        print(f'[BRIDGE] ws://{shown}:{args.bridge_port}/ -> 127.0.0.1:{args.game_port}', flush=True)
         await bridge.serve_forever()
 
 
@@ -163,6 +169,8 @@ def main():
     parser.add_argument('--bridge-port', type=port_number, default=8081)
     parser.add_argument('--game-port', type=port_number, default=6124)
     parser.add_argument('--bridge-only', action='store_true')
+    parser.add_argument('--public', action='store_true',
+                        help='accept players from other computers (an online server), not just this one')
     args = parser.parse_args()
     site_directory = ROOT / 'dist' if (ROOT / 'dist' / 'index.html').exists() else ROOT
     httpd = None
@@ -177,7 +185,8 @@ def main():
                     print(f'[WEBSITE] Reusing the server already listening on port {args.http_port}.', flush=True)
             else:
                 threading.Thread(target=httpd.serve_forever, daemon=True).start()
-        print(f'[WEBSITE] Open http://127.0.0.1:{args.http_port}/ and keep this window open.', flush=True)
+        if not args.bridge_only:
+            print(f'[WEBSITE] Open http://127.0.0.1:{args.http_port}/ and keep this window open.', flush=True)
         print(f'[GAME] Your Python test game server must also be running on port {args.game_port}.', flush=True)
         asyncio.run(run(args))
     except KeyboardInterrupt:

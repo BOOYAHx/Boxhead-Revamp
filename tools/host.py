@@ -45,10 +45,10 @@ DEFAULT_CONFIG = {
             'restart_on': ['bbh-server-hunter-fix_2.py'],
         },
         {
-            # Kept next to it on the host (not in the repository).
+            # Browsers talk to the game server through it; --public lets players on other computers in.
             'name': 'bridge',
-            'run': ['python', 'BBHServer.py', '--bridge-only', '--game-port', '6123'],
-            'restart_on': [],
+            'run': ['python', 'BBHServer.py', '--bridge-only', '--public', '--game-port', '6123'],
+            'restart_on': ['BBHServer.py'],
         },
     ]
 }
