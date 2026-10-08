@@ -31,6 +31,26 @@ export const WeaponID = {
   PLASMA: 21,
 };
 export const PISTOL_ID = WeaponID.PISTOL;
+
+/**
+ * Splash damage (this build; the original's guns hit only what they touched):
+ * where a bullet stops, or the plasma orb ends, everyone within `radius` tiles
+ * takes up to `share` of the weapon's damage, falling off like the explosions.
+ */
+export const SPLASH = {
+  [WeaponID.PISTOL]: { radius: 0.8, inner: 0.2, share: 0.3 },
+  [WeaponID.AKIMBO_PISTOLS]: { radius: 0.8, inner: 0.2, share: 0.3 },
+  [WeaponID.AKIMBO_UZIS]: { radius: 0.8, inner: 0.2, share: 0.3 },
+  [WeaponID.AK47]: { radius: 0.8, inner: 0.2, share: 0.3 },
+  [WeaponID.M16]: { radius: 0.8, inner: 0.2, share: 0.3 },
+  [WeaponID.MINIGUN]: { radius: 0.8, inner: 0.2, share: 0.3 },
+  [WeaponID.FLAMER]: { radius: 0.8, inner: 0.2, share: 0.5 },
+  [WeaponID.SHOTGUN]: { radius: 1, inner: 0.3, share: 0.5 },
+  [WeaponID.MAGNUM]: { radius: 1.2, inner: 0.4, share: 0.4 },
+  [WeaponID.RIFLE]: { radius: 1.2, inner: 0.4, share: 0.4 },
+  [WeaponID.RAILGUN]: { radius: 1.2, inner: 0.4, share: 0.4 },
+  [WeaponID.PLASMA]: { radius: 2, inner: 0.8, share: 0.5 },
+};
 export const NUM_WEAPONS = 22;
 export const NUM_BANKS = 8;
 

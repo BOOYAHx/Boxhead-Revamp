@@ -1,7 +1,7 @@
 // Fixed 20 Hz equipment simulation. Rendering and network transport are callbacks;
 // the victim judges character damage, and the owner judges deployable damage.
 import { HitCircle, traceShot } from './world.js';
-import { Weapon, WeaponID as ID } from './weapons.js';
+import { SPLASH, Weapon, WeaponID as ID } from './weapons.js';
 import { padInt } from '../util/strings.js';
 
 export const DEPLOYABLES = [
@@ -27,6 +27,29 @@ export function blastDamage(damage, distance, radius, inner) {
   if (distance >= radius) return 0;
   if (distance < inner) return damage;
   return Math.trunc(0.5 + 0.5 * damage * (1 - ((distance - inner) / (radius - inner)) ** 1.4));
+}
+
+/**
+ * Splash from a gun shot: for each ray, the point where it stopped (just short
+ * of a wall), and everyone in `judged` near it who was not hit directly. Each
+ * victim takes the strongest splash of the shot once; walls block it.
+ * Returns [{ victim, damage, angle }].
+ */
+export function gunSplash(map, weapon, splash, tracers, distances, judged, direct) {
+  const worst = new Map();
+  tracers.forEach((t, i) => {
+    const reach = Math.max(0, distances[i] - 0.05);
+    const at = { x: t.start.x + Math.cos(t.angle) * reach, y: t.start.y + Math.sin(t.angle) * reach };
+    for (const victim of judged) {
+      if (direct.has(victim) || t.altitude > victim.height) continue;
+      const away = Math.max(0, Math.hypot(victim.pos.x - at.x, victim.pos.y - at.y) - victim.moveHit.radius);
+      const damage = blastDamage(weapon.damage * splash.share, away, splash.radius, splash.inner);
+      if (damage > 0 && damage > (worst.get(victim)?.damage || 0) && clearBlastPath(map, at, victim.pos, t.altitude)) {
+        worst.set(victim, { victim, damage, angle: Math.atan2(victim.pos.y - at.y, victim.pos.x - at.x) });
+      }
+    }
+  });
+  return [...worst.values()];
 }
 
 export function clearBlastPath(map, from, to, altitude) {
@@ -228,11 +251,24 @@ export class EquipmentWorld {
     }
   }
 
+  /** The plasma orb's burst where it ends: never its owner, nor anyone it already went through. */
+  plasmaSplash(p) {
+    const splash = SPLASH[ID.PLASMA];
+    for (const ch of this.characters()) {
+      if (!(ch.local || ch.npc) || ch === p.owner || !ch.active || ch.dead || p.damaged.has(ch) || p.altitude > ch.height) continue;
+      const away = Math.max(0, Math.hypot(ch.pos.x - p.pos.x, ch.pos.y - p.pos.y) - ch.moveHit.radius);
+      const damage = blastDamage(p.damage * splash.share, away, splash.radius, splash.inner);
+      if (damage > 0 && clearBlastPath(this.map, p.pos, ch.pos, p.altitude)) this.hurt(p.owner, { id: p.weaponID, damage }, Math.atan2(ch.pos.y - p.pos.y, ch.pos.x - p.pos.x), ch);
+    }
+  }
+
   finish(p) {
     if (p.dead) return;
     p.dead = true;
-    if (p.weaponID === ID.PLASMA) this.effect({ type: 'plasma', pos: { ...p.pos }, altitude: p.altitude });
-    else this.explode(p);
+    if (p.weaponID === ID.PLASMA) {
+      this.effect({ type: 'plasma', pos: { ...p.pos }, altitude: p.altitude });
+      this.plasmaSplash(p);
+    } else this.explode(p);
   }
 
   tick() {

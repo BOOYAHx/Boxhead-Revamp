@@ -13,8 +13,8 @@ import { Preferences } from '../game/preferences.js';
 import { ShopState } from '../game/shop.js';
 import { FREE_GUNS } from '../config.js';
 import { loadLook } from '../game/profile.js';
-import { PISTOL_ID, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
-import { EquipmentWorld } from '../game/equipment.js';
+import { PISTOL_ID, SPLASH, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
+import { EquipmentWorld, gunSplash } from '../game/equipment.js';
 import { MAX_NPCS, NavGrid, NpcBrain, createNpc } from '../game/npc.js';
 import { EquipmentView } from '../render/EquipmentView.js';
 import { GameUi } from '../ui/gameUi.js';
@@ -472,16 +472,28 @@ export class GameScene extends Phaser.Scene {
     if (weapon.kind !== 'gun') this.equipment.fire(shooter, weapon, shot);
     // Offline the computer players are judged here too; online only we are.
     const judged = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== shooter && c.active && !c.dead);
+    const direct = new Set();
     const distances = shot.tracers.map((t) => {
       const result = traceShot(this.map, t.start, t.angle, t.altitude, t.range, judged, shooter, { penetrates: weapon.penetrates });
       // Every ray (shotgun pellet, flame) that reaches someone does the full damage; only the Railgun goes through.
-      for (const hit of weapon.penetrates ? result.characters : result.characters.slice(0, 1)) this.hurtCharacter(hit.target, shooter, weapon, t.angle);
+      for (const hit of weapon.penetrates ? result.characters : result.characters.slice(0, 1)) {
+        direct.add(hit.target);
+        this.hurtCharacter(hit.target, shooter, weapon, t.angle);
+      }
       for (const hit of result.deployables) {
         if (!weapon.penetrates && result.characters.length && result.characters[0].distance < hit.distance) break;
         this.equipment.damage(hit.target, shooter, weapon.damage);
       }
       return result.distance;
     });
+    // Splash where the bullets stopped (equipment.js gunSplash), judged here like the direct hits.
+    const splash = weapon.kind === 'gun' && SPLASH[weapon.id];
+    if (splash) {
+      const others = judged.filter((c) => c.active && !c.dead);
+      for (const { victim, damage, angle } of gunSplash(this.map, weapon, splash, shot.tracers, distances, others, direct)) {
+        this.hurtCharacter(victim, shooter, { id: weapon.id, damage }, angle);
+      }
+    }
     weapon.queueEffects(shot, distances);
   }
 

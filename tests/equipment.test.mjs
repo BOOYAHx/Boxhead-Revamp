@@ -195,7 +195,7 @@ test('launcher grenades explode on impact and can pass over low cover', () => {
   assert.equal(s.effects.filter((e) => e.type === 'explosion').length, 1);
 });
 
-test('plasma crosses characters once, cannot hurt its owner, stops at walls and has no blast damage', () => {
+test('plasma crosses characters once, cannot hurt its owner, and its burst spares whoever it went through', () => {
   const s = setup(); s.remote.setPosition(2, 5.5); s.local.setPosition(5.5, 5.5);
   wall(s.map, 7, 5);
   shot(s, ID.PLASMA);
@@ -206,6 +206,22 @@ test('plasma crosses characters once, cannot hurt its owner, stops at walls and 
   s.hits.length = 0; shot(s, ID.PLASMA, s.local);
   for (let i = 0; i < 15; i++) s.world.tick();
   assert.equal(s.hits.length, 0);
+});
+
+test('the plasma orb bursts where it ends: half damage close by, nothing beyond two tiles or behind cover', () => {
+  // Fired east from (2, 5.5), the orb flies along the shoulder's line (y = 5.8) into a wall at x = 7;
+  // the local player stands beside its path, out of its reach.
+  const burst = (x, y, cover = false) => {
+    const s = setup(); s.remote.setPosition(2, 5.5); s.local.setPosition(x, y); wall(s.map, 7, 5);
+    if (cover) wall(s.map, 6, 6);
+    shot(s, ID.PLASMA); for (let i = 0; i < 15; i++) s.world.tick();
+    return s.hits;
+  };
+  const near = burst(6.4, 7);
+  assert.equal(near.length, 1);
+  assert.ok(near[0].weapon.damage > 0 && near[0].weapon.damage <= 40); // up to half of 80
+  assert.equal(burst(6.4, 8.5).length, 0);
+  assert.equal(burst(6.4, 7, true).length, 0);
 });
 
 test('plasma damage is swept and respects cover even if its field reaches behind a wall', () => {
