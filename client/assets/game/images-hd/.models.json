@@ -8,6 +8,8 @@
  "Grass1": "photo",
  "GrassBits": "photo",
  "GrassRockEdge": "photo",
+ "HealthBar_Bar": "photo",
+ "HealthBar_BarBorder": "photo",
  "Pavement3": "photo",
  "Pavement5": "photo",
  "Pavers": "photo",
@@ -19,5 +21,6 @@
  "Rocks": "photo",
  "Sidewalk": "photo",
  "Tiles": "photo",
+ "WeaponSliderDisplay_AMMO_TICK": "smooth",
  "Wood": "photo"
 }
