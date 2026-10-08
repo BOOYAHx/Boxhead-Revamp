@@ -515,8 +515,8 @@ It installs the bridge's `websockets` add-on, then runs `tools/host.py` in the
 background: it starts with the server, starts again if it stops, and needs no
 open window. Then `boxhead-update` (a `git pull`, applied by itself, including
 updates to `tools/host.py`), `boxhead-log` (watch it), `boxhead-restart` and
-`boxhead-stop`. Copy `BBHServer.py`'s companion files that are not in the
-repository (`users.db` to keep the accounts) next to it first.
+`boxhead-stop`. Moving from another computer? Copy its `users.db` (the
+accounts, not in the repository) into the folder first.
 
 Players reach the site at `http://<the host's address>:8080/`; the router must
 forward ports 8080 (website) and 8081 (bridge) to the host (browsers reach the
