@@ -39,17 +39,15 @@ DEFAULT_CONFIG = {
             'restart_on': ['tools/serve.py'],
         },
         {
+            # In this repository: updates to it restart it (Update.cmd).
             'name': 'game server',
-            'enabled': False,
             'run': ['python', 'bbh-server-hunter-fix_2.py'],
-            'cwd': 'C:/path/to/your/server/folder',
-            'restart_on': [],
+            'restart_on': ['bbh-server-hunter-fix_2.py'],
         },
         {
+            # Kept next to it on the host (not in the repository).
             'name': 'bridge',
-            'enabled': False,
             'run': ['python', 'BBHServer.py', '--bridge-only', '--game-port', '6123'],
-            'cwd': 'C:/path/to/your/server/folder',
             'restart_on': [],
         },
     ]
@@ -156,9 +154,8 @@ def load_config():
         with open(CONFIG, 'w') as f:
             json.dump(DEFAULT_CONFIG, f, indent=2)
             f.write('\n')
-        print(f'Made {CONFIG}.')
-        print('Fill in the "cwd" folders of the game server and the bridge and set their "enabled" to true,')
-        print('then start this again. For now only the website runs.\n')
+        print(f'Made {CONFIG}: the website, the game server and the bridge, all from this folder.')
+        print('Edit it to change how they are started (a service with "enabled": false is left off).\n')
     with open(CONFIG) as f:
         config = json.load(f)
     return [Service(spec) for spec in config.get('services', []) if spec.get('enabled', True)]

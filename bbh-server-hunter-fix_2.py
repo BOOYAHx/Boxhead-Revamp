@@ -1,4 +1,5 @@
 import socketserver
+import socket
 import os
 import hashlib
 import time
@@ -14,7 +15,13 @@ import tempfile
 import uuid
 from contextlib import closing
 
+# users.db, its round records, banlist.txt and login_ips.log live next to this
+# file, whichever folder the server is started from (started elsewhere, it
+# used to make a new, empty users.db there: "Account does not exist").
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 DB_FILE = "users.db"
+DUPLICATE_LOGIN = b"093\x00"  # the client shows "Duplicate login detected." and returns to the menu
 
 # username -> (md5_hash, account_id_string)
 USER_DB = {}
@@ -988,6 +995,49 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                     USERS.pop(account_id, None)
                     SLOTS.release(account_id)
 
+    def take_over_session(self, account_id: str, old: dict):
+        """
+        The right password for an account that is already in: the new login wins,
+        as in the original (the old one is told "Duplicate Login"). The old
+        session is often a connection that died without closing (a closed tab,
+        a computer gone to sleep, lost Wi-Fi), which used to lock the account
+        out until the server was restarted.
+        """
+        with SESSIONS_LOCK:
+            if USERS.get(account_id) is not old:
+                return
+            closing_already = old.get('closing')
+            old['closing'] = True
+        if closing_already:
+            # Its own connection is already leaving: give that a moment to finish.
+            for _ in range(50):
+                time.sleep(0.1)
+                with SESSIONS_LOCK:
+                    if USERS.get(account_id) is not old:
+                        return
+            return
+        old_socket = old.get('socket')
+        try:
+            old_socket.sendall(DUPLICATE_LOGIN)
+        except (OSError, AttributeError):
+            pass
+        try:
+            self.leave_current_room(account_id)
+        finally:
+            try:
+                old_socket.shutdown(socket.SHUT_RDWR)
+            except (OSError, AttributeError):
+                pass
+            try:
+                old_socket.close()
+            except (OSError, AttributeError):
+                pass
+            with SESSIONS_LOCK:
+                if USERS.get(account_id) is old:
+                    USERS.pop(account_id, None)
+                    SLOTS.release(account_id)
+        print(f"[~] {old.get('display_username', account_id)} logged in again; the earlier session was closed")
+
     def _notify_round(self, room_name, room, payload):
         if self.server.rooms.get(room_name) is not room:
             return
@@ -1241,6 +1291,11 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             if client_ip in banned_ips:
                 self.send(b"10;0;Banned\x00")
                 return
+
+            with SESSIONS_LOCK:
+                previous = USERS.get(acc_id)
+            if previous is not None:
+                self.take_over_session(acc_id, previous)
 
             with SESSIONS_LOCK:
                 if acc_id in USERS:

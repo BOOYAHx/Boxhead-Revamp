@@ -478,10 +478,12 @@ On the computer that hosts the game, double-click **`Start-Online.cmd`**
   other computers and letting browsers keep the files they already have (they
   only download a file again after it changed, so the HD textures come down
   once);
-* the game server and the bridge. The first start makes `host.json` next to
-  this README; fill in the folder of your server files (`"cwd"`) and set
-  `"enabled": true` for both, then start it again. `host.json` is your own and
-  is not part of the repository.
+* the game server (`bbh-server-hunter-fix_2.py`, in this repository) and the
+  bridge (`BBHServer.py`, kept next to it on the host). The first start makes
+  `host.json` next to this README with all three; edit it to change how they
+  start. `host.json` is your own and is not part of the repository, and
+  neither are the server's `users.db` (the accounts), its round records and
+  `login_ips.log`.
 
 A service that stops by itself is started again, and its output shows in that
 window marked with its name.
@@ -494,10 +496,11 @@ window marked with its name.
   available — Refresh"*, only once they are out of a match, so nobody is cut
   off mid-round.
 * A service is restarted only when files listed in its `"restart_on"` changed
-  (the website: `tools/serve.py`). Once the server files are in this
-  repository, list their folder there (e.g. `"restart_on": ["server/"]`) and
-  server patches arrive the same way. Players in that server's matches are
-  disconnected by such a restart.
+  (the website: `tools/serve.py`; the game server: its own file). Players in
+  the game server's matches are disconnected by its restart. A `host.json`
+  made before the game server joined the repository has no `"restart_on"` for
+  it: add `"restart_on": ["bbh-server-hunter-fix_2.py"]` (or delete
+  `host.json` to have it made again).
 * A change to `tools/host.py` itself says so in the window: close it and start
   `Start-Online.cmd` again.
 
