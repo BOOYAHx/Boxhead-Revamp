@@ -16,7 +16,12 @@ const SHADOW = { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
 const LOCAL_COLOR = '#d8c8c8'; // HudMessage.LOCAL_COLOR
 const REMOTE_COLOR = '#c0c0c0'; // HudMessage.REMOTE_COLOR
 const CHAT_COLOR = '#ffffff'; // HudMessage.CHAT_COLOR
-const BOUNTY_COLOR = '#f0cb25';
+const BOUNTY_COLOR = '#f0cb25'; // GUI: StoredText(BountyText, 15780645)
+// StoredText_ScoreText / BountyText / TimeText / FPSText: bold Arial ringed by a
+// thick black glow (blur 2, strength 10), drawn at 80% opacity (GUI).
+const HUD_FONT = '"BBH Arial", Arial, Helvetica, sans-serif';
+const HUD_ALPHA = 0.8;
+const OUTLINE = { stroke: '#000000', strokeThickness: 4, shadow: { offsetX: 0, offsetY: 0, color: '#000000', blur: 2, stroke: true, fill: true } };
 const MAX_MESSAGES = 6;
 const MESSAGE_HEIGHT = 16;
 const FLOATER_SPEED = 600; // px per second (ScoreFloater.SPEED)
@@ -32,12 +37,14 @@ export class Hud {
         .text(x, y, '', { fontFamily: FONT, fontSize: size + 'px', color: '#ffffff', shadow: SHADOW, ...options })
         .setScrollFactor(0)
         .setDepth(DEPTH);
-    this.money = text(WINDOW_WIDTH - 4, 0, 22, { fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
-    this.placing = text(WINDOW_WIDTH / 2, 0, 22, { fontStyle: 'bold' }).setOrigin(0.5, 0).setAlpha(0.85);
-    this.bounty = text(WINDOW_WIDTH - 4, 42, 12, { color: BOUNTY_COLOR, fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
+    // GUI: moneyPoint (w - 2, -1), placingPoint (w / 2, -1), bountyPoint (w - 4, 42), timePoint (w - 4, 62), fpsPoint (w - 5, 82).
+    const stored = (x, y, size, options = {}) => text(x, y, size, { fontFamily: HUD_FONT, fontStyle: 'bold', ...OUTLINE, ...options }).setAlpha(HUD_ALPHA);
+    this.money = stored(WINDOW_WIDTH - 2, -1, 40).setOrigin(1, 0).setLetterSpacing(-1);
+    this.placing = stored(WINDOW_WIDTH / 2, -1, 40).setOrigin(0.5, 0).setLetterSpacing(-1);
+    this.bounty = stored(WINDOW_WIDTH - 4, 42, 16, { color: BOUNTY_COLOR }).setOrigin(1, 0);
     this.bountyIcon = scene.add.image(0, 44, 'img:GUI_BountyPointsIcon').setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH).setScale(1 / hdImageScale('GUI_BountyPointsIcon'));
-    this.time = text(WINDOW_WIDTH - 4, 62, 12, { fontStyle: 'bold' }).setOrigin(1, 0).setAlpha(0.85);
-    this.fps = text(WINDOW_WIDTH - 5, 82, 11).setOrigin(1, 0).setAlpha(0.8).setVisible(Preferences.showFPS);
+    this.time = stored(WINDOW_WIDTH - 4, 62, 16).setOrigin(1, 0);
+    this.fps = stored(WINDOW_WIDTH - 5, 82, 12).setOrigin(1, 0).setVisible(Preferences.showFPS);
     this.fpsUpdated = 0;
     this.warning = text(WINDOW_WIDTH / 2, WINDOW_HEIGHT * 0.8, 15, { fontStyle: 'bold', color: '#ffe080', backgroundColor: 'rgba(0,0,0,0.45)', padding: { x: 6, y: 3 } }).setOrigin(0.5);
     this.input = text(5, WINDOW_HEIGHT - 20, 11, { backgroundColor: 'rgba(0,0,0,0.5)', padding: { x: 4, y: 2 } }).setVisible(false);
@@ -63,7 +70,8 @@ export class Hud {
 
   setBountyPoints(points) {
     this.bounty.setText('BountyPoints ' + points);
-    this.bountyIcon.setX(WINDOW_WIDTH - 4 - this.bounty.width - 22);
+    // GUI.draw: the icon 22 px left of the text (the outline's 2 px included in its width).
+    this.bountyIcon.setX(WINDOW_WIDTH - 4 - (this.bounty.width - 2) - 22);
   }
 
   /** GUI.updateTime: minutes:seconds of play left. */
