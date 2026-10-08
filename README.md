@@ -504,6 +504,20 @@ window marked with its name.
 * A change to `tools/host.py` itself says so in the window: close it and start
   `Start-Online.cmd` again.
 
+**On a Linux server** (a VPS, over SSH/PuTTY), set it up once as a service:
+
+```sh
+git clone https://github.com/BOOYAHx/Boxhead-Revamp.git && cd Boxhead-Revamp
+sh tools/install_service.sh
+```
+
+It installs the bridge's `websockets` add-on, then runs `tools/host.py` in the
+background: it starts with the server, starts again if it stops, and needs no
+open window. Then `boxhead-update` (a `git pull`, applied by itself, including
+updates to `tools/host.py`), `boxhead-log` (watch it), `boxhead-restart` and
+`boxhead-stop`. Copy `BBHServer.py`'s companion files that are not in the
+repository (`users.db` to keep the accounts) next to it first.
+
 Players reach the site at `http://<the host's address>:8080/`; the router must
 forward ports 8080 (website) and 8081 (bridge) to the host (browsers reach the
 game server through the bridge). For `https://` put a web server with a certificate (e.g. Caddy) in front;

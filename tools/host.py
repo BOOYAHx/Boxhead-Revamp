@@ -28,6 +28,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG = os.path.join(ROOT, 'host.json')
 POLL = 3  # seconds between checks
+AS_SERVICE = bool(os.environ.get('INVOCATION_ID'))  # started by systemd
 CRASH_LIMIT = 5  # crashes within CRASH_WINDOW seconds before a service is left stopped
 CRASH_WINDOW = 60
 
@@ -169,6 +170,8 @@ def main():
     if not services:
         sys.exit('host.json lists no enabled services.')
     head = (git('rev-parse', 'HEAD') or '').strip()
+    # As a service (tools/install_service.sh) systemd stops us with SIGTERM: stop the services too.
+    signal.signal(signal.SIGTERM, signal.default_int_handler)  # like Ctrl+C
     for service in services:
         service.start()
     print('Running. Update.cmd (git pull) applies updates; Ctrl+C stops everything.\n', flush=True)
@@ -182,6 +185,9 @@ def main():
                 files = changed_files(head, new)
                 say('update', f'{head[:7]} -> {new[:7]}, {len(files)} files changed')
                 if 'tools/host.py' in files:
+                    if AS_SERVICE:
+                        say('update', 'tools/host.py changed: restarting everything with the new version')
+                        sys.exit(0)  # systemd starts us again (Restart=always)
                     say('update', 'tools/host.py changed: close this window and start it again to use the new version')
                 for service in services:
                     hit = [f for f in files if matches(f, service.restart_on)]
