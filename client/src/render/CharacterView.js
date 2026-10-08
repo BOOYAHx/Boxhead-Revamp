@@ -10,7 +10,6 @@ import { DEPTH_CORPSES, DEPTH_SHADOWS } from './MapView.js';
 import { Preferences } from '../game/preferences.js';
 import { snap } from './display.js';
 
-const FLASH_TINT = 0xc8141a; // damage flash: blood red (stands in for PlayerCharacter.FLASH_CT)
 const HEALTH_GREEN = 0x00ff00; // HealthBar: white bar tinted by health
 const HEALTH_ORANGE = 0xcc6600;
 const HEALTH_RED = 0xcc0000;
@@ -42,7 +41,6 @@ export class CharacterView {
     this.healthBorder = scene.add.image(0, 0, 'img:HealthBar_BarBorder').setOrigin(0, 0).setDepth(10000).setScale(1 / hdImageScale('HealthBar_BarBorder'));
     this.healthBar = scene.add.image(0, 0, 'img:HealthBar_Bar').setOrigin(0, 0).setDepth(10000).setScale(1 / hdImageScale('HealthBar_Bar'));
     this.shownHealth = -1;
-    this.flashing = false;
     this.nameText = scene.add
       .text(0, 0, character.name, { fontFamily: 'Verdana, sans-serif', fontSize: '10px', color: nameColor, stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5, 1);
@@ -63,21 +61,6 @@ export class CharacterView {
     this.bodyTint = tintFor(body + 'Body', look.bodyColor);
     this.bodyCustom.setTint(this.bodyTint);
     this.headCustom.setTint(tintFor(head + 'Head', look.headColor));
-    this.flashing = false;
-  }
-
-  /** PlayerCharacter.drawBody: the body flashes red for a moment after a hit. */
-  updateDamageFlash() {
-    const flashing = this.character.flashTime > 0;
-    if (flashing === this.flashing) return;
-    this.flashing = flashing;
-    if (flashing) {
-      this.body.setTint(FLASH_TINT);
-      this.bodyCustom.setTint(FLASH_TINT);
-    } else {
-      this.body.clearTint();
-      this.bodyCustom.setTint(this.bodyTint);
-    }
   }
 
   /** HealthBar.redraw: green from half health, orange from a quarter, red below. */
@@ -134,7 +117,6 @@ export class CharacterView {
     showFrame(this.headCustom, parts.headCustom, bodyFrame, 0, 0);
     showFrame(this.head, parts.head, bodyFrame, 0, 0);
 
-    this.updateDamageFlash();
     const order = [this.bodyCustom, this.body];
     const weapon = ch.weapon;
     if (ch.dead) {
