@@ -1,7 +1,6 @@
 # Boxhead Revamp — new website frontend
 
-Frontend update for https://github.com/BOOYAHx/Boxhead-Revamp, based on commit
-`6c5d97c` (Free guns option, on by default).
+Website frontend for https://github.com/BOOYAHx/Boxhead-Revamp.
 
 ## Update from GitHub
 
@@ -92,7 +91,50 @@ Back button to return from the game to the homepage.
     hero picture with mouse and scroll parallax, and an animated phone menu.
 - With "reduce motion" turned on in the system, navigation is instant. If the
   script fails to load, the opening shutter lifts by itself after 3 s.
-- No packages or build step. The game is still at `client/play.html`, unchanged.
+- No packages or build step. The game is at `client/play.html`.
+
+## Community navigation
+
+The homepage and game-page header now link to **About the Game**, **What's
+New**, **Updates**, **Feedback & Bugs**, and **Support a Creator**. These
+replace The Game, Arsenal and How to Play in the website navigation. The
+game page keeps its controls strip.
+
+- **What's New** describes the HTML5/JavaScript/Phaser rebuild, smoother
+  rendering, optional HD art, effects, gameplay, shop, customization, controls
+  and multiplayer. Frame-rate improvements are not presented as a benchmark
+  or a guaranteed FPS on every device.
+- **Updates** requests the newest six commits on `boxhead-revamp` once when
+  the page loads. It displays dates, patch descriptions and source links.
+  Bundled notes remain available if GitHub is offline or rate-limits the
+  request. Repository messages are inserted as text, not HTML. No API key,
+  polling service or scheduled task is needed.
+- **Support a Creator** opens the creator-provided PayPal link:
+  `https://www.paypal.com/ncp/payment/K2EKZJYTSW5GA`.
+- **Feedback & Bugs** has report type, summary, details, optional reproduction
+  steps and browser/device fields. Delivery is configured in
+  `client/src/site-config.js`. It is disabled until the creator supplies the
+  destination; no reports are claimed to be received or stored locally.
+
+Feedback configuration options:
+
+```js
+// Open the player's mail app; they review the draft and press Send there.
+export const feedback = { mode: 'email', email: 'YOUR_EMAIL', endpoint: '' };
+
+// Or a service endpoint that accepts a native HTML POST with the form fields
+// type, title, details, steps and browser. The service confirms receipt.
+export const feedback = { mode: 'form', email: '', endpoint: 'YOUR_HTTPS_ENDPOINT' };
+```
+
+The email option requires a configured mail app. The form option requires a
+working form-service endpoint; services with custom field IDs need their own
+mapping. Never put a private API key in this public configuration file.
+
+No package install, asset rebuild or game-server changes are needed. Pull
+the update and refresh with Ctrl+F5. Logic checks for delivery URLs and the
+patch feed run with `node --test tests/community.test.mjs`. Live visual
+preview was unavailable in this workspace (localhost timed out).
 
 ## Artwork
 

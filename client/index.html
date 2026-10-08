@@ -12,12 +12,14 @@
   <link rel="preload" href="assets/site/arena-hero.webp" as="image" fetchpriority="high" media="(min-width: 701px)">
   <link rel="preload" href="assets/site/arena-hero-small.webp" as="image" fetchpriority="high" media="(max-width: 700px)">
   <link rel="stylesheet" href="css/site.css">
+  <link rel="stylesheet" href="css/community.css">
   <script>
     // Animations are on only with scripts; the opening shutter lifts by itself if site.js never runs.
     document.documentElement.classList.add('js');
     setTimeout(() => document.body.classList.remove('is-loading'), 3000);
   </script>
   <script src="src/site.js" defer></script>
+  <script type="module" src="src/community.js"></script>
 </head>
 <body class="is-loading">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -50,10 +52,11 @@
       <button class="menu-toggle" type="button" aria-label="Open navigation" aria-controls="site-nav" aria-expanded="false"><span></span><span></span><span></span></button>
       <nav class="site-nav" id="site-nav" aria-label="Main navigation">
         <a class="nav-link is-active" href="#home" aria-current="location">Home</a>
-        <a class="nav-link" href="#the-game">The game</a>
-        <a class="nav-link" href="#arsenal">Arsenal</a>
-        <a class="nav-link" href="#how-to-play">How to play</a>
+        <a class="nav-link" href="#about">About the game</a>
+        <a class="nav-link" href="#whats-new">What's new</a>
         <a class="nav-link" href="#updates">Updates</a>
+        <a class="nav-link" href="#feedback">Feedback &amp; bugs</a>
+        <a class="nav-link" href="#support">Support a creator</a>
         <span class="nav-indicator" aria-hidden="true"></span>
         <a class="nav-repo" href="https://github.com/BOOYAHx/Boxhead-Revamp" target="_blank" rel="noopener noreferrer" aria-label="View Boxhead Revamp on GitHub (opens in a new tab)"><svg class="icon"><use href="#i-github"/></svg></a>
         <a class="button button-blood header-play" href="play.html" data-enter-game>Play now <svg class="icon"><use href="#i-arrow"/></svg></a>
@@ -71,15 +74,15 @@
           The classic multiplayer shooter, rebuilt for the browser.</p>
         <div class="hero-actions" data-reveal>
           <a class="button button-blood hero-play" href="play.html" data-enter-game><svg class="icon icon-fill"><use href="#i-play"/></svg> Enter the arena</a>
-          <a class="button button-ghost" href="#how-to-play">How to play</a>
+          <a class="button button-ghost" href="#whats-new">Discover what's new</a>
         </div>
         <dl class="hero-stats" data-reveal>
-          <div><dt>Weapons</dt><dd>20+</dd></div>
+          <div><dt>Shop items</dt><dd>17</dd></div>
           <div><dt>Bounty to claim</dt><dd>$<span data-count="1000000">1,000,000</span></dd></div>
           <div><dt>Flash needed</dt><dd>0</dd></div>
         </dl>
       </div>
-      <a class="scroll-cue" href="#the-game" aria-label="Scroll to the game"><span></span></a>
+      <a class="scroll-cue" href="#about" aria-label="About the game"><span></span></a>
     </section>
 
     <div class="hazard" aria-hidden="true"></div>
@@ -92,10 +95,10 @@
       </div>
     </div>
 
-    <section class="section container" id="the-game" aria-labelledby="game-title">
+    <section class="section container" id="about" aria-labelledby="game-title">
       <div class="section-heading" data-reveal>
-        <div><p class="eyebrow">The game you remember</p><h2 id="game-title">HUNT. GET PAID.<br><span>DON'T GET HUNTED.</span></h2></div>
-        <p>The player in the lead carries the bounty. Take them down to collect it, grab the money crates, and spend it in the shop before the next round. Then watch your back: now the red arrow is over <em>your</em> head.</p>
+        <div><p class="eyebrow">About the game</p><h2 id="game-title">HUNT. GET PAID.<br><span>DON'T GET HUNTED.</span></h2></div>
+        <p>Hunt the player in the lead, collect money crates, and build your loadout in the shop. Climb the standings and watch your back: soon the red arrow could be over <em>your</em> head.</p>
       </div>
       <div class="mode-grid">
         <article class="crate-card" data-reveal>
@@ -115,71 +118,76 @@
         <article class="crate-card" data-reveal>
           <div class="card-top"><svg class="icon"><use href="#i-dollar"/></svg><span class="card-label">03 / The shop</span></div>
           <h3>SPEND THE BOUNTY.</h3>
-          <p>Between rounds, the shop turns your money into firepower: new guns, ammo and upgrades, and refunds if you change your mind.</p>
-          <a class="text-link" href="#arsenal">See the arsenal <svg class="icon"><use href="#i-arrow"/></svg></a>
+          <p>Choose your guns, refill ammo, pick upgrades and spend your bounty on equipment. The shop also offers refunds if you change your mind.</p>
+          <a class="text-link" href="play.html" data-enter-game>Explore the shop <svg class="icon"><use href="#i-arrow"/></svg></a>
           <span class="card-note">Open the shop with B.</span>
         </article>
       </div>
     </section>
 
-    <section class="arsenal-section" id="arsenal" aria-labelledby="arsenal-title">
-      <div class="container">
-        <div class="section-heading" data-reveal>
-          <div><p class="eyebrow">Eight weapon banks</p><h2 id="arsenal-title">PICK YOUR<br><span>POISON.</span></h2></div>
-          <p>From the trusty Pistol to an airstrike called down on the wanted player. Every gun from the original is back, with its sounds, its upgrades and its kick.</p>
+    <section class="community-band" id="whats-new" aria-labelledby="new-title">
+      <div class="section container">
+        <div class="section-heading" data-reveal><div><p class="eyebrow">What's new</p><h2 id="new-title">CLASSIC BOXHEAD.<br><span>BUILT AGAIN.</span></h2></div><p>The familiar game, rebuilt in HTML5 and JavaScript. Here's what the browser edition brings to the warehouse.</p></div>
+        <div class="new-engine" data-reveal><span class="engine-mark" aria-hidden="true">HTML5<br><em>+ JS</em></span><div><h3>A new engine for a new era.</h3><p>A native JavaScript game powered by Phaser, with HTML5 canvas and WebGL rendering. Play straight in a modern browser without Flash or Ruffle.</p><span class="feature-label">Browser native · No Flash player · No game install</span></div></div>
+        <div class="new-grid">
+          <article class="crate-card" data-reveal><span class="card-label">01 / Performance</span><h3>BUILT FOR SMOOTHER PLAY.</h3><p>Rendering between game updates keeps movement smooth and makes higher frame rates possible. Your actual FPS depends on your device, browser and graphics settings.</p></article>
+          <article class="crate-card" data-reveal><span class="card-label">02 / Graphics</span><h3>THE DETAILS HIT HARDER.</h3><p>Optional HD textures, sharper rendering, soft shadows, muzzle lighting and glowing tracers. New explosions add fireballs, smoke, sparks, debris and scorch marks. Switch between Enhanced and Classic graphics.</p></article>
+          <article class="crate-card" data-reveal><span class="card-label">03 / The hunt</span><h3>THE BOUNTY IS BACK.</h3><p>Player movement and wall sliding, shooting, damage, death and respawn. Collect bounty crates, follow the standings, and finish each round with a scoreboard and awards.</p></article>
+          <article class="crate-card" data-reveal><span class="card-label">04 / Your loadout</span><h3>MORE WAYS TO FIGHT.</h3><p>The shop includes pistols, Dual Uzis, Shotgun, Rifle, AK47, Flamer and Minigun, with ammo, upgrades and refunds. Grenades, the launcher, plasma, C4, mines, airstrikes, cover and the spy satellite are available to playtest.</p></article>
+          <article class="crate-card" data-reveal><span class="card-label">05 / Customization</span><h3>MAKE YOUR HUNTER YOURS.</h3><p>Mix head and body models, choose their colours and voice, then drag the preview to rotate your character. Twelve models include Bond, Bambo, Ninja, Croft, Mummy and Devil. Your saved look also carries into offline practice.</p></article>
+          <article class="crate-card" data-reveal><span class="card-label">06 / Controls</span><h3>PLAY YOUR WAY.</h3><p>Rebind your keys, organize eight weapon banks, and use Auto Run, Spin and optional Auto Reload. Set sound, blood, smoke, shadows and screen shake from the in-game Options menu.</p></article>
+          <article class="crate-card" data-reveal><span class="card-label">07 / Multiplayer</span><h3>MEET IN THE LOBBY.</h3><p>Log in, host or join rooms, chat with players, and see other hunters move and fight. Quickplay lets you explore and practise offline before joining a live room.</p></article>
+          <article class="crate-card" data-reveal><span class="card-label">08 / The website</span><h3>A HOME FOR THE REVAMP.</h3><p>A new arena backdrop, the classic Boxhead title and hunters, animated navigation and a framed game page. Follow patches, share feedback and help shape the next update right here.</p></article>
         </div>
-        <ul class="arsenal-grid">
-          <li data-reveal><span class="bank">1</span><strong>Pistols</strong><small>Pistol · Magnum · Railgun</small></li>
-          <li data-reveal><span class="bank">2</span><strong>Rifles &amp; SMGs</strong><small>Dual Uzis · Shotgun · M16 · Rifle · AK47</small></li>
-          <li data-reveal><span class="bank">3</span><strong>Heavy</strong><small>Minigun · Flamer · Plasma Cannon</small></li>
-          <li data-reveal><span class="bank">4</span><strong>Grenades</strong><small>Grenades · Grenade Launcher</small></li>
-          <li data-reveal><span class="bank">5</span><strong>Explosives</strong><small>C4 · Mines · Airstrikes</small></li>
-          <li data-reveal><span class="bank">6</span><strong>Cover</strong><small>Barrels · Barricades</small></li>
-        </ul>
+        <p class="section-note">The revamp is still growing. Turrets and additional game modes are future work; check Updates for the latest changes.</p>
       </div>
-    </section>
-
-    <section class="controls-section" id="how-to-play" aria-labelledby="controls-title">
-      <div class="container controls-inner">
-        <div class="controls-intro" data-reveal>
-          <p class="eyebrow">Easy to learn. Hard to outrun.</p>
-          <h2 id="controls-title">KNOW YOUR<br><span>NEXT MOVE.</span></h2>
-          <p>A keyboard, quick reflexes and a good stack of crates. That's all you need.</p>
-          <p class="controls-tip"><svg class="icon"><use href="#i-target"/></svg> Hold Shift to strafe while keeping your aim.</p>
-          <a class="button button-blood" href="play.html" data-enter-game>Put it into practice <svg class="icon"><use href="#i-arrow"/></svg></a>
-        </div>
-        <dl class="control-list">
-          <div data-reveal><dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>or arrow keys</span></dd></div>
-          <div data-reveal><dt>Fire</dt><dd><kbd class="key-wide">Space</kbd><span>or</span><kbd>J</kbd></dd></div>
-          <div data-reveal><dt>Strafe</dt><dd><kbd class="key-wide">Shift</kbd></dd></div>
-          <div data-reveal><dt>Switch weapon</dt><dd><kbd>Q</kbd><kbd>E</kbd><span>banks</span><kbd class="key-wide">1–8</kbd></dd></div>
-          <div data-reveal><dt>Shop / refill</dt><dd><kbd>B</kbd><span>/</span><kbd>R</kbd></dd></div>
-          <div data-reveal><dt>Scores / menu</dt><dd><kbd class="key-wide">Tab</kbd><span>/</span><kbd class="key-wide">Esc</kbd></dd></div>
-        </dl>
-      </div>
-      <p class="container controls-footnote">Default controls. Change your keys in the game's Options menu. Best played on a desktop with a keyboard.</p>
     </section>
 
     <section class="section container updates-section" id="updates" aria-labelledby="updates-title">
       <div class="section-heading" data-reveal>
-        <div><p class="eyebrow">Case files</p><h2 id="updates-title">THE REVAMP<br><span>CONTINUES.</span></h2></div>
-        <a class="text-link" href="https://github.com/BOOYAHx/Boxhead-Revamp" target="_blank" rel="noopener noreferrer">Follow on GitHub <svg class="icon"><use href="#i-arrow"/></svg></a>
+        <div><p class="eyebrow">Updates · Patch notes</p><h2 id="updates-title">FRESH PATCHES.<br><span>FEWER BUGS.</span></h2></div>
+        <a class="text-link" href="https://github.com/BOOYAHx/Boxhead-Revamp/commits/boxhead-revamp/" target="_blank" rel="noopener noreferrer">Full update history <svg class="icon"><use href="#i-arrow"/></svg></a>
       </div>
-      <div class="update-grid">
-        <article class="case-card" data-reveal><span class="stamp">Done</span><span class="case-no">Case 01</span><h3>BACK IN THE BROWSER.</h3><p>HTML5 rendering, the original maps, movement, shooting, bounty crates, rounds, scoreboards and lobby chat.</p></article>
-        <article class="case-card" data-reveal><span class="stamp">Done</span><span class="case-no">Case 02</span><h3>THE FULL SHOP.</h3><p>Every gun, upgrades and refunds, custom controls, weapon banks and optional HD textures.</p></article>
-        <article class="case-card" data-reveal><span class="stamp stamp-hot">Testing</span><span class="case-no">Case 03</span><h3>HEAVY FIREPOWER.</h3><p>Grenades, plasma, C4, mines, airstrikes, barrels and barricades, with brand-new explosions.</p></article>
+      <p class="section-note" id="updates-status" role="status">Bundled patch notes. Open the full history for every change.</p>
+      <div class="patch-list" id="patch-list">
+        <article class="patch-entry"><time datetime="2026-10-08">08 OCT 2026</time><div><span class="feature-label">Graphics fix</span><h3>HD character outlines stay intact.</h3><p>The texture checker now catches upscaled sheets that lose details such as the Ninja's edges, belt and eyes.</p><a class="text-link" href="https://github.com/BOOYAHx/Boxhead-Revamp/commit/f12f0ff7ebb7b379b20871cc3319f44ecf446e4d" target="_blank" rel="noopener noreferrer">View patch ↗</a></div></article>
+        <article class="patch-entry"><time datetime="2026-10-08">08 OCT 2026</time><div><span class="feature-label">Website</span><h3>The original menu's stone lettering.</h3><p>The homepage and game page use heavy condensed lettering with a grey stone texture, while small text has a lighter pattern for readability.</p><a class="text-link" href="https://github.com/BOOYAHx/Boxhead-Revamp/commit/0dd581afad1cfffbebf1f5bfc822c5708234b283" target="_blank" rel="noopener noreferrer">View patch ↗</a></div></article>
+        <article class="patch-entry"><time datetime="2026-10-07T23:55:18Z">08 OCT 2026</time><div><span class="feature-label">Game page</span><h3>A familiar frame for the arena.</h3><p>The game now sits inside the silver boxhead.com frame, with the hunters above it, a controls strip and a Fullscreen button.</p><a class="text-link" href="https://github.com/BOOYAHx/Boxhead-Revamp/commit/5abfe5408fa9d652d7fee3b07cf1f96815d20056" target="_blank" rel="noopener noreferrer">View patch ↗</a></div></article>
       </div>
-      <div class="wanted-cta" data-reveal>
+    </section>
+
+    <section class="community-band" id="feedback" aria-labelledby="feedback-title">
+      <div class="section container">
+        <div class="section-heading" data-reveal><div><p class="eyebrow">Feedback &amp; bugs</p><h2 id="feedback-title">YOUR VOICE.<br><span>A BETTER GAME.</span></h2></div><p>Found a bug? Have an idea? Tell us what happened or what you'd love to see next.</p></div>
+        <div class="feedback-layout">
+          <aside class="feedback-guide"><span class="feature-label">From the players, for the players</span><h3>HELP US RECREATE IT.</h3><p>For a bug, include the steps that caused it, what you expected, and what happened instead. A browser name and game mode help us narrow it down.</p><p>Please leave passwords and payment details out of your report.</p></aside>
+          <form id="feedback-form" class="feedback-form">
+            <div class="form-row"><label for="report-type">Report type<select id="report-type" name="type"><option value="bug">Bug report</option><option value="feedback">Feedback / suggestion</option></select></label><label for="report-browser">Browser / device <span>(optional)</span><input id="report-browser" name="browser" maxlength="120" placeholder="e.g. Chrome on Windows"></label></div>
+            <label for="report-title">Summary<input id="report-title" name="title" required maxlength="120" placeholder="Give your report a short title"></label>
+            <label for="report-details">Details<textarea id="report-details" name="details" rows="5" required maxlength="4000" placeholder="What happened, or what would you like to improve?"></textarea></label>
+            <label for="report-steps" id="report-steps-label">Steps to reproduce <span>(optional)</span><textarea id="report-steps" name="steps" rows="3" maxlength="2000" placeholder="1. Join a room…&#10;2. Select…&#10;3. The issue happens when…"></textarea></label>
+            <p class="form-note" id="feedback-destination">The feedback inbox is being connected. Reports cannot be sent yet.</p>
+            <button class="button button-blood" type="submit" id="feedback-submit" disabled>Submission coming soon</button>
+            <p class="form-message" id="feedback-status" role="status" aria-live="polite"></p>
+            <noscript><p class="form-note">Enable JavaScript to use this form.</p></noscript>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container" id="support" aria-labelledby="support-title">
+      <div class="wanted-cta support-cta" data-reveal>
         <div class="wanted-poster" aria-hidden="true">
-          <span class="wanted-word">WANTED</span>
+          <span class="wanted-word">THANK YOU</span>
           <img class="wanted-face" src="assets/site/hunters-logo.png" alt="" width="542" height="296">
-          <span class="wanted-reward">$1,000,000</span>
+          <span class="wanted-reward">FROM THE CREATOR</span>
         </div>
         <div>
-          <p class="eyebrow">Your next hunt starts here</p>
-          <h2>THE TARGET IS<br><span>WAITING.</span></h2>
-          <a class="button button-blood" href="play.html" data-enter-game>Let's play <svg class="icon"><use href="#i-arrow"/></svg></a>
+          <p class="eyebrow">Support a Creator</p>
+          <h2 id="support-title">KEEP THE<br><span>REVAMP ALIVE.</span></h2>
+          <p class="support-copy">Enjoying the return to Boxhead? A voluntary donation is a way to support the creator's work on the revamp. Thank you for being part of it.</p>
+          <a class="button button-blood" href="https://www.paypal.com/ncp/payment/K2EKZJYTSW5GA" target="_blank" rel="noopener noreferrer">Support through PayPal <svg class="icon"><use href="#i-arrow"/></svg></a>
+          <p class="support-note">Opens PayPal in a new tab. Every bit of support is appreciated.</p>
         </div>
       </div>
     </section>
@@ -190,7 +198,7 @@
     <div class="container footer-inner">
       <a class="footer-brand" href="#home">BOXHEAD<span>REVAMP</span></a>
       <p>A fan-made browser revamp of Boxhead: Bounty Hunter.<br>The original game and characters belong to their creators.</p>
-      <nav aria-label="Footer navigation"><a href="#how-to-play">Controls</a><a href="https://github.com/BOOYAHx/Boxhead-Revamp" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="#home">Back to top ↑</a></nav>
+      <nav aria-label="Footer navigation"><a href="#feedback">Feedback &amp; bugs</a><a href="#support">Support a creator</a><a href="#home">Back to top ↑</a></nav>
     </div>
   </footer>
 </body>
