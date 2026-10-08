@@ -13,6 +13,14 @@ export const DEPTH_TERRAIN = -3;
 export const DEPTH_SHADOWS = -2;
 export const DEPTH_CORPSES = -1;
 
+/** SheetDecal.draw: where cell `variant` sits on a decal sheet of `width` x `height` original pixels. */
+export function decalCell(width, height, variant) {
+  const columns = Math.max(1, Math.round(width / CELL_WIDTH));
+  const rows = Math.max(1, Math.round(height / CELL_HEIGHT));
+  const v = ((variant % (columns * rows)) + columns * rows) % (columns * rows);
+  return [(v % columns) * CELL_WIDTH, Math.floor(v / columns) * CELL_HEIGHT];
+}
+
 export class MapView {
   constructor(scene, map) {
     this.scene = scene;
@@ -74,6 +82,7 @@ export class MapView {
           const th = texture.height / k;
           ctx.drawImage(texture, (px % tw) * k, (py % th) * k, CELL_WIDTH * k, CELL_HEIGHT * k, px, py, CELL_WIDTH, CELL_HEIGHT);
         }
+        this.drawDecals(ctx, left, top, width, height);
         if (relief) {
           ctx.save();
           ctx.globalAlpha = RELIEF_ALPHA;
@@ -84,6 +93,25 @@ export class MapView {
         canvas.refresh();
         this.terrain.push(scene.add.image(left, top, key).setOrigin(0, 0).setScale(1 / scale).setDepth(DEPTH_TERRAIN));
       }
+    }
+  }
+
+  /**
+   * Terrain.renderDecals: road lines, curbs, cracks, sidewalks, grass bits and
+   * rock edges painted over the ground, under the relief shading. Each is one
+   * cell of a sheet of cells (SheetDecal: variant = column + row * columns).
+   * FloorDamage is vector art the asset build does not export, so it is left out.
+   */
+  drawDecals(ctx, left, top, width, height) {
+    for (const decal of this.map.decals) {
+      const px = decal.x * CELL_WIDTH;
+      const py = decal.y * CELL_HEIGHT;
+      if (px + CELL_WIDTH <= left || px >= left + width || py + CELL_HEIGHT <= top || py >= top + height) continue;
+      const sheet = this.image(decal.image);
+      if (!sheet) continue;
+      const k = hdImageScale(decal.image);
+      const [sx, sy] = decalCell(sheet.width / k, sheet.height / k, decal.variant);
+      ctx.drawImage(sheet, sx * k, sy * k, CELL_WIDTH * k, CELL_HEIGHT * k, px, py, CELL_WIDTH, CELL_HEIGHT);
     }
   }
 
