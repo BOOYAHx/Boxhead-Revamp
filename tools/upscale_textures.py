@@ -17,12 +17,15 @@ pieces that are joined again afterwards, so no single job runs long. If the
 graphics driver crashes ("vkQueueSubmit failed -4"), Real-ESRGAN is stopped,
 the driver gets time to restart and the lost files are tried again one at a
 time; finished pieces are kept (tools/.realesrgan/pieces/), so running it
-again carries on where it stopped. Files of a few pixels and shadows (the game
-blurs those and draws them at their original size) are left as they are.
+again carries on where it stopped. Tiny files (a few pixels a side) get a
+transparent border so the AI has room around them, and a smooth enlargement
+if the AI still cannot do them. Shadows are left as they are: the game blurs
+them and draws them at their original size.
 
-Run it again after rebuilding the assets; files already done with the same
-model are skipped (--redo does them all again; a different model redoes them by
-itself). Delete client/assets/game/sprites-hd/ and images-hd/ to go back to the
+Run it again after rebuilding the assets; files already done well are skipped,
+whichever model made them, so a retry with other options (--model fast, --tile
+32) only fills in what is missing. --redo does them all again, e.g. to switch
+every file to another model. Delete client/assets/game/sprites-hd/ and images-hd/ to go back to the
 original art.
 
 Models (--model for the sprites, --ground-model for the ground textures):
@@ -86,7 +89,6 @@ MODELS = {
 EXTRA_MODELS = 'https://raw.githubusercontent.com/upscayl/upscayl/main/resources/models/{}'  # not in the Real-ESRGAN zip
 RECORD = '.models.json'  # in each -hd folder: which model made each file
 DEFAULT_MODEL = {'sprites': 'ultrasharp', 'images': 'photo'}
-EARLIER_DEFAULT = {'sprites': 'anime', 'images': 'photo'}  # what made files from before the record existed
 SCALE = 4
 MAX_SIDE = 4096  # bigger textures don't load on every graphics card
 PAD = 8  # pixels of the pattern wrapped around ground textures so their edges still tile
@@ -194,13 +196,20 @@ PIECES_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.reales
 PIECES_ABOVE = 256  # sheets wider or taller than this (original pixels) are done in pieces
 PIECE = 128  # about this many original pixels a side
 PIECE_CONTEXT = 8  # pixels of the neighbouring pieces each piece sees, cut off when they are joined
-# Not worth upscaling: the AI cannot add anything to a few pixels (and cannot be
-# judged on them), and the game blurs shadows and draws them at their original size.
-MIN_SIDE = 12
+# Tiny files (a grenade, a shell casing, the ammo tick) get a transparent border,
+# so the AI has room around them; any it still cannot do get a smooth enlargement.
+TINY_SIDE = 12
+TINY_PAD = 8
+SMOOTH = 'smooth'  # in the record: enlarged without the AI
+
+
+def is_tiny(size):
+    return min(size) < TINY_SIDE
 
 
 def worth_upscaling(name, size):
-    return min(size) >= MIN_SIDE and 'Shadow' not in name
+    """Shadows are not: the game blurs them and draws them at their original size."""
+    return 'Shadow' not in name
 
 
 def piece_boxes(w, h):
@@ -288,13 +297,18 @@ def is_tile(name):
 
 
 def prepare(src_dir, names, work, wrap):
-    """Copy the files to upscale; ground textures get their pattern wrapped around them."""
+    """Copy the files to upscale; ground textures get their pattern wrapped around them, tiny files a transparent border."""
     pads = {}
     for name in names:
         with Image.open(os.path.join(src_dir, name + '.png')) as f:
             img = f.convert('RGBA')
         pad = PAD if wrap and is_tile(name) else 0
-        if pad:
+        if not pad and is_tiny(img.size):
+            pad = TINY_PAD
+            bordered = Image.new('RGBA', (img.width + 2 * pad, img.height + 2 * pad))
+            bordered.paste(img, (pad, pad))
+            img = bordered
+        elif pad:
             w, h = img.size
             tiled = Image.new('RGBA', (w * 3, h * 3))
             for i in range(3):
@@ -341,17 +355,17 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         done = os.path.join(dest_dir, file)
         if record.get(name) == hd_sprites.REDRAWN and os.path.exists(done):
             continue  # redrawn by hand (tools/redrawn_art.py)
-        # Skip files already done well with this model, unless the asset build has replaced the original since.
-        same_model = record.get(name, EARLIER_DEFAULT[src]) == model
-        if not redo and same_model and os.path.exists(done) and os.path.getmtime(done) >= os.path.getmtime(os.path.join(src_dir, file)):
+        # Skip files already done well, whichever model made them (--redo does them again):
+        # a different --model or a retry option only fills in what is missing.
+        if not redo and os.path.exists(done):
             with Image.open(done) as f, Image.open(os.path.join(src_dir, file)) as original:
                 if f.width % sizes[name][0] == 0 and f.width // sizes[name][0] in (2, 3, 4) and hd_sprites.looks_right(original, f):
-                    continue
+                    continue  # (a rebuilt original that changed no longer looks like it, and is done again)
         names.append(name)
     skipped = [n for n in names if not worth_upscaling(n, sizes[n])]
     names = [n for n in names if worth_upscaling(n, sizes[n])]
     if skipped:
-        print(f'{src}: {len(skipped)} files stay as they are (too small to gain anything, or shadows, which the game blurs anyway).')
+        print(f'{src}: {len(skipped)} shadows stay as they are (the game blurs them and draws them at their original size).')
     if not names:
         print(f'{src}: everything worth upscaling is done (use --redo to do it again).')
         return 0, []
@@ -405,12 +419,12 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
                 return True
             return check(unit)
 
-        def check(name):
+        def check(name, made_by=model):
             path = os.path.join(dest_dir, name + '.png')
             with Image.open(path) as hd, Image.open(os.path.join(src_dir, name + '.png')) as original:
                 ok = hd_sprites.looks_right(original, hd)
             if ok:
-                record[name] = model
+                record[name] = made_by
             else:
                 os.remove(path)  # so a later try (or run) does it again
             return ok
@@ -470,6 +484,20 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
                 failed.append(name)
             for f in files.values():
                 os.remove(f)  # done, or to be made again
+
+        # Tiny files the AI could not do: a smooth enlargement instead.
+        tiny = [name for name in failed if is_tiny(sizes[name])]
+        if tiny:
+            print(f'{src}: {len(tiny)} tiny files the AI could not do get a smooth {SCALE}x enlargement instead')
+        for name in tiny:
+            with Image.open(os.path.join(src_dir, name + '.png')) as f:
+                img = f.convert('RGBA')
+            # Smooth; for the very smallest (the 2 x 5 ammo tick) that rings, so pixel for pixel.
+            for resample in (Image.LANCZOS, Image.NEAREST):
+                img.resize((img.width * SCALE, img.height * SCALE), resample).save(os.path.join(dest_dir, name + '.png'), optimize=True)
+                if check(name, SMOOTH):
+                    failed.remove(name)
+                    break
         for name in failed:
             record.pop(name, None)
         save_record(dest_dir, record)
