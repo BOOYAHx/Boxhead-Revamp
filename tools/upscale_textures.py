@@ -50,12 +50,14 @@ import io
 import json
 import os
 import platform
+import queue
 import re
 import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import urllib.request
 import zipfile
 
@@ -134,11 +136,50 @@ def run_upscaler(exe, model, src, dest, gpu, tile):
         cmd += ['-g', str(gpu)]
     if tile:
         cmd += ['-t', str(tile)]
-    return subprocess.run(cmd, cwd=os.path.dirname(exe)).returncode == 0
+    return watch(subprocess.Popen(cmd, cwd=os.path.dirname(exe), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  text=True, errors='replace', bufsize=1), STALL_CPU if gpu == -1 else STALL)
+
+
+STALL = 90  # seconds without a word from Real-ESRGAN on a graphics card before it counts as stuck
+STALL_CPU = 600
+DEVICE_LOST = re.compile(r'failed -4\b|device lost', re.I)
+device_losses = [0]  # graphics driver crashes so far this run
+
+
+def watch(proc, stall):
+    """
+    Echo Real-ESRGAN's output and wait for it. After a graphics driver crash
+    ("vkQueueSubmit failed -4") it often never exits, so it is stopped then, or
+    when it goes quiet for `stall` seconds. False if it failed or was stopped.
+    """
+    lines = queue.Queue()
+    threading.Thread(target=lambda: [lines.put(line) for line in proc.stdout] + [lines.put(None)], daemon=True).start()
+    lost = False
+    while True:
+        try:
+            line = lines.get(timeout=stall)
+        except queue.Empty:
+            print(f'  Real-ESRGAN stopped answering for {stall} s; stopping it')
+            break
+        if line is None:
+            proc.wait()
+            if lost:
+                device_losses[0] += 1
+            return proc.returncode == 0 and not lost
+        print(line, end='' if line.endswith('\n') else '\n', flush=True)
+        if DEVICE_LOST.search(line) and not lost:
+            lost = True
+            stall = min(stall, 10)  # give it a moment to exit by itself
+    if lost:
+        device_losses[0] += 1
+    proc.kill()
+    proc.wait()
+    return False
 
 
 BATCH = 12  # files per Real-ESRGAN run
 RETRY_TILES = (64, 32)  # piece sizes for files that failed in a batch
+GIVE_UP = 4  # graphics driver crashes before the rest goes to the processor
 
 # Graphics cards Real-ESRGAN lists as "[1 NVIDIA GeForce RTX 4060 Laptop GPU]  queueC=...".
 DEVICE_LINE = re.compile(r'^\[(\d+) ([^\]]+)\]')
@@ -268,6 +309,8 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         def attempt(batch, card, pieces):
             """One Real-ESRGAN run over `batch`; returns the names that did not come out right."""
             runs[0] += 1
+            if device_losses[0] >= GIVE_UP:
+                card = -1  # the graphics card keeps crashing
             run_in = os.path.join(tmp, f'run{runs[0]}', 'in')
             run_out = os.path.join(tmp, f'run{runs[0]}', 'out')
             os.makedirs(run_in)
@@ -296,10 +339,14 @@ def upscale_folder(exe, model, game, src, dest, redo, gpu, tile):
         # device lost) only that batch is lost, and it is tried again below.
         left = []
         for i in range(0, len(names), BATCH):
+            card = -1 if device_losses[0] >= GIVE_UP else gpu
             left += attempt(names[i:i + BATCH], gpu, tile)
+            save_record(dest_dir, record)  # stopping now keeps what is done
             print(f'  {min(i + BATCH, len(names))} of {len(names)} done' + (f', {len(left)} to try again' if left else ''))
+            if card != -1 and device_losses[0] >= GIVE_UP:
+                print(f'  The graphics driver crashed {device_losses[0]} times; doing the rest on the processor (slower).')
         for pieces in RETRY_TILES:
-            if not left or gpu == -1:
+            if not left or gpu == -1 or device_losses[0] >= GIVE_UP:
                 break
             print(f'{src}: trying {len(left)} files again, one at a time in {pieces} px pieces ...')
             left = [bad for name in left for bad in attempt([name], gpu, pieces)]
