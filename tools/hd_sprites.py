@@ -30,12 +30,16 @@ from PIL import Image
 
 SCALES = (2, 3, 4)
 MAX_COLOUR_DIFF = 25  # average colour difference (0-255) after shrinking back; good upscales are under 15
-MAX_ALPHA_DIFF = 30  # the same for transparency
+MAX_ALPHA_DIFF = 30  # the same for transparency, measured where either picture has something drawn
 FOLDERS = (('sprites', 'sprites-hd'), ('images', 'images-hd'))
 
 
 def difference(original, hd):
-    """How far `hd`, shrunk back to the original's size, is from it: (colour, transparency), 0-255."""
+    """
+    How far `hd`, shrunk back to the original's size, is from it: (colour, transparency), 0-255.
+    Transparency is compared only where either picture has something drawn: outline sheets are
+    mostly empty, and an upscale that lost all their lines would otherwise still look close.
+    """
     small = hd.convert('RGBA').resize(original.size, Image.BOX)
     a, b = original.convert('RGBA'), small
     pa, pb = a.load(), b.load()
@@ -49,8 +53,9 @@ def difference(original, hd):
         k = max(c1[3], c2[3]) / 255
         colour += k * (abs(c1[0] - c2[0]) + abs(c1[1] - c2[1]) + abs(c1[2] - c2[2])) / 3
         weight += k
-        alpha += abs(c1[3] - c2[3])
-        count += 1
+        if max(c1[3], c2[3]) > 8:
+            alpha += abs(c1[3] - c2[3])
+            count += 1
     return colour / max(weight, 1e-9), alpha / max(count, 1)
 
 
