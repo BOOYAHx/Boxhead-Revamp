@@ -204,17 +204,26 @@
 
 .discord-banner h2 {
   margin: 0;
-  font: 34px/1.2 var(--display);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  text-shadow: 0 2px 0 #000;
+  text-transform: none;
 }
 
 .discord-banner p {
   margin: 18px 0 20px;
-  color: #bfb7aa;
-  font: 14px/1.65 Verdana, sans-serif;
-  letter-spacing: 0;
+}
+
+/* Match the homepage's About paragraph: 16px Anton and its softer stone fill. */
+.discord-banner h2,
+.discord-banner p,
+.discord-banner-cta-label {
+  font: 400 16px/1.6 var(--display);
+  letter-spacing: 0.5px;
+  background-image: url('../assets/site/stone-text-soft.png');
+  background-size: 140px;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 1px 1px #000c);
 }
 
 .discord-banner-cta {
@@ -228,8 +237,8 @@
   border-radius: 5px;
   background: linear-gradient(#342c23, #171310);
   color: #fff;
-  font: 19px/1 var(--display);
-  letter-spacing: 0.3px;
+  font: 400 16px/1.6 var(--display);
+  letter-spacing: 0.5px;
 }
 
 .discord-banner-cta svg { width: 22px; height: 22px; fill: currentColor; }
@@ -549,10 +558,10 @@
   .discord-banner { display: flex; align-items: center; text-align: left; }
   .discord-banner-art { width: 72px; flex: 0 0 72px; }
   .discord-banner-copy { display: flex; align-items: center; gap: 12px; flex: 1; padding: 10px; }
-  .discord-banner h2 { flex: 1; font-size: 18px; }
+  .discord-banner h2 { flex: 1; }
   .discord-banner h2 br { display: none; }
   .discord-banner p { display: none; }
-  .discord-banner-cta { font-size: 14px; padding: 0 8px; }
+  .discord-banner-cta { padding: 0 8px; }
   .discord-banner-cta svg { display: none; }
   .play-console { flex-direction: column; gap: 8px; }
   .play-stage {
@@ -599,8 +608,7 @@
 
   .discord-banner-art { width: 60px; flex-basis: 60px; }
   .discord-banner-copy { gap: 8px; }
-  .discord-banner h2 { font-size: 16px; }
-  .discord-banner-cta { font-size: 13px; padding: 0 6px; }
+  .discord-banner-cta { padding: 0 6px; }
 
   .play-keys {
     display: none;
