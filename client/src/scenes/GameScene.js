@@ -295,7 +295,7 @@ export class GameScene extends Phaser.Scene {
     if (this.map) {
       remote.view?.destroy();
       remote.view = new CharacterView(this, ch, '#ffe08a');
-      remote.view.setPlacing(ch.stats.placing ? placingString(ch.stats.placing) : '');
+      remote.view.setPlacing(ch.stats.placing ? placingString(ch.stats.placing) : '', ch.stats.placing === 1);
     }
     return remote;
   }
@@ -955,7 +955,7 @@ export class GameScene extends Phaser.Scene {
   updateScores() {
     if (!this.player) return;
     const board = rankPlayers(this.players());
-    for (const entry of board) entry.view?.setPlacing(placingString(entry.stats.placing));
+    for (const entry of board) entry.view?.setPlacing(placingString(entry.stats.placing), entry.stats.placing === 1);
     const me = this.player.stats;
     this.hud.setPlacing(this.player.active ? me.placing : 0);
     this.hud.setMoney(me.money);

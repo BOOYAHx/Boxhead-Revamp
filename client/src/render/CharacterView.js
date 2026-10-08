@@ -15,6 +15,11 @@ const HEALTH_GREEN = 0x00ff00; // HealthBar: white bar tinted by health
 const HEALTH_ORANGE = 0xcc6600;
 const HEALTH_RED = 0xcc0000;
 const OVERHEAD_Y = 55; // health bar this many pixels above the feet
+// The leader's marker: the original's bullseye (from the UI art) behind "1st".
+export const LEADER_ICON = 'ui:leader';
+export const LEADER_ICON_URL = 'assets/game/ui/bitmaps/54.png';
+const LEADER_ICON_SIZE = 18;
+const LEADER_NAME_LIFT = 7; // the leader's name moves up to make room for the bullseye
 const CONTACT_ALPHA = 0.5; // enhanced: the soft dark patch right under the feet
 
 export class CharacterView {
@@ -45,6 +50,8 @@ export class CharacterView {
     this.placingText = scene.add
       .text(0, 0, '', { fontFamily: 'Verdana, sans-serif', fontSize: '10px', color: '#ffffff', stroke: '#000000', strokeThickness: 3 })
       .setOrigin(0.5, 1);
+    this.first = false;
+    this.leaderIcon = scene.textures.exists(LEADER_ICON) ? scene.add.image(0, 0, LEADER_ICON).setDisplaySize(LEADER_ICON_SIZE, LEADER_ICON_SIZE).setVisible(false) : null;
     this.applyLook();
   }
 
@@ -100,6 +107,7 @@ export class CharacterView {
     const overhead = visible && !ch.dead && !ch.local;
     this.nameText.setVisible(overhead);
     this.placingText.setVisible(overhead);
+    this.leaderIcon?.setVisible(overhead && this.first);
     if (!visible) {
       this.updateHealthBar(0, 0);
       return;
@@ -165,16 +173,21 @@ export class CharacterView {
     this.contact?.setPosition(x, y);
     this.container.setDepth(ch.dead && anim.finished ? DEPTH_CORPSES : y / CELL_HEIGHT);
     this.placingText.setPosition(x, y - OVERHEAD_Y - 5).setDepth(10000);
-    this.nameText.setPosition(x, y - OVERHEAD_Y - 17).setDepth(10000);
+    // "1st" over the lower half of the bullseye, like the original.
+    this.leaderIcon?.setPosition(x, y - OVERHEAD_Y - 15).setDepth(9999);
+    this.nameText.setPosition(x, y - OVERHEAD_Y - 17 - (this.first && this.leaderIcon ? LEADER_NAME_LIFT : 0)).setDepth(10000);
     this.updateHealthBar(x, y);
   }
 
-  setPlacing(text) {
+  /** The placing over the head ("1st", "2nd"...); first place also gets the bullseye behind it. */
+  setPlacing(text, first = false) {
     this.placingText.setText(text);
+    this.first = first;
   }
 
   destroy() {
     this.placingText.destroy();
+    this.leaderIcon?.destroy();
     this.scene.shadows.remove(this.shadow);
     this.container.destroy();
     this.contact?.destroy();

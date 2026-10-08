@@ -4,6 +4,7 @@ import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
 import { loadHdSheets } from '../render/hdLoader.js';
 import { ASSET_ROOT, imageURL, isHdTexture, loadSheets, registerFrames, setAtlas, setHdSheets } from '../render/assets.js';
+import { LEADER_ICON, LEADER_ICON_URL } from '../render/CharacterView.js';
 import { applyFilters, fitCamera } from '../render/display.js';
 import { buildFxTextures } from '../render/fxTextures.js';
 
@@ -16,7 +17,8 @@ export class BootScene extends Phaser.Scene {
     this.load.json('atlas', ASSET_ROOT + 'atlas.json');
     this.load.json('manifest', ASSET_ROOT + 'manifest.json');
     this.load.text('constants', ASSET_ROOT + 'constants.xml');
-    this.load.on('loaderror', (file) => this.fail(`Missing ${file.src}`));
+    // The leader's bullseye is optional: without it first place shows just "1st".
+    this.load.on('loaderror', (file) => file.key !== LEADER_ICON && this.fail(`Missing ${file.src}`));
   }
 
   async create() {
@@ -34,6 +36,7 @@ export class BootScene extends Phaser.Scene {
     setAtlas(atlas);
     loadSheets(this.load);
     for (const name of manifest.images) this.load.image('img:' + name, imageURL(name));
+    this.load.image(LEADER_ICON, LEADER_ICON_URL);
     for (const [name, file] of Object.entries(manifest.sounds)) this.load.audio('snd:' + name, ASSET_ROOT + 'sounds/' + file);
 
     // The original's loading screen (ui/intro.js); a plain bar when its art has not been exported.
