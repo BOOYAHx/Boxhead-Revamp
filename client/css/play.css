@@ -372,6 +372,57 @@
 
 #map-loading[hidden] { display: none; }
 
+/* "A new version of the game is available" (src/net/updates.js). */
+.update-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 20px);
+  padding: 8px 8px 8px 16px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--hazard);
+  border-radius: 4px;
+  background: #161311f2;
+  box-shadow: 0 6px 20px #0009;
+  color: var(--text);
+  font: 15px/1.2 var(--display);
+  white-space: nowrap;
+  animation: update-bar-in 0.3s ease-out;
+}
+
+.update-bar span { overflow: hidden; text-overflow: ellipsis; }
+
+.update-bar button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--blood);
+  color: #fff;
+  font: inherit;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.update-bar button:hover { background: var(--blood-hot); }
+
+.update-bar .update-later {
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.update-bar .update-later:hover { background: transparent; color: var(--text); }
+
+@keyframes update-bar-in {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+}
+
 .map-loading-copy {
   position: absolute;
   top: 69%;

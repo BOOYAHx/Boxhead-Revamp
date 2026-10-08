@@ -469,6 +469,43 @@ The client is plain static files: copy `client/` (including the generated
 the page. From step 2 the page also needs `BBHServer.py` (the WebSocket bridge
 on port 8081) and the Python game server to be running.
 
+### Hosting from this checkout (updates with `git pull`)
+
+On the computer that hosts the game, double-click **`Start-Online.cmd`**
+(`python tools/host.py`). It runs and watches everything players need:
+
+* the website for players (`tools/serve.py --online`, port 8080), answering
+  other computers and letting browsers keep the files they already have (they
+  only download a file again after it changed, so the HD textures come down
+  once);
+* the game server and the bridge. The first start makes `host.json` next to
+  this README; fill in the folder of your server files (`"cwd"`) and set
+  `"enabled": true` for both, then start it again. `host.json` is your own and
+  is not part of the repository.
+
+A service that stops by itself is started again, and its output shows in that
+window marked with its name.
+
+**Updating:** double-click **`Update.cmd`** (or run `git pull`) while
+`Start-Online.cmd` keeps running. Then:
+
+* Website and game changes need no restart. New visitors get them straight
+  away, and players already on the site see *"A new version of the game is
+  available — Refresh"*, only once they are out of a match, so nobody is cut
+  off mid-round.
+* A service is restarted only when files listed in its `"restart_on"` changed
+  (the website: `tools/serve.py`). Once the server files are in this
+  repository, list their folder there (e.g. `"restart_on": ["server/"]`) and
+  server patches arrive the same way. Players in that server's matches are
+  disconnected by such a restart.
+* A change to `tools/host.py` itself says so in the window: close it and start
+  `Start-Online.cmd` again.
+
+Players reach the site at `http://<the host's address>:8080/`; the router must
+forward ports 8080 (website) and 8081 (bridge) to the host (browsers reach the
+game server through the bridge). For `https://` put a web server with a certificate (e.g. Caddy) in front;
+the game then connects with `wss://`, so the bridge needs the certificate too.
+
 ### Step 12: explosives and equipment
 
 Update with `git pull`, then **Ctrl+F5**. This step adds no packages or asset

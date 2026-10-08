@@ -9,6 +9,7 @@ import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
 import { Intro } from './ui/intro.js';
+import { watchForUpdates } from './net/updates.js';
 
 loadPreferences();
 loadBindings(); // the Controls screen's keys
@@ -41,3 +42,6 @@ const app = new App(game, { overlay: document.getElementById('overlay'), flashRo
 game.registry.set('app', app);
 game.registry.set('intro', intro);
 window.boxheadApp = app;
+
+// "A new version is available" after the website is updated.
+watchForUpdates(app, document.getElementById('play-stage') || document.body);

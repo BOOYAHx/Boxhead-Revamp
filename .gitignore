@@ -11,3 +11,6 @@ tools/.realesrgan/
 
 # Drawing templates made from the original art (tools/redrawn_art.py)
 art/templates/
+
+# The host's own settings for tools/host.py (Start-Online.cmd)
+host.json
