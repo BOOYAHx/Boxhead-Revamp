@@ -4,7 +4,20 @@
  "Cracks": "photo",
  "Curb": "photo",
  "GUI_BountyPointsIcon": "photo",
+ "GhostfaceHeadPixels": "photo",
  "Grass1": "photo",
  "GrassBits": "photo",
- "GrassRockEdge": "photo"
+ "GrassRockEdge": "photo",
+ "Pavement3": "photo",
+ "Pavement5": "photo",
+ "Pavers": "photo",
+ "Relief1": "photo",
+ "Relief2": "photo",
+ "Relief3": "photo",
+ "Road": "photo",
+ "RoadLines": "photo",
+ "Rocks": "photo",
+ "Sidewalk": "photo",
+ "Tiles": "photo",
+ "Wood": "photo"
 }
