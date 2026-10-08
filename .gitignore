@@ -14,3 +14,9 @@ art/templates/
 
 # The host's own settings for tools/host.py (Start-Online.cmd)
 host.json
+
+# The game server's own data, kept on the host only: player accounts and passwords,
+# round records and login addresses (bbh-server-hunter-fix_2.py)
+users.db
+users.db.*
+login_ips.log
