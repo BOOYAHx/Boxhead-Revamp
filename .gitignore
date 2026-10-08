@@ -20,3 +20,6 @@ host.json
 users.db
 users.db.*
 login_ips.log
+
+# The bridge's Python add-ons (websockets), installed on the host with pip --target
+.python-packages/
