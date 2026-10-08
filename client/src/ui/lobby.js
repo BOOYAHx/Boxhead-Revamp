@@ -139,6 +139,7 @@ export class LobbyScreen {
       clearInterval(this.refreshTimer);
     }
     if (w === this.host) this.hostButton?.enable();
+    if (w === this.custom) this.customizeButton?.enable();
     this.current = null;
   }
 
@@ -240,6 +241,7 @@ export class LobbyScreen {
     this.previewDir = SW;
     this.drawPreview();
     this.openWindow(this.custom);
+    this.customizeButton?.disable(); // MMOchaLobby.showCustomizationWindow: greyed out while its window is open
   }
 
   showColors() {
@@ -399,6 +401,7 @@ export class LobbyScreen {
     this.chatInput.box.disabled = !enabled;
     if (enabled && this.current === this.browser) this.browseButton?.disable();
     if (enabled && this.current === this.host) this.hostButton?.disable();
+    if (enabled && this.current === this.custom) this.customizeButton?.disable();
   }
 
   disconnected() {
