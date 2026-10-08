@@ -8,6 +8,7 @@ import { CELL_HEIGHT, CELL_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/co
 import { placingString } from '../game/bounty.js';
 import { Preferences } from '../game/preferences.js';
 import { hdImageScale } from './assets.js';
+import { print } from '../ui/console.js';
 
 const DEPTH = 10001;
 const FONT = 'Verdana, sans-serif';
@@ -84,6 +85,7 @@ export class Hud {
   addMessage(text, { local = false, chat = false } = {}) {
     const length = chat ? 8000 : 5000;
     const fade = chat ? 200 : 500;
+    print(chat ? '> ' + text : 'Kill: ' + text); // HudMessage / KillMessage.consoleMessage
     const now = performance.now();
     this.messages.unshift({ text, color: chat ? CHAT_COLOR : local ? LOCAL_COLOR : REMOTE_COLOR, fadeAt: now + length, endAt: now + length + fade, fade });
     if (this.messages.length > MAX_MESSAGES) this.messages.pop();

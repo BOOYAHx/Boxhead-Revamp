@@ -1271,6 +1271,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Game.captureInput: the console took the keyboard, so nothing held stays down. */
+  releaseKeys() {
+    this.input.keyboard.resetKeys();
+    this.keyState?.reset();
+    this.onBlur?.();
+  }
+
   visibilityChanged() {
     this.onBlur();
     clearInterval(this.backgroundTimer);

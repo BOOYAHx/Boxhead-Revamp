@@ -11,6 +11,7 @@ import { fetchMapList } from './net/MapService.js';
 import { applyDisplay } from './render/display.js';
 import { drawPortrait } from './render/portrait.js';
 import { cleanLook, saveLook } from './game/profile.js';
+import { GameConsole } from './ui/console.js';
 import { FlashMenus } from './ui/menus.js';
 import { Screens } from './ui/Screens.js';
 
@@ -51,6 +52,7 @@ export class App {
     this.screens = new Screens(overlay, this.handlers);
     this.ui = this.screens;
     this.menus = null;
+    this.flashRoot = flashRoot;
     this.menusReady = flashRoot
       ? FlashMenus.create(flashRoot, this.handlers, {
           playSound: (name) => this.playSound(name),
@@ -74,12 +76,28 @@ export class App {
     this.applyPreferences();
     this.game.sound.once('unlocked', () => this.applyPreferences()); // browsers start audio muted until a click
     this.ready = true;
+    if (this.menus) this.createConsole();
     if (this.menus) {
       this.ui = this.menus;
       this.showMainMenu({ fade: true });
     } else {
       this.showLogin({ status: 'Connecting…' });
       this.connect();
+    }
+  }
+
+  /** Main: the ` console over the menus and the game. Game.consoleInput: exit / quit leave the game. */
+  createConsole() {
+    const scene = () => (this.game.scene.isActive('game') ? this.game.scene.getScene('game') : null);
+    try {
+      this.console = new GameConsole(this.flashRoot.parentElement, this.menus.lib, this.connection, {
+        opened: () => scene()?.releaseKeys?.(),
+        command: (name) => {
+          if ((name === 'exit' || name === 'quit') && scene()) this.leaveGame();
+        },
+      });
+    } catch (error) {
+      console.warn('The console art could not be built:', error);
     }
   }
 
@@ -296,6 +314,7 @@ export class App {
     this.fadeMusic();
     await this.mapsReady;
     const c = this.connection;
+    c.enablePing(5000);
     this.ui.showLobby({ user: c.localUser, maps: this.maps });
     this.ui.setPlayers([c.localUser, ...c.peers].filter(Boolean));
     if (!this.maps.some((m) => m?.online)) this.ui.setLobbyFeedback('Map service unavailable: using the bundled Warehouse map.');
@@ -341,6 +360,7 @@ export class App {
     await this.mapsReady;
     this.ui.clear();
     this.game.scene.stop('menu');
+    this.connection.enablePing(1000);
     this.game.scene.start('game', { mode: 'online', app: this, room });
   }
 

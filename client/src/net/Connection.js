@@ -219,11 +219,19 @@ export class Connection extends Emitter {
     this.sendRaw('0d2' + Math.max(0, GENDERS.indexOf(gender)));
   }
 
+  /** MMOchaServer.enablePing: ping now and every interval (a running timer just changes its interval). */
   enablePing(interval = 1000) {
-    if (this.pingTimer) return;
-    this.pingTimes = [];
-    this.pingsSent = [];
-    this.pingTimer = setInterval(() => this.pingTick(), Math.max(1000, interval));
+    interval = Math.max(1000, interval);
+    if (this.pingTimer) {
+      if (interval === this.pingInterval) return;
+      clearInterval(this.pingTimer);
+    } else {
+      this.pingTimes = [];
+      this.pingsSent = [];
+      this.pingTick();
+    }
+    this.pingInterval = interval;
+    this.pingTimer = setInterval(() => this.pingTick(), interval);
   }
 
   disablePing() {
