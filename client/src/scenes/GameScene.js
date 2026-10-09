@@ -58,6 +58,8 @@ export class GameScene extends Phaser.Scene {
     this.app = data.app;
     this.room = data.room;
     this.newRound = !!data.newRound; // stats in old handshakes belong to the previous round
+    // Only an explicit next-round restart carries awards; entering any room starts fresh.
+    this.roundBonus = this.newRound ? (data.roundBonus || 0) : 0;
     this.connection = this.mode === 'online' ? this.app.connection : null;
     this.map = null;
     this.loadingMap = false; // Phaser reuses the scene object for every game
@@ -1097,7 +1099,7 @@ export class GameScene extends Phaser.Scene {
     const shown = rankPlayers(everyone.map((p) => ({ ...p, active: p.local ? this.participated : true })));
     const awards = roundAwards(awardIDs, everyone);
     // GameSummary.displayAward: award money is added to the winner's next round.
-    for (const award of awards) if (award.player?.local) this.app.roundBonus = (this.app.roundBonus || 0) + award.bonus;
+    for (const award of awards) if (award.player?.local) this.roundBonus += award.bonus;
     if (this.ui) {
       // GameSummary lists everyone in the room (players who never spawned too).
       this.ui.showSummary(this.scoreRows(everyone), awards, (player) => drawPortrait(this.textures, player.character.look));
@@ -1112,8 +1114,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Game.newGame: start the next round from scratch with the room's next map. */
   newGame() {
-    if (this.mode === 'offline') this.scene.restart({ mode: 'offline', app: this.app });
-    else this.scene.restart({ mode: 'online', app: this.app, room: this.room, newRound: true, inbox: this.inbox });
+    if (this.mode === 'offline') this.scene.restart({ mode: 'offline', app: this.app, newRound: true, roundBonus: this.roundBonus });
+    else this.scene.restart({ mode: 'online', app: this.app, room: this.room, newRound: true, roundBonus: this.roundBonus, inbox: this.inbox });
   }
 
   /** Chat line: Enter opens it, Enter sends, Escape cancels (GUI input). */
@@ -1198,9 +1200,9 @@ export class GameScene extends Phaser.Scene {
     this.mapView = new MapView(this, map);
     const user = this.connection?.localUser;
     this.player = new Character({ id: this.connection ? this.connection.clientID : 'you', name: user?.name || 'You', local: true });
-    this.player.stats = newStats(this.app?.roundBonus || 0);
+    this.player.stats = newStats(this.roundBonus);
     if (this.mode === 'offline') this.player.stats.money = OFFLINE_MONEY;
-    if (this.app) this.app.roundBonus = 0; // Player.newRound spends the bonus
+    this.roundBonus = 0; // Player.newRound spends the bonus
     if (user) Object.assign(this.player.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
     else Object.assign(this.player.look, loadLook()); // offline: the look saved in this browser
     const spawn = this.pickSpawn();
