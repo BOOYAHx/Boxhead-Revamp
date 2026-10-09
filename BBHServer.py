@@ -100,6 +100,9 @@ class AssetGateway:
         return Response(status.value, status.phrase, headers, body)
 
 
+BROWSER_SEND_TIMEOUT = 20  # seconds
+
+
 async def relay(websocket, game_port):
     try:
         reader, writer = await asyncio.wait_for(
@@ -119,14 +122,16 @@ async def relay(websocket, game_port):
 
     async def game_to_browser():
         while data := await reader.read(65536):
-            await websocket.send(data)
+            # A browser that stops reading (a frozen background tab, a computer
+            # gone to sleep) is let go rather than holding up the game server.
+            await asyncio.wait_for(websocket.send(data), BROWSER_SEND_TIMEOUT)
 
     tasks = [asyncio.create_task(browser_to_game()), asyncio.create_task(game_to_browser())]
     try:
         done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             task.result()
-    except (ConnectionClosed, ConnectionError, OSError):
+    except (ConnectionClosed, ConnectionError, OSError, asyncio.TimeoutError):
         pass
     finally:
         for task in tasks:

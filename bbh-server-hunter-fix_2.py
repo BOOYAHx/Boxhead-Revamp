@@ -22,6 +22,11 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 DB_FILE = "users.db"
 DUPLICATE_LOGIN = b"093\x00"  # the client shows "Duplicate login detected." and returns to the menu
+# A player's connection that takes no data for this long (a frozen background
+# tab, a computer gone to sleep) is closed. Without a limit, sending to it
+# waited forever, and with it the player whose chat or move was being relayed,
+# who then could not join, leave or log back in.
+SEND_TIMEOUT = 10  # seconds
 
 # username -> (md5_hash, account_id_string)
 USER_DB = {}
@@ -899,12 +904,12 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
         if not room_name or room_name not in self.server.rooms:
             return
         out = f"M{wire_id(self.account_id)}{packet}\x00".encode("utf-8")
-        for peer_acc in self.server.rooms[room_name]["players"]:
+        for peer_acc in list(self.server.rooms[room_name]["players"]):
             if not include_self and peer_acc == self.account_id:
                 continue
             try:
                 USERS[peer_acc]["socket"].sendall(out)
-            except OSError:
+            except (OSError, KeyError):
                 pass
 
     def broadcast_to_room(self, message_bytes):
@@ -1009,8 +1014,9 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             closing_already = old.get('closing')
             old['closing'] = True
         if closing_already:
-            # Its own connection is already leaving: give that a moment to finish.
-            for _ in range(50):
+            # Its own connection is already leaving: give that time to finish
+            # (each send it makes on the way out ends within SEND_TIMEOUT).
+            for _ in range(SEND_TIMEOUT * 30):
                 time.sleep(0.1)
                 with SESSIONS_LOCK:
                     if USERS.get(account_id) is not old:
@@ -2428,7 +2434,10 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
         buf = ""
         try:
             while True:
-                data = self.request.recv(4096)
+                try:
+                    data = self.request.recv(4096)
+                except TimeoutError:
+                    continue  # the timeout is for sends; a quiet player is fine
                 if not data:
                     break
 
@@ -2460,8 +2469,33 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
 # Server
 ###############################################################################
 
+class PlayerSocket(socket.socket):
+    """A player's connection whose sends give up after SEND_TIMEOUT seconds."""
+
+    def sendall(self, data, flags=0):
+        try:
+            return super().sendall(data, flags)
+        except TimeoutError:
+            # The player stopped reading; part of a message may have gone out,
+            # so the connection is unusable: close it, and its own handler
+            # (woken in recv) logs the player out.
+            try:
+                self.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            print(f"[!] A connection took no data for {SEND_TIMEOUT} s and was closed")
+            raise
+
+
 class ThreadedTCPServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
+    daemon_threads = True
+
+    def get_request(self):
+        conn, address = self.socket.accept()
+        player = PlayerSocket(conn.family, conn.type, conn.proto, fileno=conn.detach())
+        player.settimeout(SEND_TIMEOUT)
+        return player, address
 
 with ThreadedTCPServer(("0.0.0.0", 6123), FlashGameHandler) as server:
     server.rooms = {
