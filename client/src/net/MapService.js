@@ -35,10 +35,14 @@ async function savedMapList() {
   }
 }
 
-/** Practice (Quick Play): every saved map, plus the bundled Warehouse. [{ name, data }] */
+/**
+ * Practice (Quick Play): every saved map. [{ name, data }] The bundled
+ * Warehouse (Shady Warehouse's walls on a guessed floor) only stands in when
+ * there are none.
+ */
 export async function practiceMapList() {
-  const saved = (await savedMapList()) || [];
-  return [...saved.filter(Boolean), { name: 'Warehouse', data: FALLBACK_MAPS[0].data }];
+  const saved = ((await savedMapList()) || []).filter((map) => map?.data);
+  return saved.length ? saved : [{ name: 'Warehouse', data: FALLBACK_MAPS[0].data }];
 }
 
 /** Map list indexed by slot id (MapInfo.mapList): [{ slot, name }]. */
