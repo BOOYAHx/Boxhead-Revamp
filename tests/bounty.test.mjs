@@ -74,3 +74,13 @@ test('chat: bundles split on ";" and typed text drops characters the original re
 test('a new round starts at $10,000 plus last round\'s award money', () => {
   assert.deepEqual(newStats(7000), { score: 10000, money: 17000, kills: 0, deaths: 0, bountyPoints: 0, placing: 0 });
 });
+
+test('a death drops 10% of the score as crates, like the game server', async () => {
+  const { bountyCrateTypes } = await import('../client/src/game/bounty.js');
+  assert.deepEqual(bountyCrateTypes(10000), [2]); // $1000 at the start of a round
+  assert.deepEqual(bountyCrateTypes(17600), [2, 2]); // $1760 rounds up to $2000
+  assert.deepEqual(bountyCrateTypes(12400), [2, 0]); // $1240 rounds up to $1250
+  assert.deepEqual(bountyCrateTypes(12600), [2, 1]); // $1260 rounds up to $1500
+  assert.deepEqual(bountyCrateTypes(0), []);
+  assert.equal(bountyCrateTypes(10000000).length, 10); // at most ten crates
+});

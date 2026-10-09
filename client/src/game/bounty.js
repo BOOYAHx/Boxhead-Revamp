@@ -79,6 +79,24 @@ export class BountyCrate {
   }
 }
 
+/**
+ * The bounty crates a death drops (the game server's rule): 10% of the
+ * victim's score rounded up to $250, as $1000, then $500, then $250 crates
+ * (types 2, 1, 0), at most MAX_CRATES_PER_DEATH.
+ */
+export const MAX_CRATES_PER_DEATH = 10;
+export function bountyCrateTypes(score) {
+  let bounty = Math.ceil(Math.max(0, Math.trunc(score)) / 2500) * 250;
+  const types = [];
+  for (const [type, value] of [[2, 1000], [1, 500], [0, 250]]) {
+    while (bounty >= value && types.length < MAX_CRATES_PER_DEATH) {
+      types.push(type);
+      bounty -= value;
+    }
+  }
+  return types;
+}
+
 /** A player's round statistics (Player). */
 export function newStats(roundBonus = 0) {
   return { score: START_SCORE, money: START_SCORE + roundBonus, kills: 0, deaths: 0, bountyPoints: 0, placing: 0 };

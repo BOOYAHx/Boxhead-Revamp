@@ -7,7 +7,7 @@ import { DIRECTIONS, byVector } from '../game/Direction.js';
 import { KeyState, isKey } from '../game/controls.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
-import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, chatLines, cleanChat, newStats, offlineAwards, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
+import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, bountyCrateTypes, chatLines, cleanChat, newStats, offlineAwards, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
 import { ShopState } from '../game/shop.js';
@@ -21,7 +21,7 @@ import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
 import { fetchMap } from '../net/MapService.js';
-import { cellPosToString, encodeFire, encodeHit, encodeMove, parseDeath, parseFire, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
+import { cellPosToString, posToString, encodeFire, encodeHit, encodeMove, parseDeath, parseFire, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
 import { padInt } from '../util/strings.js';
 import { CharacterView } from '../render/CharacterView.js';
 import { drawPortrait } from '../render/portrait.js';
@@ -43,7 +43,7 @@ const LEADER_COLOR = 0xffffff;
 const AUTO_SHOP_DELAY = 3000; // ShopGame.AUTO_SHOP_DELAY
 const OFFLINE_MONEY = 1000000; // practice: enough to try everything
 const OFFLINE_ROUND = 600; // practice rounds: 10 minutes, like the server's (round_length 630 with the summary)
-const KILL_SCORE = 500; // practice: score for a kill (online, the victim's bounty crates)
+const MAX_CRATES = 199; // crate indexes 000-198, like the game server
 const NPC_NAME_COLOR = '#ffb0a0';
 const TEXT_STYLE = { fontFamily: 'Verdana, sans-serif', fontSize: '11px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.55)', padding: { x: 6, y: 3 } };
 
@@ -515,14 +515,43 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Practice scoring: a death for the victim; a kill and KILL_SCORE for the killer. */
+  /** Practice scoring: a death for the victim, a kill for the killer, and the victim's bounty crates. */
   countKill(victim, killer) {
     victim.stats.deaths++;
-    if (killer && killer !== victim) {
-      killer.stats.kills++;
-      killer.stats.score += KILL_SCORE;
-    }
+    if (killer && killer !== victim) killer.stats.kills++;
+    this.dropBounty(victim);
     this.updateScores();
+  }
+
+  /**
+   * Practice: a death drops bounty crates like online (the server's rule,
+   * bounty.js bountyCrateTypes), scattered on open ground around the victim.
+   */
+  dropBounty(victim) {
+    let text = '';
+    for (const type of bountyCrateTypes(victim.stats.score)) {
+      let index = 0;
+      while (index < MAX_CRATES && this.crates.has(index)) index++;
+      if (index >= MAX_CRATES) index = this.crates.keys().next().value; // full: replace the oldest
+      this.removeCrate(index);
+      text += type + padInt(index, 3) + posToString(this.dropSpot(victim.pos));
+      this.crates.set(index, null); // reserve until addCrates places it
+    }
+    for (const [index, entry] of [...this.crates]) if (!entry) this.crates.delete(index);
+    this.addCrates(text, victim.pos);
+  }
+
+  /** A walkable point near `pos` for a dropped crate (or `pos` itself). */
+  dropSpot(pos) {
+    for (let tries = 0; tries < 10; tries++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 0.4 + Math.random() * 1.1;
+      const x = pos.x + Math.cos(angle) * distance;
+      const y = pos.y + Math.sin(angle) * distance;
+      const cell = this.map.cellAt(x, y);
+      if (cell && !cell.prop) return { x, y };
+    }
+    return { x: pos.x, y: pos.y };
   }
 
   /** Character.hurt + Game.characterHurt for the local player. */
@@ -894,13 +923,25 @@ export class GameScene extends Phaser.Scene {
 
   /** Game.checkBountyCrates: walking over a crate claims it until the server confirms. */
   checkBountyCrates() {
+    if (this.mode !== 'online') return this.collectCratesOffline();
     const p = this.player;
-    if (!p.active || p.dead || this.mode !== 'online') return;
+    if (!p.active || p.dead) return;
     for (const [index, { crate }] of this.crates) {
       if (!crate.inRange(p)) continue;
       this.removeCrate(index);
       this.claimedCrates.set(index, crate);
       this.outQueue.push('0m' + padInt(index, 3));
+    }
+  }
+
+  /** Practice: you and the computer players pick up the crates you walk over (no server to ask). */
+  collectCratesOffline() {
+    const takers = [this.player, ...this.npcs.map((b) => b.ch)].filter((ch) => ch.active && !ch.dead);
+    for (const [index, { crate }] of [...this.crates]) {
+      const taker = takers.find((ch) => crate.inRange(ch));
+      if (!taker) continue;
+      this.removeCrate(index);
+      this.giveCrate(taker, crate);
     }
   }
 
@@ -911,6 +952,11 @@ export class GameScene extends Phaser.Scene {
     const crate = this.removeCrate(index) || this.claimedCrates.get(index);
     this.claimedCrates.delete(index);
     if (!crate || !ch) return;
+    this.giveCrate(ch, crate, bountyPoints);
+  }
+
+  /** Player.pickupBountyItem: the crate's money and score (and its bounty points online). */
+  giveCrate(ch, crate, bountyPoints = 0) {
     ch.stats.bountyPoints += bountyPoints;
     ch.stats.score += crate.bounty;
     if (ch.local) {
