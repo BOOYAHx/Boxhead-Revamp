@@ -15,7 +15,7 @@ const GLOBAL_COLOR = '#ffff40'; // MMOchaLobby.globalMessage
 const DISCONNECTION_MESSAGE = 'You have been disconnected.';
 const CONNECTING_MESSAGE = 'Connecting to server...';
 const JOINING_MESSAGE = 'Joining Lobby...';
-const NAME_COLORS = { wanted: '#d72b2b', moderator: '#dfdfdf', normal: '#a6a6a6' }; // MMOchaUser colours
+const NAME_COLORS = { wanted: '#d72b2b', moderator: '#ffffff', normal: '#a6a6a6' }; // MMOchaUser colours (moderators: white)
 const MAX_CHAT_LINES = 100;
 const MAX_SENT = 10; // ChatWindow: messages remembered for the Up key
 const SPAM_LIMIT = 5; // messages per SPAM_TIME (MMOchaLobby.setSpamLimits)
@@ -731,7 +731,9 @@ export class LobbyScreen {
       row.visible = !!user;
       row.user = user || null;
       if (!user) return;
-      row.child('_nameField').text = capitalize(user.name);
+      const name = row.child('_nameField');
+      name.text = capitalize(user.name);
+      name.box.style.color = nameColor(user); // most wanted red, moderators white, like their chat lines
       row.child('_icon')?.gotoAndStop(this.social.icon(user, this.user));
     });
     if (this.userScroll) {
