@@ -174,7 +174,13 @@ export class KeyState {
     this.pressed = new Set(); // went down since the last tick
     this.target = target;
     this.onDown = (event) => {
-      if (event.repeat) return;
+      if (event.repeat) {
+        // Still held after the window lost focus (which forgets every key,
+        // e.g. when Windows pops up Sticky Keys): pick it up again, without
+        // counting it as a new press.
+        this.down.add(event.keyCode);
+        return;
+      }
       this.down.add(event.keyCode);
       this.pressed.add(event.keyCode);
     };

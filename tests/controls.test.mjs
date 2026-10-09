@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { Character } from '../client/src/game/Character.js';
-import { NO_KEY, defaultBindings, getBind, isKey, keyName, loadBindings, saveBindings, setBind } from '../client/src/game/controls.js';
+import { KeyState, NO_KEY, defaultBindings, getBind, isKey, keyName, loadBindings, saveBindings, setBind } from '../client/src/game/controls.js';
 import { Weapon, WeaponID, defaultBanks, loadBanks, saveBanks, setBankLayout, weaponBank } from '../client/src/game/weapons.js';
 
 const memory = () => {
@@ -76,4 +76,20 @@ test('weapon banks can be rearranged, saved, and characters re-sort theirs', () 
   assert.deepEqual(ch.banks[4].map((w) => w.id), [WeaponID.SHOTGUN]);
   assert.equal(ch.selectWeaponBank(4).id, WeaponID.SHOTGUN);
   defaultBanks();
+});
+
+test('a key still held when the window gets focus back works again', () => {
+  const target = new EventTarget();
+  const keys = new KeyState(target);
+  const key = (type, repeat = false) => target.dispatchEvent(Object.assign(new Event(type), { keyCode: 32, repeat }));
+  key('keydown');
+  assert.ok(keys.isDown('fire') && keys.newPress('fire'));
+  keys.endTick();
+  target.dispatchEvent(new Event('blur')); // focus lost: keyups would be missed, so all keys are let go
+  assert.ok(!keys.isDown('fire'));
+  key('keydown', true); // the held key's auto-repeat after focus comes back
+  assert.ok(keys.isDown('fire'));
+  assert.ok(!keys.newPress('fire'));
+  key('keyup');
+  assert.ok(!keys.isDown('fire'));
 });
