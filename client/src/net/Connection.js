@@ -315,8 +315,8 @@ export class Connection extends Emitter {
           return this.emit(ServerEvent.DISCONNECTED);
         }
         const index = this.peers.findIndex((p) => p.id === id);
-        if (index >= 0) this.peers.splice(index, 1);
-        return this.emit(ServerEvent.PEER_DISCONNECTED, { id });
+        const [peer] = index >= 0 ? this.peers.splice(index, 1) : [];
+        return this.emit(ServerEvent.PEER_DISCONNECTED, { id, name: peer?.name });
       }
       case 'M': {
         const id = data.substr(1, 3);

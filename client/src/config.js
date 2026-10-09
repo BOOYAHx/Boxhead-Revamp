@@ -14,3 +14,5 @@ export const MOST_WANTED_URL = params.get('mostwanted') || user.mostWantedUrl ||
 export const SERVER_NAME = user.serverName || 'Squaresville';
 // Guns, ammo and upgrades cost nothing in the shop.
 export const FREE_GUNS = !!user.freeGuns;
+// ?debug in the page URL: T shows hit boxes and coordinates (for testing; players never see them).
+export const DEBUG = params.has('debug');

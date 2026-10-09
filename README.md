@@ -124,7 +124,8 @@ Open <http://localhost:8080/>. You spawn at a random spawn point on Warehouse.
 
 Controls (same defaults as the Flash game): **arrows / WASD** move, **Shift**
 strafe (keep facing while moving). Test keys: **M** next character model,
-**C** body colour, **H** head colour, **T** show hit boxes.
+**C** body colour, **H** head colour, **T** show hit boxes (only with `?debug`
+at the end of the address, e.g. <http://localhost:8080/play.html?debug>).
 
 Things to check:
 

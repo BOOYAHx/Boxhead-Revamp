@@ -11,7 +11,7 @@ import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, bountyCrateTypes, chatLines, clea
 import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
 import { ShopState } from '../game/shop.js';
-import { FREE_GUNS } from '../config.js';
+import { DEBUG, FREE_GUNS } from '../config.js';
 import { loadLook } from '../game/profile.js';
 import { PISTOL_ID, SPLASH, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { EquipmentWorld, gunSplash } from '../game/equipment.js';
@@ -217,7 +217,7 @@ export class GameScene extends Phaser.Scene {
     on(ServerEvent.ROUND_TIME, ({ seconds }) => this.setRoundTime(seconds));
     on(ServerEvent.HANDSHAKE, ({ user }) => this.peerHandshake(user));
     on(ServerEvent.PEER_JOINED, () => this.updateScores());
-    on(ServerEvent.PEER_DISCONNECTED, ({ id }) => this.removeRemote(id));
+    on(ServerEvent.PEER_DISCONNECTED, ({ id, name }) => this.peerLeft(id, name));
     on(ServerEvent.PLAYER_MESSAGE, (message) => this.inbox.push(message));
     on(ServerEvent.SERVER_MESSAGE, ({ message }) => this.receiveServerMessage(message));
     on(ServerEvent.MESSAGE, ({ source, message }) => this.receiveMessage(source, message));
@@ -321,6 +321,13 @@ export class GameScene extends Phaser.Scene {
   applyHandshakeStats(remote, user) {
     const h = user.handshake;
     if (h) Object.assign(remote.character.stats, { score: h.score, kills: h.kills, deaths: h.deaths, bountyPoints: h.bountyPoints });
+  }
+
+  /** A player left the room: say so in the chat, then take them off the map. */
+  peerLeft(id, name) {
+    name = this.remotes.get(id)?.character.name || name;
+    if (name) this.hud.addMessage(`${name} has left the game`, { chat: true });
+    this.removeRemote(id);
   }
 
   removeRemote(id) {
@@ -1310,7 +1317,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.hud.update();
     if (!this.map) return;
-    if (this.chatInput === null && Phaser.Input.Keyboard.JustDown(this.keys.T)) {
+    if (DEBUG && this.chatInput === null && Phaser.Input.Keyboard.JustDown(this.keys.T)) {
       this.showHits = !this.showHits;
       this.coords.setVisible(this.showHits);
     }
