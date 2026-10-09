@@ -92,6 +92,7 @@ export class GameScene extends Phaser.Scene {
     this.equipment = null;
     this.equipmentView = null;
     this.spy = null;
+    this.spySounds = []; // satellite start and loop, including a loop waiting for its delay
     this.equipmentActivations = [];
     this.npcs = []; // computer players' brains (offline)
     this.npcCount = 0;
@@ -415,12 +416,27 @@ export class GameScene extends Phaser.Scene {
 
   // --- combat ----------------------------------------------------------------------
 
+  /** The local satellite view and its original start / loop / end sounds. */
+  setSpy(active, playEnd = true) {
+    if (Boolean(this.spy) === active) return;
+    for (const sound of this.spySounds) this.effects.stopSound(sound);
+    this.spySounds = [];
+    this.spy = active ? { ...this.player.pos } : null;
+    const pos = this.effects.focus || this.player.pos;
+    if (active) {
+      this.spySounds.push(this.effects.playSound('SatelliteStart', pos));
+      this.spySounds.push(this.effects.playSound('SatelliteLoop', pos, this.effects.soundLength('SatelliteStart'), { loop: true }));
+    } else if (playEnd) {
+      this.effects.playSound('SatelliteEnd', pos);
+    }
+  }
+
   /** Weapon.fire + Game.characterFire for the local player: shoot, show it, warn about ammo, tell the room. */
   fireLocal() {
     const p = this.player;
     const w = p.weapon;
     if (w.id === WeaponID.SPY) {
-      this.spy = this.spy ? null : { ...p.pos };
+      this.setSpy(!this.spy);
       w.timeSinceFire = 0;
       return;
     }
@@ -588,7 +604,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Game.characterDeath: kill message and the respawn countdown. */
   localDeath(killer) {
-    this.spy = null;
+    this.setSpy(false);
     this.player.weapon.charge = 0;
     this.addKillMessage(killer, this.player);
     this.hud.showWarning('You will respawn in: [seconds]', this.player.respawnTime);
@@ -715,7 +731,7 @@ export class GameScene extends Phaser.Scene {
       if (ch.local) this.playReloadSound(weapon, change ? this.effects.soundLength(change) : 0);
     }
     if (!ch.local) return;
-    this.spy = null;
+    this.setSpy(false);
     if (this.mode === 'online') this.outQueue.push('0q' + padInt(weapon.id, 2));
     this.ui?.slider.update(weapon);
   }
@@ -1064,7 +1080,7 @@ export class GameScene extends Phaser.Scene {
   endGame(awardIDs) {
     if (this.gameOver || !this.player) return;
     this.gameOver = true;
-    this.spy = null;
+    this.setSpy(false);
     this.equipmentActivations = [];
     if (this.connection) this.connection.equipmentMessages = [];
     this.closeChat();
@@ -1360,10 +1376,10 @@ export class GameScene extends Phaser.Scene {
       this.openShop();
     }
     const captured = !!(this.ui?.shopOpen || this.ui?.menuOpen); // Game.captureInput: the character stands still
-    if (p.dead) this.spy = null;
+    if (p.dead) this.setSpy(false);
     if (this.ui?.shopOpen) this.ui.shop.updateRespawnTime(Math.max(0, Math.ceil(p.respawnTime / 1000)), p.active, p.dead);
     if (captured) {
-      this.spy = null;
+      this.setSpy(false);
       p.moveDir = null;
       p.firing = false;
     } else if (this.chatInput === null && p.active) {
@@ -1485,6 +1501,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   shutdown() {
+    this.setSpy(false, false);
     this.mapLoad.abort();
     this.hideMapLoading();
     // Captured keys are blocked page-wide: release them so the menus can be typed in.
@@ -1517,3 +1534,4 @@ export class GameScene extends Phaser.Scene {
     this.player = null;
   }
 }
+

@@ -6,6 +6,7 @@ import { Character } from '../client/src/game/Character.js';
 import { GameMap, HitRect, traceShot } from '../client/src/game/world.js';
 import { E } from '../client/src/game/Direction.js';
 import { Connection } from '../client/src/net/Connection.js';
+import { newStats } from '../client/src/game/bounty.js';
 
 const stats = Object.fromEntries([ID.GRENADES, ID.BARRELS, ID.BARRICADES, ID.C4, ID.MINES, ID.AIRSTRIKE, ID.SPY, ID.GRENADE_LAUNCHER, ID.PLASMA].map((id) => [id, { name: 'Equipment', shortName: 'Equipment', damage: 80, ammo: id === ID.SPY ? null : 10, ammoIncrement: 2, range: 10, spread: 0, fireDelay: 0.5, moveSpeed: 1, cost: 1000, ammoCost: 500, upgrades: [] }]));
 setWeaponStats(stats);
@@ -341,3 +342,117 @@ test('late placement acknowledgement still switches away from empty equipment af
   assert.equal(g.player.weapon.id, 0);
   assert.equal(w.ammo.count, 0);
 });
+
+function audibleSatellite() {
+  const g = scene();
+  const weapon = g.player.pickupWeapon(new Weapon(ID.SPY));
+  g.player.selectWeapon(weapon);
+  const played = [], stopped = [];
+  g.effects.focus = { ...g.player.pos };
+  g.effects.playSound = (name, pos, delay = 0, options = {}) => {
+    const sound = { name, pos: { ...pos }, delay, ...options };
+    played.push(sound);
+    return sound;
+  };
+  g.effects.stopSound = (sound) => { if (sound) stopped.push(sound); };
+  g.effects.soundLength = (name) => name === 'SatelliteStart' ? 240 : 0;
+  return { g, played, stopped };
+}
+
+test('satellite plays its start then delayed loop; returning cancels both and plays one end cue', () => {
+  const { g, played, stopped } = audibleSatellite();
+  g.fireLocal();
+  assert.deepEqual(played.map((s) => s.name), ['SatelliteStart', 'SatelliteLoop']);
+  assert.equal(played[1].loop, true);
+  assert.equal(played[1].delay, 240);
+  assert.deepEqual(played[1].pos, g.effects.focus);
+  g.spy.x += 10; // panning the satellite does not move the listener's electronic cue
+  g.setSpy(true);
+  assert.equal(played.length, 2);
+  g.fireLocal(); // returning before the start finishes must cancel the delayed loop too
+  assert.deepEqual(stopped, played.slice(0, 2));
+  assert.equal(played.at(-1).name, 'SatelliteEnd');
+  assert.deepEqual(g.spySounds, []);
+  g.setSpy(false);
+  assert.equal(played.length, 3);
+  g.fireLocal();
+  assert.deepEqual(played.slice(3).map((s) => s.name), ['SatelliteStart', 'SatelliteLoop']);
+  assert.notEqual(played[4], stopped[1]);
+  assert.equal(g.outQueue.length, 0);
+});
+
+test('satellite audio stops on death, local weapon changes and round end', () => {
+  for (const reason of ['death', 'weapon', 'round']) {
+    const { g, played, stopped } = audibleSatellite();
+    g.fireLocal();
+    if (reason === 'death') {
+      g.addKillMessage = () => {};
+      g.localDeath(g.remotes.get('002').character);
+    } else if (reason === 'weapon') {
+      g.weaponChanged(g.remotes.get('002').character, false);
+      assert.ok(g.spy, 'another player changing weapons keeps our satellite active');
+      g.player.selectWeaponByID(0);
+      g.weaponChanged(g.player, false);
+    } else {
+      g.player.stats = newStats();
+      g.remotes.get('002').character.stats = newStats();
+      Object.assign(g.hud, { setInput() {}, showSummary() {}, setSummaryCountdown() {}, clearWarnings() {} });
+      g.endGame('');
+    }
+    assert.equal(g.spy, null, reason);
+    assert.deepEqual(stopped, played.slice(0, 2), reason);
+    assert.equal(played.filter((s) => s.name === 'SatelliteEnd').length, 1, reason);
+  }
+});
+
+test('opening the menu or shop cancels the satellite loop on the next tick', () => {
+  for (const panel of ['menuOpen', 'shopOpen']) {
+    const { g, played, stopped } = audibleSatellite();
+    g.fireLocal();
+    g.mode = 'offline';
+    g.player.active = false;
+    g.remotes.clear();
+    g.ui = { [panel]: true, shop: { updateRespawnTime() {} } };
+    g.keyState = { newPress: () => false, endTick() {} };
+    g.processWeapons = () => {};
+    g.checkBountyCrates = () => {};
+    g.tick();
+    assert.equal(g.spy, null, panel);
+    assert.deepEqual(stopped, played.slice(0, 2), panel);
+  }
+});
+
+test('satellite shutdown cancels scheduled audio without playing an exit cue', () => {
+  const { g, played, stopped } = audibleSatellite();
+  g.fireLocal();
+  const savedDocument = globalThis.document, savedWindow = globalThis.window;
+  try {
+    globalThis.document = { removeEventListener() {} };
+    globalThis.window = { ...savedWindow, removeEventListener() {} };
+    g.mapLoad = { abort() {} };
+    g.hideMapLoading = () => {};
+    g.input = { keyboard: { clearCaptures() {} } };
+    g.effects.destroy = () => {};
+    g.hud.destroy = () => {};
+    g.shutdown();
+    assert.equal(g.spy, null);
+    assert.deepEqual(stopped, played);
+    assert.equal(played.length, 2);
+    assert.deepEqual(g.spySounds, []);
+  } finally {
+    globalThis.document = savedDocument;
+    globalThis.window = savedWindow;
+  }
+});
+
+test('satellite view still opens and closes when audio is unavailable', () => {
+  const g = scene();
+  g.player.selectWeapon(g.player.pickupWeapon(new Weapon(ID.SPY)));
+  g.effects.playSound = () => null;
+  g.fireLocal();
+  assert.ok(g.spy);
+  g.fireLocal();
+  assert.equal(g.spy, null);
+});
+
+
