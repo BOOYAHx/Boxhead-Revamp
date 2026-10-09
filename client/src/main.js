@@ -10,6 +10,7 @@ import { GameScene } from './scenes/GameScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
 import { Intro } from './ui/intro.js';
 import { watchForUpdates } from './net/updates.js';
+import { keepConsoleKeys } from './ui/keyboard.js';
 
 loadPreferences();
 loadBindings(); // the Controls screen's keys
@@ -43,5 +44,17 @@ game.registry.set('app', app);
 game.registry.set('intro', intro);
 window.boxheadApp = app;
 
+// Install after Phaser's keyboard manager so the game receives keys before
+// their browser actions are cancelled (including modified/repeating Tab).
+const captureConsole = () => {
+  const stage = document.getElementById('play-stage');
+  if (!stage) return;
+  const release = keepConsoleKeys(stage, { playing: () => game.scene.isActive('game') });
+  game.events.once('destroy', release);
+};
+if (game.isRunning) captureConsole();
+else game.events.once('ready', captureConsole);
+
 // "A new version is available" after the website is updated.
 watchForUpdates(app, document.getElementById('play-stage') || document.body);
+
