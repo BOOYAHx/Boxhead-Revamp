@@ -9,6 +9,8 @@
 import { FlashLibrary, Stage } from './flash.js';
 
 const BASE = 'assets/game/intro/';
+// Begin these small bitmaps before the SVG/font work and the bulk game downloads.
+const ART = [BASE + 'bitmaps/1.png', BASE + 'bitmaps/2.png'];
 const VERSION = 'Version 1.00'; // MainFactory: "Version " + Constants.VERSION (100)
 const FRAME = 1000 / 30; // BBH.swf runs at 30 frames a second
 const TO_BLACK = 38 * FRAME; // Intros: up to the "Black" label
@@ -33,7 +35,14 @@ export class Intro {
 
   async build() {
     try {
-      const lib = await FlashLibrary.load(BASE, 'intro-');
+      const artwork = ART.map((src) => {
+        const image = new Image();
+        image.fetchPriority = 'high';
+        image.src = src;
+        return image.decode();
+      });
+      // Nothing is mounted until both logo and hunters can be drawn together.
+      const [lib] = await Promise.all([FlashLibrary.load(BASE, 'intro-'), Promise.all(artwork)]);
       // The logo is a small bitmap the original drew unsmoothed; stretched to a large
       // window that turns its edges blocky, so it is smoothed here.
       for (const image of lib.defs.querySelectorAll('image')) image.style.imageRendering = 'auto';
@@ -47,6 +56,7 @@ export class Intro {
       if (this.bar) {
         this.fill = lib.create(FULL_FILL);
         this.bar.content.insertBefore(this.fill.el, this.bar.content.children[1] || null);
+        this.progress(0);
       }
       const loading = screen.child('loadingField');
       if (loading) loading.text = '';
