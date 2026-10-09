@@ -1,9 +1,9 @@
 // Drawing resolution. The game world is always the original 700x490 window
 // (everyone sees the same area). "Classic" draws it at that size and lets the
-// browser stretch it, like the Flash player. "Enhanced" draws it at a whole
-// multiple (2x, 3x...) at or just above the screen's real resolution, with
-// the sprites' pixels kept crisp, and the browser shrinks that slightly to
-// fit: text, lines and effects are sharp and sprite edges stay clean.
+// browser stretch it, like the Flash player. "Enhanced" draws it at the size
+// it is shown on the screen (in the screen's real pixels), so the browser
+// never has to shrink or stretch the picture: shrinking a 2x picture to a
+// little over 1x made grass and sprite edges grainy and jagged.
 
 import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
@@ -36,15 +36,16 @@ export function wantedScale() {
   const height = frame?.clientHeight || window.innerHeight;
   const fit = Math.min(width / WINDOW_WIDTH, height / WINDOW_HEIGHT);
   const scale = fit * (window.devicePixelRatio || 1);
-  return Math.max(1, Math.min(MAX_SCALE, Math.ceil(scale - 0.1)));
+  return Math.max(1, Math.min(MAX_SCALE, Math.floor(scale * 100) / 100));
 }
 
 /**
- * Crisp (nearest-pixel) sprites when enhanced, smooth like Flash otherwise.
- * Upscaled sheets are always smooth (they are drawn smaller than their pixels).
+ * Original-size art: crisp (nearest-pixel) at a whole 2x, 3x..., smooth like
+ * Flash otherwise (at in-between sizes nearest-pixel makes uneven, jagged
+ * pixels). Upscaled sheets are always smooth (drawn smaller than their pixels).
  */
 export function applyFilters(textures, isHd = () => false) {
-  const crisp = Display.scale > 1;
+  const crisp = Display.scale > 1 && Number.isInteger(Display.scale);
   for (const key of textures.getTextureKeys()) {
     if (!key.startsWith('sheet:') && !key.startsWith('img:')) continue;
     const smooth = !crisp || isHd(key);

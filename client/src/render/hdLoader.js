@@ -30,7 +30,7 @@ export function shrink(img, from, to) {
 }
 
 /** The HD scale worth keeping on this screen: the drawing scale, at least 2. */
-export const usefulScale = (scale) => Math.min(scale, Math.max(2, Display.scale));
+export const usefulScale = (scale) => Math.min(scale, Math.max(2, Math.ceil(Display.scale)));
 
 /**
  * Swap in every upscaled sheet. `busy()` is true while a match is running.

@@ -74,6 +74,7 @@ export class MapView {
         if (scene.textures.exists(key)) scene.textures.remove(key);
         const canvas = scene.textures.createCanvas(key, Math.ceil(width * scale), Math.ceil(height * scale));
         const ctx = canvas.getContext();
+        ctx.imageSmoothingQuality = 'high'; // the upscaled textures are drawn smaller: average them, don't skip pixels
         ctx.setTransform(scale, 0, 0, scale, -left * scale, -top * scale);
         ctx.fillStyle = '#' + map.backgroundColor.toString(16).padStart(6, '0');
         ctx.fillRect(left, top, width, height);
