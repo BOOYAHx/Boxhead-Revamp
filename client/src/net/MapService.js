@@ -35,6 +35,12 @@ async function savedMapList() {
   }
 }
 
+/** Practice (Quick Play): every saved map, plus the bundled Warehouse. [{ name, data }] */
+export async function practiceMapList() {
+  const saved = (await savedMapList()) || [];
+  return [...saved.filter(Boolean), { name: 'Warehouse', data: FALLBACK_MAPS[0].data }];
+}
+
 /** Map list indexed by slot id (MapInfo.mapList): [{ slot, name }]. */
 export async function fetchMapList() {
   const saved = await savedMapList();

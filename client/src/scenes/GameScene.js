@@ -20,7 +20,7 @@ import { EquipmentView } from '../render/EquipmentView.js';
 import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
 import { ServerEvent } from '../net/Connection.js';
-import { fetchMap } from '../net/MapService.js';
+import { fetchMap, practiceMapList } from '../net/MapService.js';
 import { cellPosToString, posToString, encodeFire, encodeHit, encodeMove, parseDeath, parseFire, parseMove, shouldSendMove, stringToCellPos } from '../net/protocol.js';
 import { padInt } from '../util/strings.js';
 import { CharacterView } from '../render/CharacterView.js';
@@ -44,6 +44,7 @@ const AUTO_SHOP_DELAY = 3000; // ShopGame.AUTO_SHOP_DELAY
 const OFFLINE_MONEY = 1000000; // practice: enough to try everything
 const OFFLINE_ROUND = 600; // practice rounds: 10 minutes, like the server's (round_length 630 with the summary)
 const MAX_CRATES = 199; // crate indexes 000-198, like the game server
+let lastPracticeMap = null; // practice rounds change map
 const NPC_NAME_COLOR = '#ffb0a0';
 const TEXT_STYLE = { fontFamily: 'Verdana, sans-serif', fontSize: '11px', color: '#ffffff', backgroundColor: 'rgba(0,0,0,0.55)', padding: { x: 6, y: 3 } };
 
@@ -179,11 +180,26 @@ export class GameScene extends Phaser.Scene {
     this.app.leaveGame();
   }
 
+  /** Practice: a random map from all of them each round, never the same one twice in a row. */
   async loadOfflineMap() {
     const { signal } = this.mapLoad;
-    // Give the browser a paint before constructing the locally bundled map.
-    await this.loadingPaint();
-    if (!signal.aborted) this.loadMap(parseMap(FALLBACK_MAPS[0].data));
+    // Give the browser a paint (the loading screen) while the list arrives, before constructing the map.
+    const [maps] = await Promise.all([practiceMapList(), this.loadingPaint()]);
+    if (signal.aborted) return;
+    const choices = maps.length > 1 ? maps.filter((m) => m.name !== lastPracticeMap) : maps;
+    const choice = choices[Math.floor(Math.random() * choices.length)];
+    let map;
+    try {
+      map = parseMap(choice.data);
+      this.mapName = choice.name;
+    } catch (error) {
+      console.error('Could not load map', choice.name, error);
+      map = parseMap(FALLBACK_MAPS[0].data);
+      this.mapName = 'Warehouse';
+    }
+    lastPracticeMap = this.mapName;
+    this.loadMap(map);
+    this.hud?.showWarning(this.mapName, 3000); // which map this round is
   }
 
   loadingPaint() {
@@ -1311,7 +1327,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
     const tab = this.keyState.isDown('scores') && this.chatInput === null && (this.mode === 'online' || this.npcs.length > 0);
     if (this.ui) this.ui.showScoreboard(tab ? this.scoreRows(this.players()) : null);
-    else this.hud.showScoreboard(`${this.room} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
+    else this.hud.showScoreboard(`${this.room || 'Quick Play'} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
     this.drawDebug();
     const p = this.player.pos;
     this.coords.setText(`x ${p.x.toFixed(2)}  y ${p.y.toFixed(2)}`);
