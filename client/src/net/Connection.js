@@ -289,10 +289,13 @@ export class Connection extends Emitter {
         return this.emit(ServerEvent.AUTHENTICATE, { id, user });
       }
       case 'U': {
-        // Like the Flash client, only peers are updated: the server also sends
-        // our own handshake, in the game-room layout even inside the lobby.
         const id = data.substr(1, 3);
-        const user = this.peers.find((p) => p.id === id);
+        const own = id === this.clientID;
+        // Career totals refresh through a lobby handshake, without another
+        // authentication event. Own game handshakes never replace those totals.
+        // Older servers also sent their own game layout inside the lobby.
+        if (own && (this.room !== '_' || !/^\d+(?:;\d+){4};[0-9][01]$/.test(data.substr(24)))) return;
+        const user = own ? this.localUser : this.peers.find((p) => p.id === id);
         if (!user) return;
         if (this.room === '_') updateUserFromLobbyHandshake(user, data.substr(4));
         else updateUserFromGameHandshake(user, data.substr(4));

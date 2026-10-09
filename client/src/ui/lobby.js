@@ -725,6 +725,10 @@ export class LobbyScreen {
     this.placeOnlineTab();
     const online = this.onlineTab?.child('_nameField');
     if (online) online.text = `${this.players.length} ONLINE`;
+    if (this.statsPopup?.visible && this.statsUser) {
+      const current = this.players.find((user) => sameName(user, this.statsUser));
+      if (current) this.renderUserStats((this.statsUser = current));
+    }
   }
 
   showUsers(index, moveBar = true) {
@@ -1121,6 +1125,17 @@ export class LobbyScreen {
     if (!this.interfaceEnabled || !this.statsPopup || !user) return;
     this.closeUserPopups();
     const popup = this.statsPopup;
+    this.statsUser = user;
+    this.renderUserStats(user);
+    const waiting = popup.child('_waitingAnim');
+    if (waiting) waiting.visible = false;
+    this.statsShownAt = performance.now();
+    this.placePopup(popup, x, y, 76, -14, 104);
+  }
+
+  /** Redraw an open stats panel when fresh profile totals arrive. */
+  renderUserStats(user) {
+    const popup = this.statsPopup;
     const name = popup.child('_nameField');
     name.text = capitalize(user.name);
     name.box.style.color = nameColor(user);
@@ -1128,10 +1143,6 @@ export class LobbyScreen {
     const n = (v) => String(v || 0);
     popup.child('_statsField').text = 'Bounty Points\nKills\nDeaths\nWins\nRounds';
     popup.child('_valuesField').text = [stats.bounty, stats.kills, stats.deaths, stats.wins, (stats.wins || 0) + (stats.losses || 0)].map(n).join('\n');
-    const waiting = popup.child('_waitingAnim');
-    if (waiting) waiting.visible = false;
-    this.statsShownAt = performance.now();
-    this.placePopup(popup, x, y, 76, -14, 104);
   }
 
   /** Show a popup at (x, y), kept inside the stage (MMOchaLobby.constrainPopup). */

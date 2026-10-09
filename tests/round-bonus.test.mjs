@@ -105,3 +105,22 @@ test('practice award cash cannot leak into an online room', (t) => {
   scene.loadMap(new GameMap(4, 4));
   assert.equal(scene.player.stats.money, 10000);
 });
+
+test('kills, deaths, score and cash reset for the next round without a page refresh', (t) => {
+  const scene = setup(t);
+  Object.assign(scene.player.stats, { kills: 7, deaths: 3, score: 25000, bountyPoints: 8, money: 22000 });
+  restart(scene);
+  assert.deepEqual(scene.player.stats, newStats());
+  assert.equal(scene.shop.wallet, scene.player.stats);
+});
+
+test('joining another game resets match stats and preserves saved profile totals', (t) => {
+  const scene = setup(t);
+  const career = { kills: 50, deaths: 20, wins: 6, losses: 3, bounty: 15000 };
+  scene.app.connection.localUser.stats = career;
+  Object.assign(scene.player.stats, { kills: 9, deaths: 5, score: 24000, bountyPoints: 6, money: 18000 });
+  scene.init({ mode: 'online', app: scene.app, room: 'Another game' });
+  scene.loadMap(new GameMap(4, 4));
+  assert.deepEqual(scene.player.stats, newStats());
+  assert.equal(scene.app.connection.localUser.stats, career);
+});

@@ -656,7 +656,8 @@ def lobby_user_packet(account_id: str) -> bytes:
 
     username = USERS[account_id]["username"]
     name20 = fmt_name_20(USERS[account_id].get("display_username", username))
-    data = USER_DB[username]
+    with USER_DB_LOCK:
+        data = USER_DB[username].copy()
     
 
     level = effective_user_level(username, data)
@@ -1548,8 +1549,10 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             mode_suffix = "" if room_name == "_" else room.get("mode", GAME_MODE_FFA)
             self.send(f"C{wire_id(self.account_id)}{mode_suffix}\x00".encode("utf-8"))
 
-            # IMPORTANT: send self game handshake
-            self.send(game_user_packet(self.account_id))
+            # The lobby layout carries saved profile totals; game-room stats
+            # must not be mistaken for those totals when returning to the lobby.
+            self.send(lobby_user_packet(self.account_id) if room_name == "_"
+                      else game_user_packet(self.account_id))
             # Blasting "100" into the positional and state slots 
             self.send(f"M{wire_id(self.account_id)}6100\x00".encode("utf-8"))
 
@@ -1851,6 +1854,8 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
 
         # ROOM LIST REQUEST
         elif packet == "01":
+            if USERS[self.account_id].get('room') == '_':
+                self.send(lobby_user_packet(self.account_id))
             self.send(build_room_list_bytes(self.server))
             return
         
