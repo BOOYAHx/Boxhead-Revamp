@@ -2,6 +2,7 @@
 
 import { WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { Preferences } from '../game/preferences.js';
+import { parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { loadHdSheets } from '../render/hdLoader.js';
 import { ASSET_ROOT, imageURL, isHdTexture, loadSheets, registerFrames, setAtlas, setHdSheets } from '../render/assets.js';
 import { LEADER_ICON, LEADER_ICON_URL } from '../render/CharacterView.js';
@@ -34,6 +35,8 @@ export class BootScene extends Phaser.Scene {
       return;
     }
     setAtlas(atlas);
+    // Weapon names and stats, for the menus too (Options > Weapon Banks), not just a match.
+    setWeaponStats(parseWeaponStats(this.cache.text.get('constants') || ''));
     loadSheets(this.load);
     for (const name of manifest.images) this.load.image('img:' + name, imageURL(name));
     this.load.image(LEADER_ICON, LEADER_ICON_URL);
