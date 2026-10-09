@@ -42,6 +42,37 @@ git commit -m "Add HD textures and saved maps"
 git push
 ```
 
+## Moderator commands
+
+Moderators can type these in lobby chat, game chat, or the console (opened
+with the backquote key):
+
+* `/warn name message` sends a private warning to that player.
+* `/ban name minutes reason` removes that player and blocks their account
+  for **1–960 whole minutes**. For example: `/ban Hunter 30 Repeated spam`.
+
+Use the name of a player in your current room. Commands are case-insensitive;
+messages keep their original capitalization. A moderator cannot ban themselves.
+Command help appears in the lobby only for moderators. The server checks every
+request against its own account data, including requests from modified clients.
+
+Existing accounts with a `level` greater than zero in the server's `users.db`,
+or names in `MODERATOR_USERNAMES` in `bbh-server-hunter-fix_2.py`, are moderators.
+No account is promoted automatically. Role changes require restarting the game
+server and logging in again. Prefer `users.db` for host-specific roles so a
+normal `git pull` does not conflict with edits to the tracked Python file.
+
+Timed bans are stored beside `users.db` in `users.db.moderation.sqlite3` and
+expire automatically, including after a server restart. Keep this file with
+your host backups. Bans apply to the account, so players sharing an IP are
+unaffected.
+
+This update changes the game server. When running the default `tools/host.py`
+setup (including `boxhead.service`), **`git pull` automatically restarts the
+game server**, briefly disconnecting active games. Refresh the browser to load
+the commands. If you run the Python game server directly, restart it after
+pulling the update. No new dependency or build step is needed.
+
 ## Progress
 
 The port is built in small steps. Each one is tested before the next starts.

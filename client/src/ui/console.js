@@ -5,6 +5,7 @@
 // (Input.pause / Game.captureInput).
 
 import { ServerEvent } from '../net/Connection.js';
+import { runModeratorCommand } from '../game/moderation.js';
 import { Stage } from './flash.js';
 
 const MAX_MESSAGES_IN = 20; // typed lines kept for Up / Down
@@ -216,6 +217,7 @@ export class GameConsole {
     messagesIn.push(text);
     while (messagesIn.length > MAX_MESSAGES_IN) messagesIn.shift();
     this.inIndex = messagesIn.length;
+    if (runModeratorCommand(this.connection, text.startsWith('/') ? text : '/' + text, print)) return;
     if (text.charAt(0) === '/') text = text.slice(1);
     const args = text.toLowerCase().split(' ');
     const command = args.shift();

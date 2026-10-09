@@ -6,6 +6,7 @@ import { MOST_WANTED_URL } from '../config.js';
 import { COLORS, MODELS, tintFor } from '../game/bodyParts.js';
 import { DIRECTIONS, SW } from '../game/Direction.js';
 import { Social } from '../game/social.js';
+import { moderatorHelp } from '../game/moderation.js';
 
 const LOBBY_FRAME = 4; // background frames with the premiums tab hidden (Constants.HIDE_PREMIUMS)
 const MOST_WANTED_FRAME = 6;
@@ -403,9 +404,11 @@ export class LobbyScreen {
       span.style.color = WELCOME_COLOR;
       replacing.appendChild(span);
       this.print([[lines[1], WELCOME_COLOR]], replacing);
+      for (const line of moderatorHelp(this.user)) this.print([[line, MOD_MESSAGE_COLOR]]);
       return;
     }
     for (const line of lines) this.print([[line, WELCOME_COLOR]]);
+    for (const line of moderatorHelp(this.user)) this.print([[line, MOD_MESSAGE_COLOR]]);
   }
 
   syncChatScroll() {
@@ -564,6 +567,7 @@ export class LobbyScreen {
   /** MMOchaLobby.sendPrivateChat: "c" + text to that player only, shown on their page. */
   sendPrivateChat(text, page) {
     if (!this.spamCheck(page)) return;
+    if (this.handlers.moderate?.(text, (message) => this.print([[message, MOD_MESSAGE_COLOR]], null, page))) return;
     if (!this.players.some((p) => sameName(p, page.user))) {
       this.print([[`${capitalize(page.user.name)} is not in the lobby.`, null]], null, page);
       return;

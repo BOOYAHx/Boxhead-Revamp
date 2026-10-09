@@ -32,12 +32,14 @@ SEND_TIMEOUT = 10  # seconds
 USER_DB = {}
 USER_DB_LOCK = threading.RLock()
 SESSIONS_LOCK = threading.RLock()
+MODERATION_LOCK = threading.RLock()  # serialize ban commits with login admission
 DEPLOYABLE_LOCK = threading.RLock()
 CRATE_LOCK = threading.RLock()
 MAX_MAP_CRATES = 199
 CRATE_ID_WIDTH = 3
 MAX_CRATES_PER_DEATH = 10  # Upper limit, not a guaranteed number of drops.
 MAX_WARNING_MESSAGE_LENGTH = 240
+MAX_BAN_MINUTES = 960  # original /ban limit
 
 # --- Game modes -------------------------------------------------------------
 # The client sends the mode as the first character of the "02" create header
@@ -71,7 +73,7 @@ USERS = {}  # account_id -> dict(socket, username, slot, room)
 ###############################################################################
 
 def is_configured_moderator(username):
-    return str(username).casefold() in MODERATOR_USERNAMES
+    return str(username).casefold() in {str(name).casefold() for name in MODERATOR_USERNAMES}
 
 
 def effective_user_level(username, data):
@@ -105,6 +107,45 @@ def account_is_moderator(account_id):
             return int(data.get("level", "0")) > 0
         except (TypeError, ValueError):
             return False
+
+def clean_moderation_message(message):
+    return ''.join(char for char in message if ord(char) >= 32 and not 127 <= ord(char) <= 159).strip()[:MAX_WARNING_MESSAGE_LENGTH]
+
+
+def open_moderation_store():
+    """Keep timed account bans on the host, independent of a player's IP or slot."""
+    connection = sqlite3.connect(DB_FILE + '.moderation.sqlite3', timeout=10)
+    try:
+        connection.execute('CREATE TABLE IF NOT EXISTS account_bans ('
+                           'account_id TEXT PRIMARY KEY, expires_at REAL NOT NULL, '
+                           'reason TEXT NOT NULL, moderator_id TEXT NOT NULL)')
+        connection.commit()
+        return connection
+    except Exception:
+        connection.close()
+        raise
+
+
+def active_account_ban(account_id, now=None):
+    if not os.path.exists(DB_FILE + '.moderation.sqlite3'):
+        return None
+    now = time.time() if now is None else now
+    with closing(open_moderation_store()) as connection, connection:
+        record = connection.execute('SELECT expires_at, reason FROM account_bans WHERE account_id=?',
+                                    (str(account_id),)).fetchone()
+        if record is None:
+            return None
+        if record[0] <= now:
+            connection.execute('DELETE FROM account_bans WHERE account_id=?', (str(account_id),))
+            return None
+        return {'minutes': max(1, math.ceil((record[0] - now) / 60)), 'reason': record[1]}
+
+
+def save_account_ban(account_id, minutes, reason, moderator_id):
+    with closing(open_moderation_store()) as connection, connection:
+        connection.execute('INSERT OR REPLACE INTO account_bans VALUES (?, ?, ?, ?)',
+                           (str(account_id), time.time() + minutes * 60, reason, str(moderator_id)))
+
 
 def log_player_ip(username, ip_address):
     """Appends a successful login to a dedicated IP log file."""
@@ -1027,22 +1068,107 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             old_socket.sendall(DUPLICATE_LOGIN)
         except (OSError, AttributeError):
             pass
+        self.close_reserved_session(account_id, old)
+        print(f"[~] {old.get('display_username', account_id)} logged in again; the earlier session was closed")
+
+    def close_reserved_session(self, account_id, user):
+        """Finish cleanup after this handler claimed the session's closing flag."""
         try:
             self.leave_current_room(account_id)
         finally:
+            target_socket = user.get('socket')
             try:
-                old_socket.shutdown(socket.SHUT_RDWR)
+                target_socket.shutdown(socket.SHUT_RDWR)
             except (OSError, AttributeError):
                 pass
             try:
-                old_socket.close()
+                target_socket.close()
             except (OSError, AttributeError):
                 pass
             with SESSIONS_LOCK:
-                if USERS.get(account_id) is old:
+                if USERS.get(account_id) is user:
                     USERS.pop(account_id, None)
                     SLOTS.release(account_id)
-        print(f"[~] {old.get('display_username', account_id)} logged in again; the earlier session was closed")
+
+    def reject_banned_login(self, account_id):
+        try:
+            ban = active_account_ban(account_id)
+        except (OSError, sqlite3.Error) as error:
+            print(f'[MOD BAN] Could not check bans: {error}')
+            self.send(b'10;0;Unable to check account bans. Please try again later.\x00')
+            return True
+        if ban:
+            self.send(f"0e{ban['minutes']}; {ban['reason']}\x00".encode('utf-8'))
+            return True
+        return False
+
+    def moderation_result(self, message):
+        self.send(f'0t{message}\x00'.encode('utf-8'))
+
+    def handle_moderation(self, packet):
+        # Never authorize from a client-supplied level, name or target ID.
+        if not account_is_moderator(self.account_id):
+            self.moderation_result('Only moderators can use this command.')
+            return
+        is_ban = packet.startswith('0e')
+        if is_ban:
+            fields = packet[2:].split(';', 2)
+            if (len(fields) != 3 or not fields[1].isascii() or not fields[1].isdigit()
+                    or len(fields[1]) > 3 or not 1 <= int(fields[1]) <= MAX_BAN_MINUTES):
+                self.moderation_result('Usage: /ban name minutes reason (1–960 minutes).')
+                return
+            target_wire, duration, reason = fields
+            minutes = int(duration)
+        else:
+            target_wire, reason = packet[2:5], packet[5:]
+        reason = clean_moderation_message(reason)
+        if len(target_wire) != 3 or not target_wire.isascii() or not target_wire.isdigit() or not reason:
+            self.moderation_result('Provide a player and a message.')
+            return
+
+        # The lock keeps a reconnect from being admitted between the ban check
+        # and its durable commit. Target delivery and room cleanup happen outside it.
+        with MODERATION_LOCK:
+            with SESSIONS_LOCK:
+                target = next(((account, user) for account, user in USERS.items()
+                               if f"{user.get('slot', 0):03d}" == target_wire and not user.get('closing')), None)
+            if target is None:
+                self.moderation_result('Player is no longer connected.')
+                return
+            target_account, target_user = target
+            name = target_user.get('display_username', target_user['username'])
+            if is_ban:
+                if target_account == self.account_id:
+                    self.moderation_result('You cannot ban yourself.')
+                    return
+                try:
+                    save_account_ban(target_account, minutes, reason, self.account_id)
+                except (OSError, sqlite3.Error) as error:
+                    print(f'[MOD BAN] Could not save ban: {error}')
+                    self.moderation_result('Ban could not be saved. Player was not banned.')
+                    return
+                with SESSIONS_LOCK:
+                    owns_cleanup = USERS.get(target_account) is target_user and not target_user.get('closing')
+                    if owns_cleanup:
+                        target_user['closing'] = True
+
+        if is_ban:
+            try:
+                target_user['socket'].sendall(f'0e{minutes}; {reason}\x00'.encode('utf-8'))
+            except OSError:
+                pass
+            finally:
+                if owns_cleanup:
+                    self.close_reserved_session(target_account, target_user)
+            self.moderation_result(f'Banned {name} for {minutes} minute(s): {reason}')
+        else:
+            try:
+                target_user['socket'].sendall(f'0g{reason}\x00'.encode('utf-8'))
+            except OSError:
+                self.moderation_result('Warning could not be delivered; player disconnected.')
+                return
+            self.moderation_result(f'Warning sent to {name}: {reason}')
+        print(f"[MOD {'BAN' if is_ban else 'WARN'}] {self.username} -> {name}: {reason}")
 
     def _notify_round(self, room_name, room, payload):
         if self.server.rooms.get(room_name) is not room:
@@ -1298,12 +1424,19 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                 self.send(b"10;0;Banned\x00")
                 return
 
-            with SESSIONS_LOCK:
-                previous = USERS.get(acc_id)
+            with MODERATION_LOCK:
+                if self.reject_banned_login(acc_id):
+                    return
+                with SESSIONS_LOCK:
+                    previous = USERS.get(acc_id)
             if previous is not None:
                 self.take_over_session(acc_id, previous)
 
-            with SESSIONS_LOCK:
+            with MODERATION_LOCK, SESSIONS_LOCK:
+                # Recheck after session takeover; a moderator may have banned
+                # the account while its earlier connection was being cleaned up.
+                if self.reject_banned_login(acc_id):
+                    return
                 if acc_id in USERS:
                     error = b"10;0;Account already logged in\x00"
                 elif not SLOTS.free:
@@ -1336,58 +1469,13 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             # ignore any pre-auth junk
             return
 
-        # MODERATOR WARNING
-        # Client packet: 0g + target wire ID (3 characters) + warning text.
-        # The target client expects the private server packet: 0g + warning text.
-        elif packet.startswith("0g"):
-            if not account_is_moderator(self.account_id):
-                print(f"[MOD WARN] Denied non-moderator warning from {self.username}")
-                return
-
-            if len(packet) < 6:
-                return
-
-            target_wire = packet[2:5]
-            if not target_wire.isascii() or not target_wire.isdigit():
-                return
-
-            # Do not allow control characters to alter packet or chat display.
-            message = "".join(char for char in packet[5:] if ord(char) >= 32)
-            message = message.strip()[:MAX_WARNING_MESSAGE_LENGTH]
-            if not message:
-                return
-
-            target_account_id = next(
-                (account_id for account_id in tuple(USERS)
-                 if wire_id(account_id) == target_wire),
-                None,
-            )
-            target_user = USERS.get(target_account_id)
-            if not target_user:
-                return
-
-            try:
-                target_user["socket"].sendall(f"0g{message}\x00".encode("utf-8"))
-                print(
-                    f"[MOD WARN] {USERS[self.account_id]['display_username']} -> "
-                    f"{target_user.get('display_username', target_user['username'])}: {message}"
-                )
-            except OSError:
-                pass
+        # Moderator packets are private server actions, never generic relays.
+        elif packet.startswith(('0g', '0e')):
+            self.handle_moderation(packet)
             return
 
-        # MODERATOR BAN (/ban)
-        # Client packet: 0e + target id + ";" + minutes + ";" + message.
-        # Bans are not implemented on this server yet. This handler only makes
-        # sure the packet is NEVER relayed: the generic relay at the bottom used to
-        # forward it to the whole lobby, and every client that receives "0e"
-        # treats it as "you are banned" and signs out.
-        elif packet.startswith("0e"):
-            if account_is_moderator(self.account_id):
-                print(f"[MOD BAN] {USERS[self.account_id]['display_username']} tried /ban "
-                      f"({packet[2:80]!r}); bans are not enabled on this server")
-            else:
-                print(f"[MOD BAN] Denied non-moderator ban packet from {self.username}")
+        # 0t is a server-only result packet; clients cannot forge notices.
+        elif packet.startswith('0t'):
             return
 
         # JOIN ROOM
@@ -2497,9 +2585,14 @@ class ThreadedTCPServer(socketserver.ThreadingTCPServer):
         player.settimeout(SEND_TIMEOUT)
         return player, address
 
-with ThreadedTCPServer(("0.0.0.0", 6123), FlashGameHandler) as server:
-    server.rooms = {
-        "_": {"name": "_", "players": set(), "settings_string": "", "round_start": None, "round_length": 630, "crates": {}}
-    }
-    print("[*] Listening on port 6123...")
-    server.serve_forever()
+def main():
+    with ThreadedTCPServer(("0.0.0.0", 6123), FlashGameHandler) as server:
+        server.rooms = {
+            "_": {"name": "_", "players": set(), "settings_string": "", "round_start": None, "round_length": 630, "crates": {}}
+        }
+        print("[*] Listening on port 6123...")
+        server.serve_forever()
+
+
+if __name__ == '__main__':
+    main()

@@ -16,6 +16,7 @@ import { loadLook } from '../game/profile.js';
 import { PISTOL_ID, SPLASH, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { EquipmentWorld, gunSplash } from '../game/equipment.js';
 import { MAX_NPCS, NavGrid, NpcBrain, createNpc } from '../game/npc.js';
+import { runModeratorCommand } from '../game/moderation.js';
 import { EquipmentView } from '../render/EquipmentView.js';
 import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
@@ -223,6 +224,8 @@ export class GameScene extends Phaser.Scene {
     on(ServerEvent.PLAYER_MESSAGE, (message) => this.inbox.push(message));
     on(ServerEvent.SERVER_MESSAGE, ({ message }) => this.receiveServerMessage(message));
     on(ServerEvent.MESSAGE, ({ source, message }) => this.receiveMessage(source, message));
+    on(ServerEvent.WARNING, ({ message }) => this.hud.addMessage(`Warning from moderator: ${message}`, { chat: true }));
+    on(ServerEvent.MODERATION_RESULT, ({ message }) => this.hud.addMessage(message, { chat: true }));
     this.secondTimer = this.time.addEvent({ delay: 1000, loop: true, callback: () => this.second() });
     this.floodTimer = this.time.addEvent({ delay: FLOOD_TIME, loop: true, callback: () => this.floodTick() });
     c.requestRoomInfo(this.room);
@@ -1163,6 +1166,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.floodCount++;
+    if (runModeratorCommand(this.mode === 'online' ? this.connection : null, text, (message) => this.hud.addMessage(message, { chat: true }))) return;
     this.chatOutQueue.push(CHAT_PREFIX + text);
     this.hud.addMessage(`${this.player.name}: ${text}`, { chat: true });
   }

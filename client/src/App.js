@@ -7,6 +7,7 @@
 import { BRIDGE_URL, SERVER_NAME } from './config.js';
 import { Preferences, savePreferences } from './game/preferences.js';
 import { MAX_NPCS } from './game/npc.js';
+import { runModeratorCommand } from './game/moderation.js';
 import { Connection, ServerEvent } from './net/Connection.js';
 import { fetchMapList } from './net/MapService.js';
 import { applyDisplay } from './render/display.js';
@@ -47,6 +48,7 @@ export class App {
       joinRoom: (name) => this.joinRoom(name),
       createRoom: (options) => this.createRoom(options),
       chat: (text) => this.lobbyChat(text),
+      moderate: (text, notify) => runModeratorCommand(this.connection, text, notify),
       privateMessage: (user, text) => this.connection.sendPrivate('c' + text, user.id),
       preferencesChanged: () => this.applyPreferences(),
       customize: (look) => this.customize(look),
@@ -162,6 +164,26 @@ export class App {
       else if (message.charAt(0) === 'c' && peer) this.ui.receivePrivate?.(peer, message.substr(1));
     });
     c.on(ServerEvent.WARNING, ({ message }) => c.room === LOBBY && this.ui.addChat('Moderator', message, 'warning'));
+    c.on(ServerEvent.MODERATION_RESULT, ({ message }) => {
+      if (c.room !== LOBBY) return;
+      this.ui.addChat('', message, 'notice');
+      print(message);
+    });
+    c.on(ServerEvent.BANNED, ({ minutes, reason }) => {
+      const title = `You are banned for ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+      if (this.menus) {
+        this.showMainMenu();
+        this.menus.banScreen(title, reason);
+      } else {
+        this.state = 'login';
+        this.pendingLogin = null;
+        clearTimeout(this.reconnectTimer);
+        clearInterval(this.roomTimer);
+        c.disconnect();
+        this.stopGame();
+        this.showLogin({ error: `${title} ${reason}` });
+      }
+    });
     c.on(ServerEvent.GLOBAL_MESSAGE, ({ message }) => c.room === LOBBY && this.ui.addChat('', message, 'system'));
   }
 
@@ -359,6 +381,7 @@ export class App {
   }
 
   lobbyChat(text) {
+    if (runModeratorCommand(this.connection, text, (message) => this.ui.addChat('', message, 'notice'))) return;
     this.connection.sendMessage('C' + text);
     this.ui.addChat(this.connection.localUser?.name || 'You', text, 'own');
   }
@@ -371,6 +394,7 @@ export class App {
     this.creatingRoom = false;
     this.fadeMusic();
     await this.mapsReady;
+    if (this.state !== 'game' || !this.connection.authenticated || this.connection.room !== room) return;
     this.ui.clear();
     this.game.scene.stop('menu');
     this.connection.enablePing(1000);

@@ -27,6 +27,8 @@ export const ServerEvent = Object.freeze({
   SERVER_MESSAGE: 'serverMessage',
   ROUND_TIME: 'roundTime',
   WARNING: 'warning',
+  BANNED: 'banned',
+  MODERATION_RESULT: 'moderationResult',
   GLOBAL_MESSAGE: 'globalMessage',
   MOST_WANTED_CHANGE: 'mostWantedChange',
   PING: 'ping',
@@ -92,7 +94,9 @@ export class Connection extends Emitter {
       this.localUser = new User(null);
       this.emit(ServerEvent.CONNECTED);
     });
-    socket.addEventListener('message', (event) => this.receive(event.data));
+    socket.addEventListener('message', (event) => {
+      if (socket === this.socket) this.receive(event.data);
+    });
     socket.addEventListener('error', () => {
       if (socket === this.socket && socket.readyState !== WebSocket.OPEN) this.emit(ServerEvent.FAILED);
     });
@@ -367,6 +371,16 @@ export class Connection extends Emitter {
         });
       case 'g':
         return this.emit(ServerEvent.WARNING, { message: rest });
+      case 'e': {
+        const separator = rest.indexOf(';');
+        const duration = separator < 0 ? '' : rest.slice(0, separator);
+        if (!/^[0-9]+$/.test(duration) || Number(duration) < 1) return;
+        this.buffer = ''; // discard queued login/game packets after the ban
+        this.disconnect();
+        return this.emit(ServerEvent.BANNED, { minutes: Number(duration), reason: rest.slice(separator + 1).trim() });
+      }
+      case 't':
+        return this.emit(ServerEvent.MODERATION_RESULT, { message: rest });
       case 'j':
         return this.emit(ServerEvent.GLOBAL_MESSAGE, { message: rest });
       case 'r':

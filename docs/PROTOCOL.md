@@ -61,6 +61,30 @@ survivor. `<maps>` is one capital letter per map in the rotation
 Game handshake payload:
 `<weapon2><hp3><name20><gender1><hm2><hc2><bm2><bc2><team1><score>;<kills>;<deaths>;<bounty>;[<weapon2><flags1>]...<wanted1>`
 
+## Moderation
+
+These authenticated requests are authorized from server account data (`level`
+greater than zero or `MODERATOR_USERNAMES`), never from client-supplied roles.
+
+| Client sends | Meaning |
+| --- | --- |
+| `0g<target3><message>` | private moderator warning |
+| `0e<target3>;<minutes>;<reason>` | timed account ban (1–960 whole minutes) |
+
+| Server sends | Meaning |
+| --- | --- |
+| `0g<message>` | warning to the target only |
+| `0e<minutes>; <reason>` | ban to the target only, also returned on a banned login |
+| `0t<message>` | private command result to the requesting moderator |
+
+Non-moderator requests are denied and never relayed. Incoming client `0t`
+packets are discarded. Empty reasons, invalid durations and self-bans are
+rejected. Messages have control characters removed and are capped at 240
+characters. A ban is durably recorded before disconnecting the player, removing
+their room membership and deployables, and releasing their slot. The host's
+`users.db.moderation.sqlite3` persists bans across restarts; expired bans allow
+login again. Shared IPs are unaffected.
+
 ## In game
 
 Positions are cells × 100, five digits per axis (`x5 y5`); a cell is
