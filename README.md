@@ -432,12 +432,13 @@ python tools/upscale_textures.py
 node --test tests/*.test.mjs
 ```
 
-## Free guns
+## Weapon prices
 
-`client/config.js` has `freeGuns: true`: every gun, its ammo and its upgrades
-cost nothing in the shop (it shows "Free"), so money only counts for the score.
-Equipment keeps its price. Set it to `false` for the original prices. Each
-player's page decides, so on a website set it in the uploaded `config.js`.
+`client/config.js` has `freeGuns: false`, so guns, ammo and upgrades use their
+normal shop prices. Equipment keeps its price as well. Set `freeGuns: true`
+only when you want guns, ammo and upgrades to be free; equipment still costs
+money. Each player's page uses the website's `config.js`, so update that file
+on the online host for everyone.
 
 ### Step 13: character customization
 
