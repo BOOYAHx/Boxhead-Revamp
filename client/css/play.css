@@ -1,6 +1,6 @@
 /* The game page (play.html) in the website's style: the same header, hazard
    tape and charcoal, the game in a steel frame over the darkened arena, and a
-   strip of controls under it. css/style.css styles the game's own layers. */
+   fullscreen button under it. css/style.css styles the game's own layers. */
 
 @font-face {
   font-family: 'Anton';
@@ -21,8 +21,7 @@
   --steel: #5d6266;
   --display: 'Anton', Impact, 'Arial Narrow', sans-serif;
   --header: 64px;
-  --bar: 48px;
-  --community-width: 300px;
+  --actions-height: 32px;
   display: flex;
   flex-direction: column;
   height: 100svh;
@@ -175,106 +174,6 @@
   min-width: 0;
 }
 
-/* The larger community banner shares the console's silver frame and nameplate. */
-.play-community {
-  box-sizing: border-box;
-  flex: 0 0 var(--community-width);
-  width: var(--community-width);
-}
-
-.discord-banner {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  min-height: min(560px, calc(100svh - var(--header) - 120px));
-  overflow: hidden;
-  border: 0;
-  border-radius: 4px;
-  background:
-    linear-gradient(#090807a6, #090807a6),
-    url('../assets/site/discord-banner-wallpaper.jpg') center / cover no-repeat,
-    #090807;
-  color: #f5f0e7;
-  text-align: center;
-  text-decoration: none;
-  transition: box-shadow 0.2s;
-}
-
-.discord-banner::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(180deg, transparent 20%, #09080799 55%, #090807ed 100%);
-  pointer-events: none;
-}
-
-.discord-banner:hover {
-  box-shadow: inset 0 0 0 1px var(--gold);
-}
-
-.discord-banner:focus-visible { outline: 3px solid var(--gold); outline-offset: 5px; }
-.discord-banner-art {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center top;
-}
-
-.discord-banner-copy {
-  position: relative;
-  z-index: 2;
-  box-sizing: border-box;
-  width: 100%;
-  padding: 24px 18px;
-}
-
-.discord-banner h2 {
-  margin: 0;
-  text-transform: none;
-}
-
-.discord-banner p {
-  margin: 18px 0 20px;
-}
-
-/* Match the homepage's About paragraph: 16px Anton and its softer stone fill. */
-.discord-banner h2,
-.discord-banner p,
-.discord-banner-cta-label {
-  font: 400 16px/1.6 var(--display);
-  letter-spacing: 0.5px;
-  background-image: url('../assets/site/stone-text-soft.png');
-  background-size: 140px;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: none;
-  filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 1px 1px #000c);
-}
-
-.discord-banner-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 48px;
-  padding: 0 5px;
-  border: 1px solid #958774;
-  border-radius: 5px;
-  background: linear-gradient(#342c23, #171310);
-  color: #fff;
-  font: 400 16px/1.6 var(--display);
-  letter-spacing: 0.5px;
-}
-
-.discord-banner-cta svg { width: 22px; height: 22px; fill: currentColor; }
-.discord-banner-cta circle { fill: #211b15; }
-.discord-banner:hover .discord-banner-cta { border-color: var(--gold); color: var(--gold); }
-
 .play-frame {
   position: relative;
   padding: 21px 11px 12px;
@@ -338,10 +237,10 @@
   z-index: 0;
 }
 
-/* The 700 x 490 game, as large as fits between the header and the controls strip. */
+/* The 700 x 490 game fills the available space while keeping its aspect ratio. */
 .play-stage {
   position: relative;
-  width: min(calc(100vw - 70px - var(--community-width)), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490));
+  width: min(calc(100vw - 54px), calc((100svh - var(--header) - 8px - var(--actions-height) - 108px) * 700 / 490));
   aspect-ratio: 700 / 490;
   background: #000;
   overflow: hidden;
@@ -458,58 +357,12 @@
 .map-loading-copy button:focus-visible { outline: 2px solid #eee; outline-offset: 2px; }
 .map-loading-copy button:disabled { opacity: 0.5; cursor: wait; }
 
-/* --- the controls strip ------------------------------------------------------------------ */
-.play-bar {
-  flex: 0 0 auto;
-  min-height: var(--bar);
-  width: min(calc(100vw - 50px - var(--community-width)), calc((100svh - var(--header) - 8px - var(--bar) - 108px) * 700 / 490 + 18px));
+/* --- fullscreen action below the console ------------------------------------------------- */
+.play-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 0 14px;
-  background: #110f0ee6;
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--blood);
-}
-
-.play-keys {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.play-keys li {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.play-keys kbd {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 21px;
-  padding: 0 4px;
-  background: linear-gradient(180deg, #2c2724, #1b1715);
-  border: 1px solid #45403b;
-  border-bottom-width: 3px;
-  border-radius: 3px;
-  color: var(--text);
-  font: 12px/1 var(--display);
-  letter-spacing: 0.5px;
-}
-
-.play-keys kbd.wide {
-  min-width: 34px;
+  justify-content: center;
+  min-height: var(--actions-height);
 }
 
 .play-fullscreen {
@@ -581,7 +434,7 @@
 }
 
 /* The main menu's stone lettering (see css/site.css). */
-.play-brand span, .play-brand small, .play-nav a, .play-keys li {
+.play-brand span, .play-brand small, .play-nav a {
   background-image: url('../assets/site/stone-text.png');
   background-size: 120px;
   -webkit-background-clip: text;
@@ -600,65 +453,7 @@
   filter: brightness(1.45) drop-shadow(0 0 1.5px #000);
 }
 
-/* --- wide windows: the controls stand beside the game, so it can use nearly the full height --- */
-@media (min-aspect-ratio: 3/2) and (min-width: 1100px) {
-  .play-console {
-    flex-direction: row;
-    gap: 18px;
-  }
-
-  .play-stage {
-    width: min(calc(100vw - 70px - var(--community-width) - 210px), calc((100svh - var(--header) - 8px - 100px) * 700 / 490));
-  }
-
-  .play-bar {
-    width: 168px;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: center;
-    gap: 16px;
-    padding: 16px 14px;
-    margin-top: 40px; /* level with the game, below the nameplate */
-  }
-
-  .play-keys {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 9px;
-  }
-
-  .play-fullscreen {
-    justify-content: center;
-  }
-}
-
 /* --- small windows ------------------------------------------------------------------------------- */
-@media (max-width: 900px), (max-height: 640px) {
-  .play-page { --bar: 72px; }
-  .play-main { flex-direction: column; gap: 12px; }
-  .play-community { order: 1; flex: 0 0 auto; width: min(calc(100vw - 32px), 480px); }
-  .discord-banner { min-height: 96px; align-items: center; text-align: left; }
-  .discord-banner::before { background: #090807c9; }
-  .discord-banner-copy { display: flex; align-items: center; gap: 12px; flex: 1; padding: 10px; }
-  .discord-banner h2 { flex: 1; }
-  .discord-banner p { display: none; }
-  .discord-banner-cta { padding: 0 8px; }
-  .discord-banner-cta svg { display: none; }
-  .play-console { flex-direction: column; gap: 8px; }
-  .play-stage {
-    width: min(calc(100vw - 52px), calc((100svh - var(--header) - 8px - var(--bar) - 244px) * 700 / 490));
-  }
-  .play-bar {
-    width: min(calc(100vw - 32px), calc((100svh - var(--header) - 8px - var(--bar) - 244px) * 700 / 490 + 18px));
-    flex-direction: row;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 0 14px;
-    margin-top: 0;
-  }
-  .play-keys { flex-direction: row; align-items: center; gap: 6px 10px; }
-}
-
 @media (max-width: 1200px) {
   .play-nav {
     display: none;
@@ -672,7 +467,6 @@
 @media (max-width: 560px) {
   .play-page {
     --header: 56px;
-    --bar: 48px;
   }
 
   .play-header {
@@ -688,16 +482,6 @@
     font-size: 18px;
   }
 
-  .discord-banner-copy { gap: 8px; }
-  .discord-banner-cta { padding: 0 6px; }
-
-  .play-keys {
-    display: none;
-  }
-
-  .play-bar {
-    justify-content: flex-end;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -710,6 +494,4 @@
   .play-back {
     transition: none;
   }
-
-  .discord-banner { transition: none; }
 }
