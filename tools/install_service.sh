@@ -51,19 +51,18 @@ systemctl daemon-reload
 systemctl enable --now boxhead
 systemctl restart boxhead
 
-# Short commands for later.
-PROFILE=/root/.bashrc
-sed -i '/# boxhead commands$/d' "$PROFILE"
-cat >> "$PROFILE" <<ALIASES
-alias boxhead-update='cd $DIR && git pull' # boxhead commands
-alias boxhead-log='journalctl -u boxhead -f -n 50' # boxhead commands
-alias boxhead-restart='systemctl restart boxhead' # boxhead commands
-alias boxhead-stop='systemctl stop boxhead' # boxhead commands
-ALIASES
+# Short commands for later, as real commands (they work in every window at once).
+for name in update log restart stop; do rm -f "/usr/local/bin/boxhead-$name"; done
+printf '#!/bin/sh\ncd "%s" && git pull\n' "$DIR" > /usr/local/bin/boxhead-update
+printf '#!/bin/sh\nexec journalctl -u boxhead -f -n 50\n' > /usr/local/bin/boxhead-log
+printf '#!/bin/sh\nexec systemctl restart boxhead\n' > /usr/local/bin/boxhead-restart
+printf '#!/bin/sh\nexec systemctl stop boxhead\n' > /usr/local/bin/boxhead-stop
+chmod +x /usr/local/bin/boxhead-update /usr/local/bin/boxhead-log /usr/local/bin/boxhead-restart /usr/local/bin/boxhead-stop
+# Earlier versions added these as aliases in .bashrc: remove them.
+sed -i '/# boxhead commands$/d' /root/.bashrc 2>/dev/null || true
 
 echo
 echo "Done. The game now runs by itself, and starts again after a reboot."
-echo "Log out and in again (or run: . ~/.bashrc), then:"
 echo "  boxhead-update    get the latest version (it is applied by itself)"
 echo "  boxhead-log       watch what it is doing (Ctrl+C to leave; the game keeps running)"
 echo "  boxhead-restart   restart everything"
