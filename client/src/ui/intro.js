@@ -34,6 +34,9 @@ export class Intro {
   async build() {
     try {
       const lib = await FlashLibrary.load(BASE, 'intro-');
+      // The logo is a small bitmap the original drew unsmoothed; stretched to a large
+      // window that turns its edges blocky, so it is smoothed here.
+      for (const image of lib.defs.querySelectorAll('image')) image.style.imageRendering = 'auto';
       const frame = document.createElement('div');
       frame.className = 'flash-stage';
       this.root.appendChild(frame);
