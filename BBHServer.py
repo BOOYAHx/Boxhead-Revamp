@@ -3,6 +3,7 @@ import argparse
 import asyncio
 import functools
 import http.server
+import ipaddress
 from http import HTTPStatus
 from pathlib import Path
 import socket
@@ -105,6 +106,12 @@ BROWSER_SEND_TIMEOUT = 20  # seconds
 
 async def relay(websocket, game_port):
     try:
+        # Use the connection's network peer; browser-supplied headers aren't trusted.
+        client_ip = str(ipaddress.ip_address(websocket.remote_address[0]))
+    except (TypeError, IndexError, ValueError):
+        await websocket.close(code=1011, reason='Client address is unavailable')
+        return
+    try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection('127.0.0.1', game_port), timeout=3)
     except (OSError, asyncio.TimeoutError):
@@ -112,9 +119,12 @@ async def relay(websocket, game_port):
         await websocket.close(code=1011, reason='Test game server is not running')
         return
 
-    print(f'[BRIDGE] Browser connected to the test game server on port {game_port}.', flush=True)
+    print(f'[BRIDGE] Browser {client_ip} connected to the test game server on port {game_port}.', flush=True)
 
     async def browser_to_game():
+        # This must precede every browser packet, including login and forged IP headers.
+        writer.write(f'@bridge-ip:{client_ip}\x00'.encode('ascii'))
+        await writer.drain()
         async for message in websocket:
             # Ruffle uses binary frames; accept UTF-8 text frames as well.
             writer.write(message.encode('utf-8') if isinstance(message, str) else message)

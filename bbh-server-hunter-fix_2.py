@@ -1,5 +1,6 @@
 import socketserver
 import socket
+import ipaddress
 import os
 import hashlib
 import time
@@ -27,6 +28,7 @@ DUPLICATE_LOGIN = b"093\x00"  # the client shows "Duplicate login detected." and
 # waited forever, and with it the player whose chat or move was being relayed,
 # who then could not join, leave or log back in.
 SEND_TIMEOUT = 10  # seconds
+BRIDGE_IP_PREFIX = '@bridge-ip:'
 
 # username -> (md5_hash, account_id_string)
 USER_DB = {}
@@ -1296,6 +1298,18 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
     def handle_packet(self, packet):
         if not packet:
             return
+        first_packet = not getattr(self, '_received_packet', False)
+        self._received_packet = True
+        if packet.startswith(BRIDGE_IP_PREFIX):
+            # The local bridge supplies the first packet. Later/browser-supplied
+            # headers and metadata from direct internet connections are ignored.
+            if first_packet and getattr(self, 'account_id', None) is None:
+                try:
+                    if ipaddress.ip_address(self.client_address[0]).is_loopback:
+                        self.player_ip = str(ipaddress.ip_address(packet[len(BRIDGE_IP_PREFIX):]))
+                except ValueError:
+                    pass
+            return
         user = USERS.get(getattr(self, 'account_id', None))
         if getattr(self, 'account_id', None) is not None and (
                 not user or user.get('socket') is not self.request or user.get('closing')):
@@ -1416,7 +1430,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                 self.send(f"10;0;{auth_error}\x00".encode("utf-8"))
                 return
 
-            client_ip = self.client_address[0]
+            client_ip = getattr(self, 'player_ip', self.client_address[0])
             banned_ips = []
             if os.path.exists("banlist.txt"):
                 with open("banlist.txt", "r", encoding="utf-8") as stream:
@@ -2521,6 +2535,8 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
     def handle(self):
         self.username = None
         self.account_id = None
+        self.player_ip = self.client_address[0]
+        self._received_packet = False
 
         #print(f"[+] Connected: {self.client_address}")
 
