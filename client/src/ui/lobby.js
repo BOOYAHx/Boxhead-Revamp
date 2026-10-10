@@ -505,7 +505,7 @@ export class LobbyScreen {
   }
 
   createUserPage(user) {
-    const page = { user, nodes: [], waiting: false };
+    const page = { user, nodes: [], waiting: false, offscreenSoundPlayed: false };
     this.userPages.push(page);
     this.scrollTabsTo(this.userPages.length - 1);
     return page;
@@ -520,6 +520,7 @@ export class LobbyScreen {
     box.replaceChildren(...page.nodes);
     page.nodes = null;
     page.waiting = false;
+    page.offscreenSoundPlayed = false;
     this.page = page;
     box.scrollTop = page.scroll ?? box.scrollHeight;
     this.syncChatScroll();
@@ -582,6 +583,11 @@ export class LobbyScreen {
     const page = this.userPage(user) || this.createUserPage(user);
     page.user = user;
     this.chatLine(user, user.name, text, page);
+    if (page !== this.page && !page.offscreenSoundPlayed) {
+      // SoundList.OFFSCREEN_CHAT used the respawn sound in the original game.
+      this.menus.playSound('CharacterRespawn');
+      page.offscreenSoundPlayed = true;
+    }
   }
 
   // --- connection (MMOchaLobby.disconnected / connected / joinedLobby) --------------------------------
