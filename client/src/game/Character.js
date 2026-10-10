@@ -59,10 +59,11 @@ export class Animator {
 }
 
 export class Character {
-  constructor({ id = null, name = '', local = false } = {}) {
+  constructor({ id = null, name = '', local = false, instantWeaponCycling = false } = {}) {
     this.id = id;
     this.name = name;
     this.local = local;
+    this.instantWeaponCycling = instantWeaponCycling;
     this.pos = { x: 0, y: 0 };
     this.prevPos = { x: 0, y: 0 }; // position at the previous tick, for smooth rendering
     this.firePos = this.pos; // remote players fire from their last reported position
@@ -189,6 +190,11 @@ export class Character {
     this.refillTarget = null;
     if (this.weapon) this.weapon.charge = 0;
     this.weapon = weapon;
+    if (this.local && this.instantWeaponCycling && (weapon.kind === 'gun' || weapon.kind === 'projectile') && !weapon.isLoaded) {
+      weapon.timeSinceFire = weapon.reloadTime;
+      weapon.lightTime = 0;
+      weapon.reload();
+    }
     this.animSpeed = weapon.moveSpeed;
     return true;
   }

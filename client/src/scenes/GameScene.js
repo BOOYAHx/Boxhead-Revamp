@@ -62,9 +62,8 @@ export class GameScene extends Phaser.Scene {
     // Only an explicit next-round restart carries awards; entering any room starts fresh.
     this.roundBonus = this.newRound ? (data.roundBonus || 0) : 0;
     this.connection = this.mode === 'online' ? this.app.connection : null;
-    // Only Opeth's authenticated online account shares a cooldown across guns.
-    this.restrictWeaponCycling = (this.connection?.localUser?.name || '').toLowerCase() === 'opeth';
-    this.weaponCycleCooldown = 0;
+    // Opeth's authenticated online account can fire a gun immediately after switching to it.
+    this.instantWeaponCycling = (this.connection?.localUser?.name || '').toLowerCase() === 'opeth';
     this.map = null;
     this.loadingMap = false; // Phaser reuses the scene object for every game
     this.mapLoad = new AbortController();
@@ -456,17 +455,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  cycleCooldownReady(weapon) {
-    return !this.restrictWeaponCycling || this.weaponCycleCooldown <= 0 ||
-      (weapon.kind !== 'gun' && weapon.kind !== 'projectile');
-  }
-
   /** Weapon.fire + Game.characterFire for the local player: shoot, show it, warn about ammo, tell the room. */
   fireLocal() {
     const p = this.player;
     const w = p.weapon;
-    const gun = w.kind === 'gun' || w.kind === 'projectile';
-    if (!this.cycleCooldownReady(w)) return;
     if (w.id === WeaponID.SPY) {
       this.setSpy(!this.spy);
       w.timeSinceFire = 0;
@@ -485,7 +477,6 @@ export class GameScene extends Phaser.Scene {
     } else w.useFireAmmo();
     const param = w.fireParam(Math.random, p.speed);
     const shot = w.shoot(p, w.fireAngle(p), param);
-    if (this.restrictWeaponCycling && gun) this.weaponCycleCooldown = w.reloadTime;
     this.executeShot(p, shot);
     if (w.ammo) {
       if (w.ammo.count === 0) this.hud.showWarning('OUT OF AMMO!', 2000);
@@ -693,7 +684,6 @@ export class GameScene extends Phaser.Scene {
    * smoke, shells, fire and sounds. An empty gun is swapped once reloaded.
    */
   processWeapons(ch) {
-    if (ch === this.player && this.weaponCycleCooldown > 0) this.weaponCycleCooldown--;
     for (const weapon of ch.weapons) {
       const current = weapon === ch.weapon;
       const { effects, reloaded, stopLoop } = weapon.process(current);
@@ -1225,7 +1215,7 @@ export class GameScene extends Phaser.Scene {
     this.map = map;
     this.mapView = new MapView(this, map);
     const user = this.connection?.localUser;
-    this.player = new Character({ id: this.connection ? this.connection.clientID : 'you', name: user?.name || 'You', local: true });
+    this.player = new Character({ id: this.connection ? this.connection.clientID : 'you', name: user?.name || 'You', local: true, instantWeaponCycling: this.instantWeaponCycling });
     this.player.stats = newStats(this.roundBonus);
     if (this.mode === 'offline') this.player.stats.money = OFFLINE_MONEY;
     this.roundBonus = 0; // Player.newRound spends the bonus
@@ -1446,7 +1436,7 @@ export class GameScene extends Phaser.Scene {
     if (p.active) p.move(this.map);
     if (p.active && p.processTimers()) {
       if (!this.ui?.shopOpen) this.respawnLocal(); // the shop holds the respawn back
-    } else if (p.weapon.fireInput(p.firing, ks.newPress('fire'), p.active && !p.dead && !captured && this.chatInput === null && this.cycleCooldownReady(p.weapon))) this.fireLocal();
+    } else if (p.weapon.fireInput(p.firing, ks.newPress('fire'), p.active && !p.dead && !captured && this.chatInput === null)) this.fireLocal();
     this.processWeapons(p);
     // AutoReload: a gun down to its last round is filled up.
     if (Preferences.autoReload && this.ui && !this.ui.shopOpen && !this.gameOver && p.active && !p.dead) {
