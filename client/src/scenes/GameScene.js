@@ -71,6 +71,8 @@ export class GameScene extends Phaser.Scene {
     this.participated = false;
     this.unsubscribe = [];
     this.remotes = new Map(); // peer id -> { id, character, view, ping, ... }
+    this.pendingJoins = new Set(); // wait for the handshake to supply the name
+    this.joinNoticesReady = false; // initial roster arrives before the room-info reply
     // Player messages wait here until the map is loaded (Game.messageInQueue).
     // It carries over to the next round: peers that start it sooner announce
     // their spawn while we are still on the summary.
@@ -219,7 +221,7 @@ export class GameScene extends Phaser.Scene {
     on(ServerEvent.ROOM_INFO, (info) => this.receiveRoomInfo(info));
     on(ServerEvent.ROUND_TIME, ({ seconds }) => this.setRoundTime(seconds));
     on(ServerEvent.HANDSHAKE, ({ user }) => this.peerHandshake(user));
-    on(ServerEvent.PEER_JOINED, () => this.updateScores());
+    on(ServerEvent.PEER_JOINED, ({ id }) => this.peerJoined(id));
     on(ServerEvent.PEER_DISCONNECTED, ({ id, name }) => this.peerLeft(id, name));
     on(ServerEvent.PLAYER_MESSAGE, (message) => this.inbox.push(message));
     on(ServerEvent.SERVER_MESSAGE, ({ message }) => this.receiveServerMessage(message));
@@ -232,6 +234,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   async receiveRoomInfo(info) {
+    this.joinNoticesReady = true;
     this.setRoundTime(info.roundTime);
     if (this.map || this.loadingMap || this.mapLoad.signal.aborted) return;
     this.loadingMap = true;
@@ -285,7 +288,13 @@ export class GameScene extends Phaser.Scene {
 
   // --- other players ----------------------------------------------------------------
 
+  peerJoined(id) {
+    if (this.joinNoticesReady) this.pendingJoins.add(id);
+    this.updateScores();
+  }
+
   peerHandshake(user) {
+    if (user.name && this.pendingJoins.delete(user.id)) this.hud.addMessage(`${user.name} has joined the game`, { chat: true });
     if (this.map) this.applyHandshakeStats(this.ensureRemote(user), user);
     this.forcePositionUpdate = true; // let the newcomer see where we are
     this.updateScores();
@@ -330,6 +339,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A player left the room: say so in the chat, then take them off the map. */
   peerLeft(id, name) {
+    this.pendingJoins.delete(id);
     name = this.remotes.get(id)?.character.name || name;
     if (name) this.hud.addMessage(`${name} has left the game`, { chat: true });
     this.removeRemote(id);

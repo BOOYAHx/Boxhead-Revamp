@@ -312,7 +312,8 @@ export class Connection extends Emitter {
           this.roomGameType = data.length > 4 ? data.charAt(4) : 'A';
           return this.emit(ServerEvent.ROOM_JOINED, { id, room: this.room, gameType: this.roomGameType });
         }
-        if (!this.peers.some((p) => p.id === id)) this.peers.push(new User(id));
+        if (this.peers.some((p) => p.id === id)) return;
+        this.peers.push(new User(id));
         return this.emit(ServerEvent.PEER_JOINED, { id });
       }
       case 'D': {
