@@ -1308,7 +1308,7 @@ export class GameScene extends Phaser.Scene {
     const others = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== ch && c.active && !c.dead);
     const spawn = chooseSpawn(this.map.spawns, others) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
     ch.respawn(spawn.x, spawn.y);
-    ch.selectWeapon(ch.weapons.find((w) => w.id !== PISTOL_ID && w.available) || ch.weaponByID(PISTOL_ID) || ch.weapon);
+    ch.selectWeapon(ch.weaponByID(PISTOL_ID) || ch.weapon); // back in with the Pistol, the bots' default
     brain.reset();
     if (sound) this.effects.playSound('CharacterRespawn', ch.pos);
   }

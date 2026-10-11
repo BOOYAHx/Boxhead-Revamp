@@ -625,10 +625,12 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   ammo at the shop's prices, bought in this order as the money comes in: Rifle,
   Plasma Cannon, Magnum (a line in the kill feed says when one buys a gun). **Easy** bots react and aim slowly and only pick up crates right beside
   them; **Medium** bots fight like Step 17 below; **Hard** bots react and aim
-  quicker, often sidestep your line, go for you a little first, pick up money
+  quicker, usually sidestep your line, go for you a little first, pick up money
   crates nearby (unless a fight is right next to them) and chain their guns like
   good players: Plasma, then Shotgun, then Rifle, then Magnum (each gun reloads
   on its own, so switching fires the next one; each switch takes them a moment).
+  Every bot's default gun is the Pistol: it respawns with it and holds it while
+  walking about, switching to a bought gun to fight.
 * **Starting Money**: $10,000 to $100,000 each round.
 * **Maps**: tick the maps to play; each round is a random one of them (all when
   every box is ticked).

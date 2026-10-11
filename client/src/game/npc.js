@@ -46,7 +46,7 @@ export const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
 export const LEVELS = Object.freeze({
   Easy: { think: 280, aim: 480, dodge: 0.1, playerBias: 1, crates: 3, cycle: false },
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
-  Hard: { think: 110, aim: 140, dodge: 0.65, playerBias: 0.8, crates: 10, cycle: true, switchDelay: 200 },
+  Hard: { think: 95, aim: 115, dodge: 0.72, playerBias: 0.75, crates: 10, cycle: true, switchDelay: 170 },
 });
 /** The gun every bot starts each round with (full of ammo; it buys more shells later). */
 export const STARTING_GUN = WeaponID.SHOTGUN;
@@ -234,10 +234,11 @@ export class NpcBrain {
       set money(value) { if (character.stats) character.stats.money = value; },
     });
     // The starting Shotgun comes from that shop, so its shells are refilled like a bought gun's.
+    // (The Pistol stays in hand: it is the default.)
     const start = this.shop.item(STARTING_GUN);
     if (start && !start.owned) {
       start.owned = true;
-      character.selectWeapon(character.pickupWeapon(start.weapon));
+      character.pickupWeapon(start.weapon);
     }
     this.nextShop = 0;
     this.switchedAt = -Infinity;
@@ -419,12 +420,16 @@ export class NpcBrain {
   /** The gun for the range: the Shotgun up close, Plasma or a long gun further off, else the Pistol. */
   chooseGun(target) {
     const ch = this.ch;
-    if (!target) return;
     const best = (ids) => ids.map((id) => ch.weaponByID(id)).find((w) => w?.available);
     const pistol = ch.weaponByID(WeaponID.PISTOL) || ch.weapon;
+    // The Pistol is every bot's default: held while walking about with nobody to fight.
+    if (!target) {
+      ch.selectWeapon(pistol);
+      return;
+    }
     if (this.level.cycle) {
-      // Hard: walk with the Magnum (quickest on its feet) or the Pistol; aimAndFire picks the gun for each shot.
-      if (this.alignedSince === null) ch.selectWeapon(best([WeaponID.MAGNUM]) || pistol);
+      // Hard: walk with the Pistol; aimAndFire picks the gun for each shot.
+      if (this.alignedSince === null) ch.selectWeapon(pistol);
       else if (!ch.weapon.available) ch.selectWeapon(pistol);
       return;
     }

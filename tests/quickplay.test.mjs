@@ -67,7 +67,7 @@ function bot(difficulty, money = 0) {
 test('bots start with the Pistol, a full Shotgun and no money, then buy Rifle, Plasma and Magnum as the crates pay', () => {
   const { npc, brain, bought } = bot('Medium');
   assert.deepEqual(npc.weapons.map((w) => w.id).sort(), [WeaponID.PISTOL, WeaponID.SHOTGUN].sort());
-  assert.equal(npc.weapon.id, WeaponID.SHOTGUN, 'holding it');
+  assert.equal(npc.weapon.id, WeaponID.PISTOL, 'the Pistol in hand: the default');
   assert.equal(npc.weaponByID(WeaponID.SHOTGUN).ammo.count, 35);
   assert.equal(brain.goShopping(), null, 'nothing to spend');
   npc.stats.money = 8499;
@@ -201,4 +201,18 @@ test('money crates draw Hard bots unless a fight is right there; Easy bots ignor
   const easy = duel('Easy', 9);
   easy.brain.update(easy.world(0, [crate]));
   assert.notDeepEqual(easy.brain.goal, crate);
+});
+
+test('the Pistol stays the default: bots only take out a bought gun to fight', () => {
+  for (const difficulty of ['Medium', 'Hard']) {
+    const { npc, brain } = duel(difficulty, 30); // owns every gun
+    assert.ok(npc.weaponByID(WeaponID.MAGNUM));
+    const map = parseMap('130;20;;ffffff1b;;0');
+    brain.update({ map, nav: new NavGrid(map), characters: [npc], crates: [], now: 0 });
+    assert.equal(npc.weapon.id, WeaponID.PISTOL, `${difficulty}: nobody to fight`);
+  }
+  const hard = duel('Hard', 30);
+  hard.npc.selectWeapon(hard.npc.weaponByID(WeaponID.MAGNUM));
+  hard.brain.update(hard.world(0));
+  assert.equal(hard.npc.weapon.id, WeaponID.PISTOL, 'Hard walks with the Pistol, not the Magnum');
 });
