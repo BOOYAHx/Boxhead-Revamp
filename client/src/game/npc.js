@@ -2,16 +2,19 @@
 // guns, and a brain that finds its way round the map, picks a target, lines up
 // one of the eight firing lines (every gun in Boxhead shoots along the facing),
 // keeps its distance, dodges shots and switches guns for the range.
+// Bots start every round with only the Pistol and no money: the bounty crates
+// they pick up pay for guns and ammo from their own shop, at the shop's prices.
 // Three difficulties (Quick Play's setup): Easy bots react and aim slowly and
-// carry light guns; Hard bots react fast, dodge, go after money crates and
-// chain their heavy guns like good players (Plasma, then Shotgun, then Rifle:
-// each gun reloads on its own, so switching fires the next one at once).
+// save up for cheap guns; Hard bots react fast, dodge, go after money crates,
+// buy the Shotgun, Rifle and Plasma Cannon first and chain them like good
+// players (each gun reloads on its own, so switching fires the next one at once).
 // Pure logic: the game scene moves, shoots and damages them like any player.
 
 import { Character } from './Character.js';
 import { DIRECTIONS } from './Direction.js';
 import { FIRE_RADIUS } from './constants.js';
 import { MODELS } from './bodyParts.js';
+import { ShopState } from './shop.js';
 import { traceShot } from './world.js';
 import { Weapon, WeaponID } from './weapons.js';
 
@@ -22,7 +25,6 @@ export const NPC_NAMES = [
   'Sergeant Stack', 'Pixel Pete', 'Mona Mayhem', 'Count Cornerstone', 'Ziggy Zero', 'Brick Baxter', 'Lady Lockjaw', 'Dutch Dozer',
 ];
 const AUTOMATIC = [WeaponID.AKIMBO_UZIS, WeaponID.AK47, WeaponID.M16, WeaponID.MINIGUN];
-const LIGHT_AUTOMATIC = [WeaponID.AKIMBO_UZIS, WeaponID.AK47, WeaponID.M16];
 const CLOSE = [WeaponID.SHOTGUN];
 const LONG = [WeaponID.RIFLE, WeaponID.MAGNUM, WeaponID.RAILGUN];
 // Hard bots fire these one after another, first loaded one in range first.
@@ -40,10 +42,20 @@ export const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
  * the heavy guns.
  */
 export const LEVELS = Object.freeze({
-  Easy: { think: 280, aim: 480, dodge: 0.1, playerBias: 1, crates: 0, cycle: false },
+  Easy: { think: 280, aim: 480, dodge: 0.1, playerBias: 1, crates: 3, cycle: false },
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
   Hard: { think: 70, aim: 50, dodge: 0.9, playerBias: 0.65, crates: 12, cycle: true },
 });
+/**
+ * What each difficulty saves up for, in order (each gun once it can pay for
+ * it), and how empty a gun gets (share of a full load) before it buys ammo.
+ */
+export const SHOPPING = Object.freeze({
+  Easy: { guns: [WeaponID.AKIMBO_UZIS, WeaponID.SHOTGUN, WeaponID.AK47], refillBelow: 0.2 },
+  Medium: { guns: [WeaponID.AKIMBO_UZIS, WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.AK47, WeaponID.MINIGUN], refillBelow: 0.3 },
+  Hard: { guns: [WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.AK47, WeaponID.MINIGUN], refillBelow: 0.5 },
+});
+const SHOP_TIME = 1000; // ms between shopping trips (sooner when a gun runs dry)
 export const levelFor = (difficulty) => LEVELS[difficulty] || LEVELS.Medium;
 const ALIGNED = FIRE_RADIUS * 0.7; // cells off the line that still hit
 const DODGE_TIME = 300;
@@ -56,13 +68,8 @@ const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], 
 
 const pick = (list, random) => list[Math.floor(random() * list.length)];
 
-/**
- * A computer player: a name from the list, a random costume and guns with
- * unlimited ammo: Easy the Pistol and a light automatic, Medium the Pistol, an
- * automatic and a shotgun or long gun, Hard the Pistol, Plasma Cannon,
- * Shotgun, Rifle and an automatic.
- */
-export function createNpc(index, random = Math.random, usedNames = new Set(), difficulty = 'Medium') {
+/** A computer player: a name from the list, a random costume and the Pistol (it buys the rest). */
+export function createNpc(index, random = Math.random, usedNames = new Set()) {
   const free = NPC_NAMES.filter((n) => !usedNames.has(n));
   const name = free.length ? pick(free, random) : `Bot ${index + 1}`;
   const ch = new Character({ id: 'n' + String((index % 99) + 1).padStart(2, '0'), name }); // 3 characters, like a server slot id
@@ -79,12 +86,7 @@ export function createNpc(index, random = Math.random, usedNames = new Set(), di
   ch.weapons = [];
   ch.banks = {};
   ch.weapon = null;
-  const guns = {
-    Easy: () => [WeaponID.PISTOL, pick(LIGHT_AUTOMATIC, random)],
-    Hard: () => [WeaponID.PISTOL, ...CYCLE, pick(AUTOMATIC, random)],
-  }[difficulty]?.() || [WeaponID.PISTOL, pick(AUTOMATIC, random), pick(random() < 0.5 ? CLOSE : LONG, random)];
-  for (const id of guns) ch.pickupWeapon(new Weapon(id, { remote: true }));
-  ch.selectWeapon(ch.weapons.find((w) => AUTOMATIC.includes(w.id)) || ch.weapons[0]);
+  ch.selectWeapon(ch.pickupWeapon(new Weapon(WeaponID.PISTOL, { remote: true })));
   return ch;
 }
 
@@ -222,6 +224,14 @@ export class NpcBrain {
     this.random = random;
     this.difficulty = LEVELS[difficulty] ? difficulty : 'Medium';
     this.level = levelFor(difficulty);
+    this.shopping = SHOPPING[this.difficulty];
+    // Its own shop, paid from its money (character.stats.money): crates fill it.
+    this.shop = new ShopState({
+      get money() { return character.stats?.money || 0; },
+      set money(value) { if (character.stats) character.stats.money = value; },
+    });
+    this.nextShop = 0;
+    this.onBuy = null; // (character, weapon): a new gun was bought
     this.target = null;
     this.nextThink = 0;
     this.goal = null;
@@ -251,11 +261,40 @@ export class NpcBrain {
       ch.firing = false;
       return;
     }
+    if (now >= this.nextShop || !ch.weapon.available) {
+      this.goShopping();
+      this.nextShop = now + SHOP_TIME;
+    }
     if (now >= this.nextThink) {
       this.think(world);
       this.nextThink = now + this.level.think * (0.8 + this.random() * 0.4);
     }
     this.aimAndFire(world);
+  }
+
+  /**
+   * Spend the money: the next gun on its list once it can pay for it, else
+   * ammo for a gun that is running low. Returns what was bought, or null.
+   */
+  goShopping() {
+    const ch = this.ch;
+    const shop = this.shop;
+    const next = this.shopping.guns.find((id) => shop.item(id) && !shop.item(id).owned && !shop.item(id).blocked);
+    if (next !== undefined && shop.money >= shop.item(next).fillCost) {
+      const result = shop.buy(next);
+      if (result.ok) {
+        ch.pickupWeapon(result.weapon);
+        this.onBuy?.(ch, result.weapon);
+        return result.weapon;
+      }
+    }
+    for (const id of this.shopping.guns) {
+      const item = shop.item(id);
+      const ammo = item?.owned && item.weapon.ammo;
+      if (!ammo || ammo.count >= ammo.max * this.shopping.refillBelow) continue;
+      if (shop.money >= item.fillCost && shop.buy(id).ok) return item.weapon;
+    }
+    return null;
   }
 
   enemies(world) {
@@ -372,13 +411,15 @@ export class NpcBrain {
     const ch = this.ch;
     if (!target) return;
     // Hard: walk with the automatic (the heavy guns are slower); aimAndFire picks the gun for each shot.
+    const has = (ids) => ch.weapons.find((w) => ids.includes(w.id) && w.available);
+    const fallback = ch.weapon.available ? ch.weapon : ch.weaponByID(WeaponID.PISTOL) || ch.weapon;
     if (this.level.cycle) {
-      if (this.alignedSince === null) ch.selectWeapon(ch.weapons.find((w) => AUTOMATIC.includes(w.id)) || ch.weapon);
+      if (this.alignedSince === null) ch.selectWeapon(has(AUTOMATIC) || has(CYCLE) || fallback);
+      else if (!ch.weapon.available) ch.selectWeapon(fallback);
       return;
     }
     const d = Math.hypot(target.pos.x - ch.pos.x, target.pos.y - ch.pos.y);
-    const has = (ids) => ch.weapons.find((w) => ids.includes(w.id));
-    const want = (d < 3.5 && has(CLOSE)) || (d > 9 && has(LONG)) || has(AUTOMATIC) || ch.weapon;
+    const want = (d < 3.5 && has(CLOSE)) || (d > 9 && has(LONG)) || has(AUTOMATIC) || has(CLOSE) || has(LONG) || fallback;
     if (want !== ch.weapon) ch.selectWeapon(want);
   }
 
@@ -388,9 +429,9 @@ export class NpcBrain {
    */
   cycleGuns(distance) {
     const ch = this.ch;
-    const ready = (w) => w.isLoaded && distance <= w.range * 0.95;
+    const ready = (w) => w.available && w.isLoaded && distance <= w.range * 0.95;
     const heavy = CYCLE.map((id) => ch.weaponByID(id)).find((w) => w && ready(w));
-    const next = heavy || ch.weapons.find((w) => AUTOMATIC.includes(w.id) && ready(w));
+    const next = heavy || ch.weapons.find((w) => AUTOMATIC.includes(w.id) && ready(w)) || (!ch.weapon.available && ch.weaponByID(WeaponID.PISTOL));
     if (next) ch.selectWeapon(next);
   }
 
@@ -422,7 +463,7 @@ export class NpcBrain {
     const line = bestLine(ch.pos, target.pos);
     ch.dir = line.dir;
     // Hard bots switch to whichever gun reaches, so the longest of them counts (up to a screen away).
-    const reach = this.level.cycle ? Math.min(25, Math.max(...ch.weapons.filter((w) => w.kind === 'gun' || w.kind === 'projectile').map((w) => w.range))) : ch.weapon.range;
+    const reach = this.level.cycle ? Math.min(25, Math.max(...ch.weapons.filter((w) => (w.kind === 'gun' || w.kind === 'projectile') && w.available).map((w) => w.range))) : ch.weapon.range;
     const inRange = line.along <= reach * 0.95;
     if (line.offset <= ALIGNED && inRange && clearShot(map, ch.pos, target.pos)) {
       if (this.alignedSince === null) this.alignedSince = now;

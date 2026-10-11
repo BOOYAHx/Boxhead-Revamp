@@ -1017,6 +1017,7 @@ export class GameScene extends Phaser.Scene {
   giveCrate(ch, crate, bountyPoints = 0) {
     ch.stats.bountyPoints += bountyPoints;
     ch.stats.score += crate.bounty;
+    if (ch.npc) ch.stats.money += crate.bounty; // a bot's money buys its guns
     if (ch.local) {
       this.effects.playSound('Ka_ching', ch.pos);
       ch.stats.money += crate.bounty; // Player.pickupMoney (no money premium)
@@ -1288,10 +1289,12 @@ export class GameScene extends Phaser.Scene {
     while (this.npcs.length > count) this.removeRemote(this.npcs.pop().ch.id);
     const used = new Set(this.npcs.map((b) => b.ch.name));
     while (this.npcs.length < count) {
-      const ch = createNpc(this.npcCount++, Math.random, used, QuickPlay.difficulty);
+      const ch = createNpc(this.npcCount++, Math.random, used);
       used.add(ch.name);
       ch.stats = newStats();
+      ch.stats.money = 0; // bots earn their guns: the crates they pick up pay for them
       const brain = new NpcBrain(ch, Math.random, QuickPlay.difficulty);
+      brain.onBuy = (bot, weapon) => this.hud.addMessage(`${bot.name} bought the ${weapon.name}`);
       this.npcs.push(brain);
       this.remotes.set(ch.id, { id: ch.id, character: ch, view: new CharacterView(this, ch, NPC_NAME_COLOR), ping: 0, pings: [], npc: brain });
       this.respawnNpc(brain, false);
@@ -1305,7 +1308,7 @@ export class GameScene extends Phaser.Scene {
     const others = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== ch && c.active && !c.dead);
     const spawn = chooseSpawn(this.map.spawns, others) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
     ch.respawn(spawn.x, spawn.y);
-    ch.selectWeapon(ch.weapons.find((w) => w.id !== PISTOL_ID) || ch.weapon);
+    ch.selectWeapon(ch.weapons.find((w) => w.id !== PISTOL_ID && w.available) || ch.weaponByID(PISTOL_ID) || ch.weapon);
     brain.reset();
     if (sound) this.effects.playSound('CharacterRespawn', ch.pos);
   }
@@ -1325,9 +1328,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A computer player's shot, like fireLocal (its guns never run dry). */
+  /** A computer player's shot, like fireLocal (bought guns use up their ammo; the bot buys more). */
   fireNpc(ch) {
     const w = ch.weapon;
+    w.useFireAmmo();
     const param = w.fireParam(Math.random, ch.speed);
     this.executeShot(ch, w.shoot(ch, w.fireAngle(ch), param));
   }

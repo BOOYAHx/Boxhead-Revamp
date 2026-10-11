@@ -8,12 +8,15 @@ import { MAX_MONEY, MIN_MONEY, QuickPlay, cleanSettings, loadQuickPlay, playable
 import { WeaponID, parseWeaponStats, setWeaponStats } from '../client/src/game/weapons.js';
 import { parseMap } from '../client/src/game/world.js';
 
-// Guns with simple stats; the heavy ones reload slowly, like the real ones.
-const gun = (id, name, delay = 0.1, range = 20) =>
-  `<weapon id="${id}" name="${name}" shortName="${name}"><ammo>Infinite</ammo><damage>10</damage><range>${range}</range><spread>0</spread><fireDelay>${delay}</fireDelay><moveSpeed>1</moveSpeed></weapon>`;
+// Guns with simple stats and the shop's prices; the heavy ones reload slowly, like the real ones.
+const gun = (id, name, { delay = 0.1, range = 20, cost = 0, ammo = 0, ammoCost = 0 } = {}) =>
+  `<weapon id="${id}" name="${name}" shortName="${name}"><ammo>${ammo || 'Infinite'}</ammo><ammoIncrement>${ammo}</ammoIncrement><damage>10</damage><range>${range}</range><spread>0</spread>` +
+  `<fireDelay>${delay}</fireDelay><moveSpeed>1</moveSpeed><cost>${cost}</cost><ammoCost>${ammoCost}</ammoCost></weapon>`;
 setWeaponStats(parseWeaponStats(`<data>${[
-  gun(0, 'Pistol'), gun(2, 'Uzis'), gun(4, 'Minigun'), gun(13, 'AK47'), gun(14, 'M16'),
-  gun(3, 'Shotgun', 1.5, 10), gun(15, 'Rifle', 1, 25), gun(21, 'Plasma Cannon', 1.2, 100),
+  gun(0, 'Pistol'), gun(2, 'Dual Uzis', { cost: 6500, ammo: 250, ammoCost: 5 }), gun(4, 'Minigun', { cost: 27000, ammo: 200, ammoCost: 25 }),
+  gun(13, 'AK47', { cost: 17500, ammo: 100, ammoCost: 12 }), gun(14, 'M16', { cost: 17500, ammo: 300, ammoCost: 12 }),
+  gun(3, 'Shotgun', { delay: 1.5, range: 10, cost: 7000, ammo: 35, ammoCost: 50 }), gun(15, 'Rifle', { delay: 1, range: 25, cost: 8500, ammo: 35, ammoCost: 90 }),
+  gun(21, 'Plasma Cannon', { delay: 1.2, range: 100, cost: 23000, ammo: 15, ammoCost: 300 }),
 ].join('')}</data>`));
 
 function seeded(seed = 1) {
@@ -51,26 +54,65 @@ test('rounds are played on the picked maps, or all of them when none (or only re
   assert.equal(playableMaps(maps, ['Gone Map']).length, 3);
 });
 
-test('each difficulty arms its bots differently', () => {
-  const ids = (difficulty, seed) => createNpc(0, seeded(seed), new Set(), difficulty).weapons.map((w) => w.id);
-  for (let seed = 1; seed < 20; seed++) {
-    const easy = ids('Easy', seed);
-    assert.equal(easy.length, 2);
-    assert.ok(!easy.includes(WeaponID.MINIGUN) && !easy.includes(WeaponID.PLASMA));
-    const hard = ids('Hard', seed);
-    for (const id of [WeaponID.PLASMA, WeaponID.SHOTGUN, WeaponID.RIFLE]) assert.ok(hard.includes(id));
-    assert.equal(hard.length, 5);
-  }
+function bot(difficulty, money = 0) {
+  const npc = createNpc(0, seeded(3));
+  npc.stats = { money, score: 10000 };
+  const brain = new NpcBrain(npc, seeded(5), difficulty);
+  const bought = [];
+  brain.onBuy = (ch, weapon) => bought.push(weapon.name);
+  return { npc, brain, bought };
+}
+
+test('bots start with the Pistol and no money, and buy guns as the crates pay for them', () => {
+  const { npc, brain, bought } = bot('Hard');
+  assert.deepEqual(npc.weapons.map((w) => w.id), [WeaponID.PISTOL]);
+  assert.equal(brain.goShopping(), null, 'nothing to spend');
+  npc.stats.money = 6999;
+  assert.equal(brain.goShopping(), null, 'not enough for the Shotgun yet');
+  npc.stats.money = 9000;
+  brain.goShopping();
+  assert.deepEqual(bought, ['Shotgun']);
+  assert.equal(npc.stats.money, 2000, 'paid the shop price');
+  assert.ok(npc.weaponByID(WeaponID.SHOTGUN));
+  npc.stats.money += 8500 + 23000;
+  brain.goShopping();
+  brain.goShopping();
+  assert.deepEqual(bought, ['Shotgun', 'Rifle', 'Plasma Cannon'], 'Hard saves up for its chain first');
+});
+
+test('each difficulty saves up for its own list of guns', () => {
+  const easy = bot('Easy', 1e6);
+  const medium = bot('Medium', 1e6);
+  for (let i = 0; i < 8; i++) easy.brain.goShopping(), medium.brain.goShopping();
+  assert.deepEqual(easy.bought, ['Dual Uzis', 'Shotgun', 'AK47']);
+  assert.deepEqual(medium.bought, ['Dual Uzis', 'Shotgun', 'Rifle', 'AK47', 'Minigun']);
+});
+
+test('bought guns run out of ammo, and bots buy more when they can afford it', () => {
+  const { npc, brain } = bot('Medium', 6500);
+  brain.goShopping();
+  const uzis = npc.weaponByID(WeaponID.AKIMBO_UZIS);
+  assert.equal(uzis.ammo.count, 250);
+  uzis.ammo.setCount(0);
+  assert.equal(uzis.available, false);
+  assert.equal(brain.goShopping(), null, 'no money for ammo');
+  npc.stats.money = 2000;
+  assert.equal(brain.goShopping(), uzis);
+  assert.equal(uzis.ammo.count, 250);
+  assert.equal(npc.stats.money, 2000 - 250 * 5);
 });
 
 function duel(difficulty, distance = 6) {
   const map = parseMap('130;20;;ffffff1b;;0');
   const nav = new NavGrid(map);
-  const npc = createNpc(0, seeded(3), new Set(), difficulty);
+  const npc = createNpc(0, seeded(3));
+  npc.stats = { money: 1e6, score: 10000 }; // rich: owns every gun on its list
   npc.respawn(4.5, 10.5);
   const enemy = new Character({ id: 'me', local: true });
   enemy.respawn(4.5 + distance, 10.5);
   const brain = new NpcBrain(npc, seeded(5), difficulty);
+  for (let i = 0; i < 6; i++) brain.goShopping();
+  npc.stats.money = 0;
   return { npc, enemy, brain, world: (now, crates = []) => ({ map, nav, characters: [npc, enemy], crates, now }) };
 }
 

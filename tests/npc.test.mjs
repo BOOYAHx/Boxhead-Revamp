@@ -15,7 +15,7 @@ function seeded(seed = 1) {
   return () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 }
 
-test('up to 15 computer players, each with its own made-up name, a costume and unlimited guns', () => {
+test('up to 15 computer players, each with its own made-up name, a costume and only the Pistol', () => {
   const used = new Set();
   const random = seeded(7);
   for (let i = 0; i < MAX_NPCS; i++) {
@@ -24,8 +24,8 @@ test('up to 15 computer players, each with its own made-up name, a costume and u
     used.add(npc.name);
     assert.equal(npc.npc, true);
     assert.ok(npc.look.bodyModel >= 0 && npc.look.bodyModel < 12);
-    assert.equal(npc.weapons.length, 3);
-    assert.ok(npc.weapons.every((w) => w.ammo === null), 'NPC guns never run dry');
+    assert.deepEqual(npc.weapons.map((w) => w.id), [0], 'guns are bought with crate money');
+    assert.equal(npc.weapon.id, 0);
   }
   assert.equal(used.size, MAX_NPCS);
 });
