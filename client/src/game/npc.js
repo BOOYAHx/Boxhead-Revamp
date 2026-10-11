@@ -3,11 +3,12 @@
 // one of the eight firing lines (every gun in Boxhead shoots along the facing),
 // keeps its distance, dodges shots and switches guns for the range.
 // Bots start every round with only the Pistol and no money: the bounty crates
-// they pick up pay for guns and ammo from their own shop, at the shop's prices.
-// Three difficulties (Quick Play's setup): Easy bots react and aim slowly and
-// save up for cheap guns; Hard bots react fast, dodge, go after money crates,
-// buy the Shotgun, Rifle and Plasma Cannon first and chain them like good
-// players (each gun reloads on its own, so switching fires the next one at once).
+// they pick up pay for guns and ammo from their own shop, at the shop's prices,
+// in this order: Shotgun, Rifle, Plasma Cannon, Magnum.
+// Three difficulties (Quick Play's setup): Easy bots react and aim slowly;
+// Hard bots react fast, dodge, go after money crates and chain their guns like
+// good players (Plasma, Shotgun, Rifle, Magnum: each gun reloads on its own,
+// so switching fires the next one at once).
 // Pure logic: the game scene moves, shoots and damages them like any player.
 
 import { Character } from './Character.js';
@@ -24,11 +25,12 @@ export const NPC_NAMES = [
   'Nina Knuckles', 'Hexley', 'Big Lou', 'Tank Tompkins', 'Viper Vance', 'Slick Rico', 'Duchess Dynamo', 'Bones Malone',
   'Sergeant Stack', 'Pixel Pete', 'Mona Mayhem', 'Count Cornerstone', 'Ziggy Zero', 'Brick Baxter', 'Lady Lockjaw', 'Dutch Dozer',
 ];
-const AUTOMATIC = [WeaponID.AKIMBO_UZIS, WeaponID.AK47, WeaponID.M16, WeaponID.MINIGUN];
-const CLOSE = [WeaponID.SHOTGUN];
-const LONG = [WeaponID.RIFLE, WeaponID.MAGNUM, WeaponID.RAILGUN];
+// Which gun a bot holds for the range, best first (the Pistol when it has none of them).
+const CLOSE_RANGE = [WeaponID.SHOTGUN, WeaponID.PLASMA, WeaponID.MAGNUM, WeaponID.RIFLE];
+const MID_RANGE = [WeaponID.PLASMA, WeaponID.MAGNUM, WeaponID.SHOTGUN, WeaponID.RIFLE];
+const LONG_RANGE = [WeaponID.PLASMA, WeaponID.RIFLE, WeaponID.MAGNUM];
 // Hard bots fire these one after another, first loaded one in range first.
-const CYCLE = [WeaponID.PLASMA, WeaponID.SHOTGUN, WeaponID.RIFLE];
+const CYCLE = [WeaponID.PLASMA, WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.MAGNUM];
 const COLORS = 34; // colour choices per body part
 const FEMALE = new Set(['Croft', 'Bride']);
 const MONSTER = new Set(['Zombie', 'Mummy']);
@@ -46,14 +48,13 @@ export const LEVELS = Object.freeze({
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
   Hard: { think: 70, aim: 50, dodge: 0.9, playerBias: 0.65, crates: 12, cycle: true },
 });
-/**
- * What each difficulty saves up for, in order (each gun once it can pay for
- * it), and how empty a gun gets (share of a full load) before it buys ammo.
- */
+/** What every bot saves up for, in order: each gun once it can pay for it. */
+export const BUY_ORDER = Object.freeze([WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM]);
+/** How empty a gun gets (share of a full load) before the bot buys ammo for it. */
 export const SHOPPING = Object.freeze({
-  Easy: { guns: [WeaponID.AKIMBO_UZIS, WeaponID.SHOTGUN, WeaponID.AK47], refillBelow: 0.2 },
-  Medium: { guns: [WeaponID.AKIMBO_UZIS, WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.AK47, WeaponID.MINIGUN], refillBelow: 0.3 },
-  Hard: { guns: [WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.AK47, WeaponID.MINIGUN], refillBelow: 0.5 },
+  Easy: { guns: BUY_ORDER, refillBelow: 0.2 },
+  Medium: { guns: BUY_ORDER, refillBelow: 0.3 },
+  Hard: { guns: BUY_ORDER, refillBelow: 0.5 },
 });
 const SHOP_TIME = 1000; // ms between shopping trips (sooner when a gun runs dry)
 export const levelFor = (difficulty) => LEVELS[difficulty] || LEVELS.Medium;
@@ -406,32 +407,31 @@ export class NpcBrain {
     return inSight ? null : best;
   }
 
-  /** The gun for the range: the shotgun up close, a long gun far off, otherwise the automatic. */
+  /** The gun for the range: the Shotgun up close, Plasma or a long gun further off, else the Pistol. */
   chooseGun(target) {
     const ch = this.ch;
     if (!target) return;
-    // Hard: walk with the automatic (the heavy guns are slower); aimAndFire picks the gun for each shot.
-    const has = (ids) => ch.weapons.find((w) => ids.includes(w.id) && w.available);
-    const fallback = ch.weapon.available ? ch.weapon : ch.weaponByID(WeaponID.PISTOL) || ch.weapon;
+    const best = (ids) => ids.map((id) => ch.weaponByID(id)).find((w) => w?.available);
+    const pistol = ch.weaponByID(WeaponID.PISTOL) || ch.weapon;
     if (this.level.cycle) {
-      if (this.alignedSince === null) ch.selectWeapon(has(AUTOMATIC) || has(CYCLE) || fallback);
-      else if (!ch.weapon.available) ch.selectWeapon(fallback);
+      // Hard: walk with the Magnum (quickest on its feet) or the Pistol; aimAndFire picks the gun for each shot.
+      if (this.alignedSince === null) ch.selectWeapon(best([WeaponID.MAGNUM]) || pistol);
+      else if (!ch.weapon.available) ch.selectWeapon(pistol);
       return;
     }
     const d = Math.hypot(target.pos.x - ch.pos.x, target.pos.y - ch.pos.y);
-    const want = (d < 3.5 && has(CLOSE)) || (d > 9 && has(LONG)) || has(AUTOMATIC) || has(CLOSE) || has(LONG) || fallback;
+    const want = best(d < 3.5 ? CLOSE_RANGE : d > 9 ? LONG_RANGE : MID_RANGE) || pistol;
     if (want !== ch.weapon) ch.selectWeapon(want);
   }
 
   /**
-   * Hard: the first loaded heavy gun that reaches (Plasma, Shotgun, Rifle),
-   * else the automatic, so a shot goes out every time one is ready.
+   * Hard: the first loaded gun that reaches (Plasma, Shotgun, Rifle, Magnum),
+   * else the Pistol, so a shot goes out every time one is ready.
    */
   cycleGuns(distance) {
     const ch = this.ch;
     const ready = (w) => w.available && w.isLoaded && distance <= w.range * 0.95;
-    const heavy = CYCLE.map((id) => ch.weaponByID(id)).find((w) => w && ready(w));
-    const next = heavy || ch.weapons.find((w) => AUTOMATIC.includes(w.id) && ready(w)) || (!ch.weapon.available && ch.weaponByID(WeaponID.PISTOL));
+    const next = CYCLE.map((id) => ch.weaponByID(id)).find((w) => w && ready(w)) || ch.weaponByID(WeaponID.PISTOL);
     if (next) ch.selectWeapon(next);
   }
 

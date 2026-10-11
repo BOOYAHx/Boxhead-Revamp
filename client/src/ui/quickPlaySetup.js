@@ -5,11 +5,12 @@
 import { DIFFICULTIES } from '../game/npc.js';
 import { MAX_MONEY, MIN_MONEY, MONEY_STEP, cleanSettings, formatMoney } from '../game/quickPlay.js';
 
-// Every bot starts with only the Pistol and buys guns with the crates it picks up.
+// Every bot starts with only the Pistol and buys Shotgun, Rifle, Plasma Cannon
+// and Magnum, in that order, with the crates it picks up.
 const HINTS = {
-  Easy: 'Pistol only at first. Slow to react; saves up for Uzis, a Shotgun and an AK47.',
-  Medium: 'Pistol only at first. Buys Uzis, a Shotgun, a Rifle, an AK47 and a Minigun as it earns.',
-  Hard: 'Pistol only at first. Grabs every crate, buys Shotgun, Rifle and Plasma, then chains them.',
+  Easy: 'Slow to react. Pistol at first, then buys Shotgun, Rifle, Plasma and Magnum as it earns.',
+  Medium: 'A fair fight. Pistol at first, then buys Shotgun, Rifle, Plasma and Magnum as it earns.',
+  Hard: 'Fast, grabs every crate, buys Shotgun, Rifle, Plasma and Magnum, and chains them.',
 };
 
 function el(tag, className, text) {

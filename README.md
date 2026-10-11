@@ -621,16 +621,15 @@ rebuild it).
 Pressing **Quick Play** first shows its setup (kept in the browser for next time):
 
 * **Bot Difficulty**: every bot starts each round with only the Pistol and $0,
-  and works its way up: the bounty crates it picks up pay for guns and ammo at
-  the shop's prices (a line in the kill feed says when one buys a gun).
-  **Easy** bots react and aim slowly and save up for Dual Uzis, a Shotgun and an
-  AK47; **Medium** bots fight like Step 17 below and buy Dual Uzis, a Shotgun, a
-  Rifle, an AK47 and a Minigun; **Hard** bots react and aim fast, nearly always
-  sidestep your line, hunt you first, pick up every money crate nearby (unless a
-  fight is right next to them), buy the Shotgun, Rifle and Plasma Cannon first
-  and chain them like good players: Plasma, then Shotgun, then Rifle (each gun
-  reloads on its own, so switching fires the next one at once), with an
-  automatic while those reload.
+  and works its way up: the bounty crates it picks up pay for its guns and ammo
+  at the shop's prices, bought in this order as the money comes in: Shotgun,
+  Rifle, Plasma Cannon, Magnum (a line in the kill feed says when one buys a
+  gun). **Easy** bots react and aim slowly and only pick up crates right beside
+  them; **Medium** bots fight like Step 17 below; **Hard** bots react and aim
+  fast, nearly always sidestep your line, hunt you first, pick up every money
+  crate nearby (unless a fight is right next to them) and chain their guns like
+  good players: Plasma, then Shotgun, then Rifle, then Magnum (each gun reloads
+  on its own, so switching fires the next one at once).
 * **Starting Money**: $10,000 to $100,000 each round.
 * **Maps**: tick the maps to play; each round is a random one of them (all when
   every box is ticked).
