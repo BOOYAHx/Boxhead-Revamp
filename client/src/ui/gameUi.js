@@ -176,6 +176,11 @@ export class GameUi {
       return;
     }
     if (!this.scoreboard) this.scoreboard = this.stage.addChild(this.lib.create('boxhead.ui.score.BountyScoreBoard'));
+    // Reopening the shop appends it above the cached board; held scores belong on top.
+    if (this.stage.el.lastElementChild !== this.scoreboard.el) {
+      this.stage.removeChild(this.scoreboard);
+      this.stage.addChild(this.scoreboard);
+    }
     this.scoreboard.visible = true;
     fillEntries(this.scoreboard, players);
   }
