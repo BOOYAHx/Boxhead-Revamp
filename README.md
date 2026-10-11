@@ -629,6 +629,9 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   crates nearby (unless a fight is right next to them) and chain their guns like
   good players: Plasma, then Shotgun, then Rifle, then Magnum (each gun reloads
   on its own, so switching fires the next one; each switch takes them a moment).
+  **Super Hard** bots react and aim almost instantly, nearly always dodge,
+  hunt you first, chase every crate within reach, start with the Shotgun and
+  the Rifle, earn double money from crates and chain their guns with no pause.
   Every bot's default gun is the Pistol: it respawns with it and holds it while
   walking about, switching to a bought gun to fight.
 * **Starting Money**: $10,000 to $100,000 each round.

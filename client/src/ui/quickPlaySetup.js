@@ -11,6 +11,7 @@ const HINTS = {
   Easy: 'Fights like the original bots. Starts with a Shotgun, then buys Rifle, Plasma and Magnum.',
   Medium: 'A fair fight. Starts with a Shotgun, then buys Rifle, Plasma and Magnum as it earns.',
   Hard: 'Fast, grabs every crate. Starts with a Shotgun, buys Rifle, Plasma, Magnum, and chains them.',
+  'Super Hard': 'Extremely fast and accurate. Starts with Shotgun and Rifle, crates pay double, chains guns instantly.',
 };
 
 function el(tag, className, text) {
@@ -40,7 +41,7 @@ export function createQuickPlaySetup(root, { settings, maps, play, back, playSou
   const segment = el('div', 'qp-segment');
   const hint = el('p', 'qp-hint');
   const levelButtons = DIFFICULTIES.map((level) => {
-    const button = el('button', 'qp-choice qp-' + level.toLowerCase(), level);
+    const button = el('button', 'qp-choice qp-' + level.toLowerCase().replace(/\s+/g, '-'), level);
     button.type = 'button';
     button.addEventListener('click', () => {
       playSound('ClickShort');

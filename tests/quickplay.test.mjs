@@ -216,3 +216,17 @@ test('the Pistol stays the default: bots only take out a bought gun to fight', (
   hard.brain.update(hard.world(0));
   assert.equal(hard.npc.weapon.id, WeaponID.PISTOL, 'Hard walks with the Pistol, not the Magnum');
 });
+
+test('Super Hard bots start with Shotgun and Rifle, react fastest and chain guns without a pause', () => {
+  const { npc } = bot('Super Hard');
+  assert.ok(npc.weaponByID(WeaponID.SHOTGUN) && npc.weaponByID(WeaponID.RIFLE));
+  assert.equal(cleanSettings({ difficulty: 'Super Hard' }).difficulty, 'Super Hard');
+  const { npc: s, brain, world } = duel('Super Hard');
+  brain.update(world(0));
+  brain.update(world(50));
+  assert.equal(s.firing, true, 'aims almost at once');
+  assert.equal(s.weapon.id, WeaponID.PLASMA);
+  s.weapon.timeSinceFire = 0;
+  brain.update(world(60));
+  assert.equal(s.weapon.id, WeaponID.SHOTGUN, 'the next gun straight away');
+});

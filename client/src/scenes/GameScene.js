@@ -1017,7 +1017,7 @@ export class GameScene extends Phaser.Scene {
   giveCrate(ch, crate, bountyPoints = 0) {
     ch.stats.bountyPoints += bountyPoints;
     ch.stats.score += crate.bounty;
-    if (ch.npc) ch.stats.money += crate.bounty; // a bot's money buys its guns
+    if (ch.npc) ch.stats.money += crate.bounty * (this.remotes.get(ch.id)?.npc?.level.crateMoney || 1); // a bot's money buys its guns
     if (ch.local) {
       this.effects.playSound('Ka_ching', ch.pos);
       ch.stats.money += crate.bounty; // Player.pickupMoney (no money premium)

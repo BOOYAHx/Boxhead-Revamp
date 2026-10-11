@@ -35,7 +35,7 @@ const COLORS = 34; // colour choices per body part
 const FEMALE = new Set(['Croft', 'Bride']);
 const MONSTER = new Set(['Zombie', 'Mummy']);
 
-export const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+export const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Super Hard'];
 /**
  * How each difficulty plays. think: ms between plans (reaction); aim: ms on a
  * firing line before the first shot; dodge: chance to step off an enemy's
@@ -48,6 +48,9 @@ export const LEVELS = Object.freeze({
   Easy: { think: 100, aim: 120, dodge: 0.75, playerBias: 0.8, crates: 3, cycle: false },
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
   Hard: { think: 95, aim: 115, dodge: 0.72, playerBias: 0.75, crates: 10, cycle: true, switchDelay: 170 },
+  // Super Hard: near-instant reactions and aim, almost always dodges, hunts the human, chains guns with no pause
+  // and crates pay it double (crateMoney), so it reaches the Plasma Cannon and Magnum early.
+  'Super Hard': { think: 50, aim: 35, dodge: 0.95, playerBias: 0.55, crates: 14, cycle: true, switchDelay: 0, crateMoney: 2 },
 });
 /** The gun every bot starts each round with (full of ammo; it buys more shells later). */
 export const STARTING_GUN = WeaponID.SHOTGUN;
@@ -58,6 +61,7 @@ export const SHOPPING = Object.freeze({
   Easy: { guns: BUY_ORDER, refillBelow: 0.2 },
   Medium: { guns: BUY_ORDER, refillBelow: 0.3 },
   Hard: { guns: BUY_ORDER, refillBelow: 0.5 },
+  'Super Hard': { guns: BUY_ORDER, refillBelow: 0.7, start: [WeaponID.SHOTGUN, WeaponID.RIFLE] },
 });
 const SHOP_TIME = 1000; // ms between shopping trips (sooner when a gun runs dry)
 export const levelFor = (difficulty) => LEVELS[difficulty] || LEVELS.Medium;
@@ -236,10 +240,12 @@ export class NpcBrain {
     });
     // The starting Shotgun comes from that shop, so its shells are refilled like a bought gun's.
     // (The Pistol stays in hand: it is the default.)
-    const start = this.shop.item(STARTING_GUN);
-    if (start && !start.owned) {
-      start.owned = true;
-      character.pickupWeapon(start.weapon);
+    for (const id of this.shopping.start || [STARTING_GUN]) {
+      const start = this.shop.item(id);
+      if (start && !start.owned) {
+        start.owned = true;
+        character.pickupWeapon(start.weapon);
+      }
     }
     this.nextShop = 0;
     this.switchedAt = -Infinity;

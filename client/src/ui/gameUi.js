@@ -229,7 +229,7 @@ export class GameUi {
     const layer = document.createElement('div');
     layer.className = 'summary-difficulty';
     const tag = document.createElement('span');
-    tag.className = 'summary-difficulty-tag is-' + difficulty.toLowerCase();
+    tag.className = 'summary-difficulty-tag is-' + difficulty.toLowerCase().replace(/\s+/g, '-');
     tag.textContent = 'Bot Difficulty: ' + difficulty;
     layer.append(tag);
     this.root.append(layer);
