@@ -2,9 +2,9 @@
 // guns, and a brain that finds its way round the map, picks a target, lines up
 // one of the eight firing lines (every gun in Boxhead shoots along the facing),
 // keeps its distance, dodges shots and switches guns for the range.
-// Bots start every round with only the Pistol and no money: the bounty crates
-// they pick up pay for guns and ammo from their own shop, at the shop's prices,
-// in this order: Shotgun, Rifle, Plasma Cannon, Magnum.
+// Bots start every round with the Pistol, a Shotgun and no money: the bounty
+// crates they pick up pay for guns and ammo from their own shop, at the
+// shop's prices, in this order: Rifle, Plasma Cannon, Magnum.
 // Three difficulties (Quick Play's setup): Easy bots react and aim slowly;
 // Hard bots react fast, dodge, go after money crates and chain their guns like
 // good players (Plasma, Shotgun, Rifle, Magnum: each gun reloads on its own,
@@ -41,14 +41,16 @@ export const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
  * firing line before the first shot; dodge: chance to step off an enemy's
  * line; playerBias: the human looks this much closer (below 1: hunted first);
  * crates: how far (cells) a money crate draws it, 0 for never; cycle: chain
- * the heavy guns.
+ * the heavy guns, switching at most every switchDelay ms.
  */
 export const LEVELS = Object.freeze({
   Easy: { think: 280, aim: 480, dodge: 0.1, playerBias: 1, crates: 3, cycle: false },
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
-  Hard: { think: 70, aim: 50, dodge: 0.9, playerBias: 0.65, crates: 12, cycle: true },
+  Hard: { think: 110, aim: 140, dodge: 0.65, playerBias: 0.8, crates: 10, cycle: true, switchDelay: 200 },
 });
-/** What every bot saves up for, in order: each gun once it can pay for it. */
+/** The gun every bot starts each round with (full of ammo; it buys more shells later). */
+export const STARTING_GUN = WeaponID.SHOTGUN;
+/** What every bot saves up for, in order: each gun once it can pay for it (the Shotgun is already owned). */
 export const BUY_ORDER = Object.freeze([WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM]);
 /** How empty a gun gets (share of a full load) before the bot buys ammo for it. */
 export const SHOPPING = Object.freeze({
@@ -231,7 +233,14 @@ export class NpcBrain {
       get money() { return character.stats?.money || 0; },
       set money(value) { if (character.stats) character.stats.money = value; },
     });
+    // The starting Shotgun comes from that shop, so its shells are refilled like a bought gun's.
+    const start = this.shop.item(STARTING_GUN);
+    if (start && !start.owned) {
+      start.owned = true;
+      character.selectWeapon(character.pickupWeapon(start.weapon));
+    }
     this.nextShop = 0;
+    this.switchedAt = -Infinity;
     this.onBuy = null; // (character, weapon): a new gun was bought
     this.target = null;
     this.nextThink = 0;
@@ -426,13 +435,15 @@ export class NpcBrain {
 
   /**
    * Hard: the first loaded gun that reaches (Plasma, Shotgun, Rifle, Magnum),
-   * else the Pistol, so a shot goes out every time one is ready.
+   * else the Pistol, so a shot goes out every time one is ready; it takes a
+   * moment (switchDelay) to change guns.
    */
-  cycleGuns(distance) {
+  cycleGuns(distance, now) {
     const ch = this.ch;
+    if (now - this.switchedAt < (this.level.switchDelay || 0)) return;
     const ready = (w) => w.available && w.isLoaded && distance <= w.range * 0.95;
     const next = CYCLE.map((id) => ch.weaponByID(id)).find((w) => w && ready(w)) || ch.weaponByID(WeaponID.PISTOL);
-    if (next) ch.selectWeapon(next);
+    if (next && ch.selectWeapon(next)) this.switchedAt = now;
   }
 
   aimAndFire(world) {
@@ -468,7 +479,7 @@ export class NpcBrain {
     if (line.offset <= ALIGNED && inRange && clearShot(map, ch.pos, target.pos)) {
       if (this.alignedSince === null) this.alignedSince = now;
       if (now - this.alignedSince >= this.level.aim) {
-        if (this.level.cycle) this.cycleGuns(line.along);
+        if (this.level.cycle) this.cycleGuns(line.along, now);
         ch.firing = true;
       }
       // Lined up: hold the line (only step along it), so the shots keep landing.

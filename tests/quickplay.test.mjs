@@ -64,44 +64,41 @@ function bot(difficulty, money = 0) {
   return { npc, brain, bought };
 }
 
-test('bots start with the Pistol and no money, then buy Shotgun, Rifle, Plasma and Magnum as the crates pay', () => {
+test('bots start with the Pistol, a full Shotgun and no money, then buy Rifle, Plasma and Magnum as the crates pay', () => {
   const { npc, brain, bought } = bot('Medium');
-  assert.deepEqual(npc.weapons.map((w) => w.id), [WeaponID.PISTOL]);
+  assert.deepEqual(npc.weapons.map((w) => w.id).sort(), [WeaponID.PISTOL, WeaponID.SHOTGUN].sort());
+  assert.equal(npc.weapon.id, WeaponID.SHOTGUN, 'holding it');
+  assert.equal(npc.weaponByID(WeaponID.SHOTGUN).ammo.count, 35);
   assert.equal(brain.goShopping(), null, 'nothing to spend');
-  npc.stats.money = 6999;
-  assert.equal(brain.goShopping(), null, 'not enough for the Shotgun yet');
+  npc.stats.money = 8499;
+  assert.equal(brain.goShopping(), null, 'not enough for the Rifle yet');
   npc.stats.money = 9000;
   brain.goShopping();
-  assert.deepEqual(bought, ['Shotgun']);
-  assert.equal(npc.stats.money, 2000, 'paid the shop price');
-  npc.stats.money += 6000;
-  assert.equal(brain.goShopping(), null, 'saving for the Rifle ($8,500)');
-  npc.stats.money += 500;
-  brain.goShopping();
+  assert.deepEqual(bought, ['Rifle']);
+  assert.equal(npc.stats.money, 500, 'paid the shop price');
   npc.stats.money += 23000;
   brain.goShopping();
   npc.stats.money += 30000;
   brain.goShopping();
-  assert.deepEqual(bought, ['Shotgun', 'Rifle', 'Plasma Cannon', 'Magnum']);
-  assert.equal(npc.stats.money, 0);
+  assert.deepEqual(bought, ['Rifle', 'Plasma Cannon', 'Magnum']);
+  assert.equal(npc.stats.money, 500);
   npc.stats.money = 1e6;
   brain.goShopping();
-  assert.equal(bought.length, 4, 'nothing more after the Magnum');
+  assert.equal(bought.length, 3, 'nothing more after the Magnum');
 });
 
-test('every difficulty buys in the same order', () => {
+test('every difficulty starts with the Shotgun and buys in the same order', () => {
   for (const difficulty of ['Easy', 'Medium', 'Hard']) {
-    const { brain, bought } = bot(difficulty, 1e6);
+    const { npc, brain, bought } = bot(difficulty, 1e6);
+    assert.ok(npc.weaponByID(WeaponID.SHOTGUN), difficulty);
     for (let i = 0; i < 6; i++) brain.goShopping();
-    assert.deepEqual(bought, ['Shotgun', 'Rifle', 'Plasma Cannon', 'Magnum'], difficulty);
+    assert.deepEqual(bought, ['Rifle', 'Plasma Cannon', 'Magnum'], difficulty);
   }
 });
 
-test('bought guns run out of ammo, and bots buy more when they can afford it', () => {
-  const { npc, brain } = bot('Medium', 7000);
-  brain.goShopping();
+test('the Shotgun runs out of shells, and bots buy more when they can afford it', () => {
+  const { npc, brain } = bot('Medium');
   const shotgun = npc.weaponByID(WeaponID.SHOTGUN);
-  assert.equal(shotgun.ammo.count, 35);
   shotgun.ammo.setCount(0);
   assert.equal(shotgun.available, false);
   assert.equal(brain.goShopping(), null, 'no money for ammo');
@@ -118,13 +115,17 @@ test('Medium bots pick the gun for the range from what they own', () => {
   const mid = duel('Medium', 6);
   mid.brain.update(mid.world(0));
   assert.equal(mid.npc.weapon.id, WeaponID.PLASMA);
-  const poor = bot('Medium');
+  const fresh = bot('Medium');
   const map = parseMap('130;20;;ffffff1b;;0');
-  poor.npc.respawn(4.5, 10.5);
+  fresh.npc.respawn(4.5, 10.5);
   const enemy = new Character({ id: 'me', local: true });
-  enemy.respawn(10.5, 10.5);
-  poor.brain.update({ map, nav: new NavGrid(map), characters: [poor.npc, enemy], crates: [], now: 0 });
-  assert.equal(poor.npc.weapon.id, WeaponID.PISTOL, 'nothing bought yet: the Pistol');
+  enemy.respawn(12.5, 10.5);
+  const world = (now) => ({ map, nav: new NavGrid(map), characters: [fresh.npc, enemy], crates: [], now });
+  fresh.brain.update(world(0));
+  assert.equal(fresh.npc.weapon.id, WeaponID.SHOTGUN, 'only the Shotgun so far');
+  fresh.npc.weaponByID(WeaponID.SHOTGUN).ammo.setCount(0);
+  fresh.brain.update(world(1000));
+  assert.equal(fresh.npc.weapon.id, WeaponID.PISTOL, 'out of shells and money: the Pistol');
 });
 
 function duel(difficulty, distance = 6) {
@@ -145,23 +146,27 @@ test('Hard bots chain their guns: Plasma, then Shotgun, then Rifle, then Magnum,
   const { npc, brain, world } = duel('Hard');
   brain.update(world(0));
   brain.update(world(100));
+  assert.equal(npc.firing, false, 'a moment to aim first');
+  brain.update(world(200));
   assert.equal(npc.dir, E);
   assert.equal(npc.firing, true);
   assert.equal(npc.weapon.id, WeaponID.PLASMA);
   npc.weapon.timeSinceFire = 0; // the game fired it: reloading now
-  brain.update(world(150));
-  assert.equal(npc.weapon.id, WeaponID.SHOTGUN, 'the next loaded gun, at once');
+  brain.update(world(300));
+  assert.equal(npc.weapon.id, WeaponID.PLASMA, 'changing guns takes a moment');
+  brain.update(world(400));
+  assert.equal(npc.weapon.id, WeaponID.SHOTGUN, 'then the next loaded gun');
   npc.weapon.timeSinceFire = 0;
-  brain.update(world(200));
+  brain.update(world(600));
   assert.equal(npc.weapon.id, WeaponID.RIFLE);
   npc.weapon.timeSinceFire = 0;
-  brain.update(world(250));
+  brain.update(world(800));
   assert.equal(npc.weapon.id, WeaponID.MAGNUM);
   npc.weapon.timeSinceFire = 0;
-  brain.update(world(275));
+  brain.update(world(1000));
   assert.equal(npc.weapon.id, WeaponID.PISTOL, 'the Pistol while the rest reload');
   npc.weaponByID(WeaponID.PLASMA).timeSinceFire = 999; // reloaded
-  brain.update(world(300));
+  brain.update(world(1200));
   assert.equal(npc.weapon.id, WeaponID.PLASMA);
 });
 
@@ -169,7 +174,7 @@ test('Hard bots skip a heavy gun that cannot reach', () => {
   const { npc, brain, world } = duel('Hard', 14); // past the Shotgun's range
   npc.weaponByID(WeaponID.PLASMA).timeSinceFire = 0;
   brain.update(world(0));
-  brain.update(world(100));
+  brain.update(world(200));
   assert.equal(npc.weapon.id, WeaponID.RIFLE);
 });
 
