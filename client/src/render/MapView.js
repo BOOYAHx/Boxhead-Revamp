@@ -47,14 +47,15 @@ export class MapView {
   }
 
   /**
-   * How sharp to paint the ground: at the drawing scale when the ground
-   * textures are upscaled (Enhanced Graphics), limited so the pieces stay
-   * within the graphics card's memory.
+   * How sharp to paint the ground: when the ground textures are upscaled
+   * (Enhanced Graphics), at the whole-number scale at or above the drawing
+   * scale (it is then drawn a little smaller, which keeps it sharp), limited
+   * so the pieces stay within the graphics card's memory.
    */
   terrainScale() {
     const names = [...new Set(this.map.cells.map((c) => TEXTURES[c.texture]).filter(Boolean)), this.map.relief].filter(Boolean);
     if (!names.some((name) => hdImageScale(name) > 1)) return 1;
-    let scale = Math.max(1, Display.scale);
+    let scale = Math.max(1, Math.ceil(Display.scale));
     while (scale > 1 && this.pixelWidth * this.pixelHeight * scale * scale > TERRAIN_BUDGET) scale--;
     return scale;
   }

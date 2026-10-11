@@ -40,12 +40,13 @@ export function wantedScale() {
 }
 
 /**
- * Original-size art: crisp (nearest-pixel) at a whole 2x, 3x..., smooth like
- * Flash otherwise (at in-between sizes nearest-pixel makes uneven, jagged
- * pixels). Upscaled sheets are always smooth (drawn smaller than their pixels).
+ * Original-size art (until its upscaled copy is swapped in): crisp
+ * (nearest-pixel) from 1.5x up, so it stays sharp instead of blurred; smooth
+ * like Flash below that, where nearest-pixel would make some pixels twice as
+ * wide as others. Upscaled sheets are always smooth (drawn smaller than their pixels).
  */
 export function applyFilters(textures, isHd = () => false) {
-  const crisp = Display.scale > 1 && Number.isInteger(Display.scale);
+  const crisp = Display.scale >= 1.5;
   for (const key of textures.getTextureKeys()) {
     if (!key.startsWith('sheet:') && !key.startsWith('img:')) continue;
     const smooth = !crisp || isHd(key);
