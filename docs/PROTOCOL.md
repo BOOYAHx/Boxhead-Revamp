@@ -51,12 +51,18 @@ survivor. `<maps>` is one capital letter per map in the rotation
 | `C<id>[<mode>]` | you (own id, with the room's mode) or a peer joined |
 | `D<id>` | a peer left (own id: you were disconnected) |
 | `U<id><payload>` | peer handshake: lobby stats, or game state in a game room (below) |
+| `P<id><payload>` | refreshed saved profile after a ranked round; same payload as `A`, without logging in again or changing rooms |
 | `01<players2><name>;...` | room list (full and private rooms are hidden) |
 | `04<mode><custom><mapLetter><players2><seconds>` | room info |
 | `099` | join/create failed ("Game not found" / name in use) |
 | `p<seconds>` | round time left |
 | `s<crates>` | bounty crates already on the map |
 | `0r<5 slot ids>` | round over: winner, hunter, professor, poacher, dummy |
+
+Profile updates contain absolute saved totals and go to each online round
+participant, including players who returned to the lobby during the save.
+The browser updates its cached profile and redraws an open View Stats panel.
+Client-supplied `P` packets are discarded. Unranked rounds do not change saved totals.
 
 Game handshake payload:
 `<weapon2><hp3><name20><gender1><hm2><hc2><bm2><bc2><team1><score>;<kills>;<deaths>;<bounty>;[<weapon2><flags1>]...<wanted1>`

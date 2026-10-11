@@ -1184,6 +1184,18 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                 except OSError:
                     pass
 
+    def refresh_round_profiles(self, players):
+        # A participant may already be back in the lobby when the save finishes.
+        usernames = {player['username'] for player in players}
+        for account, user in list(USERS.items()):
+            if user.get('username') not in usernames:
+                continue
+            try:
+                # Same saved profile payload as login, without re-authenticating.
+                user['socket'].sendall(b'P' + auth_packet(account)[1:])
+            except (OSError, KeyError):
+                pass
+
     def _start_next_round(self, room):
         # Called under the round lock, after the previous result was committed.
         room['round_id'] = uuid.uuid4().hex
@@ -1277,6 +1289,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             print(f'[ROUND END] {round_id} {kind} round finished; stats not saved')
             return
         print(f'[ROUND SAVE] {round_id} saved once for {len(room["round_snapshot"])} players')
+        self.refresh_round_profiles(room['round_snapshot'])
         update_most_wanted_xml()
 
     def get_awards_and_save_db(self, room_name, room=None):
@@ -1489,8 +1502,8 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             self.handle_moderation(packet)
             return
 
-        # 0t is a server-only result packet; clients cannot forge notices.
-        elif packet.startswith('0t'):
+        # Notices and saved profile updates can only come from the server.
+        elif packet.startswith(('0t', 'P')):
             return
 
         # JOIN ROOM

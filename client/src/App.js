@@ -154,6 +154,7 @@ export class App {
     };
     c.on(ServerEvent.PEER_JOINED, refreshPlayers);
     c.on(ServerEvent.HANDSHAKE, refreshPlayers);
+    c.on(ServerEvent.PROFILE_UPDATE, refreshPlayers);
     c.on(ServerEvent.PEER_DISCONNECTED, refreshPlayers);
     c.on(ServerEvent.MOST_WANTED_CHANGE, refreshPlayers);
     c.on(ServerEvent.MESSAGE, ({ source, message }) => {

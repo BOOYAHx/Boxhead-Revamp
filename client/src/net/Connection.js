@@ -14,6 +14,7 @@ export const ServerEvent = Object.freeze({
   FAILED: 'failed',
   DISCONNECTED: 'disconnected',
   AUTHENTICATE: 'authenticate',
+  PROFILE_UPDATE: 'profileUpdate',
   REGISTER: 'register',
   SERVER_ERROR: 'serverError',
   ROOM_LIST: 'roomList',
@@ -279,14 +280,18 @@ export class Connection extends Emitter {
     switch (type) {
       case '0':
         return this.handleZeroMessage(data);
-      case 'A': {
+      case 'A':
+      case 'P': {
         const id = data.substr(1, 3);
+        // Saved totals refresh independently of the room and login handshake.
+        if (type === 'P' && (!this.authenticated || !this.localUser || id !== this.clientID
+          || !/^.{20}\d[0-2]\d{8}\d+(?:;\d+){4}[01]$/.test(data.substr(4)))) return;
         const user = this.localUser || (this.localUser = new User(id));
         user.id = id;
         this.clientID = id;
         this.authenticated = true;
         updateUserFromAuthenticate(user, data.substr(4));
-        return this.emit(ServerEvent.AUTHENTICATE, { id, user });
+        return this.emit(type === 'P' ? ServerEvent.PROFILE_UPDATE : ServerEvent.AUTHENTICATE, { id, user });
       }
       case 'U': {
         const id = data.substr(1, 3);
