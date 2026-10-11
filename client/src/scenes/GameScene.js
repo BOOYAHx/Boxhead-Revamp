@@ -424,15 +424,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Our gun upgrades again ("0l<weapon2><1|2>"), for a player who joined after
-   * we bought them: each player's game judges the hits on them with its own
+   * Our gun and equipment upgrades again ("0l<weapon2><1|2>"), for a player
+   * who joined after we bought them: each player's game judges the hits on them with its own
    * copy of our guns, which starts without upgrades (an upgraded Shotgun
    * still did 6 a pellet to them, not 7). Players who have them already
    * ignore the repeat.
    */
   announceUpgrades() {
     if (this.mode !== 'online' || !this.shop || !this.connection) return;
-    for (const item of this.shop.weapons) {
+    for (const item of [...this.shop.weapons, ...this.shop.equipment]) {
       if (!item.owned) continue;
       item.weapon.upgrades.forEach((upgrade, i) => {
         if (upgrade?.owned) this.connection.sendGameMessage('0l' + padInt(item.id, 2) + (i + 1));
