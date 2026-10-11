@@ -616,6 +616,23 @@ XGen logos). Its art comes from BBH.swf and is included in
 `client/assets/game/intro/` (`tools/export_intro.py` or `tools/build_assets.py`
 rebuild it).
 
+### Quick Play setup: bot difficulty, starting money, maps
+
+Pressing **Quick Play** first shows its setup (kept in the browser for next time):
+
+* **Bot Difficulty**: **Easy** bots react and aim slowly and carry the Pistol and a
+  light automatic; **Medium** plays like Step 17 below; **Hard** bots react and aim
+  fast, nearly always sidestep your line, hunt you first, pick up every money
+  crate nearby (unless a fight is right next to them) and chain their heavy guns
+  like good players: Plasma Cannon, then Shotgun, then Rifle (each gun reloads on
+  its own, so switching fires the next one at once), with an automatic while
+  those reload.
+* **Starting Money**: $10,000 to $100,000 each round.
+* **Maps**: tick the maps to play; each round is a random one of them (all when
+  every box is ticked).
+
+The Game Summary at the end of a round shows the bots' difficulty.
+
 ### Step 17: practice against computer players
 
 **Quick Play** (offline) now fills the map with computer players, 8 at first.

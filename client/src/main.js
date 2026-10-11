@@ -3,6 +3,7 @@
 import { App } from './App.js';
 import { loadBindings } from './game/controls.js';
 import { Preferences, isSaved, loadPreferences } from './game/preferences.js';
+import { loadQuickPlay } from './game/quickPlay.js';
 import { loadBanks } from './game/weapons.js';
 import { Display, applyDisplay, canvasSize, sharpenText, softwareRendering, wantedScale } from './render/display.js';
 import { BootScene } from './scenes/BootScene.js';
@@ -13,6 +14,7 @@ import { watchForUpdates } from './net/updates.js';
 import { keepConsoleKeys } from './ui/keyboard.js';
 
 loadPreferences();
+loadQuickPlay(); // Quick Play's setup: bot difficulty, starting money, maps
 loadBindings(); // the Controls screen's keys
 loadBanks(); // the Weapon Banks screen's layout
 // Enhanced Graphics starts off on computers drawing without a graphics card.

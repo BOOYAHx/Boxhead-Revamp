@@ -466,3 +466,274 @@ form.host {
   color: #5e5e5e;
   opacity: 1;
 }
+
+/* Quick Play's setup (ui/quickPlaySetup.js): a dark rounded panel like the
+   options screen, over the main menu's backdrop. Sizes follow the stage width. */
+.qp-setup {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  container-type: inline-size;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.qp-panel {
+  width: 60cqw;
+  max-height: 92%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 1.8cqw 2.8cqw 1.4cqw;
+  border: 0.3cqw solid #8d8d8d;
+  border-radius: 1.8cqw;
+  background: rgba(0, 0, 0, 0.82);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 0 0 0.15cqw #2a2a2a, 0 1.5cqw 4cqw rgba(0, 0, 0, 0.6);
+}
+
+.qp-setup .qp-title {
+  margin: 0 0 1.3cqw;
+  padding-bottom: 0.6cqw;
+  border-bottom: 0.15cqw solid #8d8d8d;
+  color: #fff;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 3.6cqw;
+  font-weight: bold;
+  line-height: 1;
+  text-shadow: 0 0.2cqw 0.5cqw #000;
+}
+
+.qp-section {
+  margin: 0 0 1.2cqw;
+}
+
+.qp-setup .qp-label {
+  display: block;
+  margin: 0 0 0.6cqw;
+  color: #fff;
+  font-size: 2cqw;
+  font-weight: bold;
+  letter-spacing: 0.05cqw;
+}
+
+.qp-hint {
+  min-height: 2cqw;
+  margin: 0.5cqw 0 0;
+  font-size: 1.55cqw;
+  line-height: 1.35;
+  color: #b9b9b9;
+}
+
+.qp-segment {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8cqw;
+}
+
+.qp-choice,
+.qp-button,
+.qp-link {
+  font: inherit;
+  cursor: pointer;
+}
+
+.qp-choice {
+  padding: 0.8cqw 0;
+  border: 0.2cqw solid #5a5a5a;
+  border-radius: 0.9cqw;
+  background: linear-gradient(#2b2b2b, #161616);
+  color: #cfcfcf;
+  font-size: 2cqw;
+  font-weight: bold;
+  transition: filter 120ms ease, border-color 120ms ease;
+}
+
+.qp-choice:hover {
+  filter: brightness(1.35);
+}
+
+.qp-choice[aria-pressed='true'] {
+  color: #fff;
+  border-color: currentColor;
+}
+
+.qp-choice.qp-easy[aria-pressed='true'] { background: linear-gradient(#2f7a34, #184a1c); }
+.qp-choice.qp-medium[aria-pressed='true'] { background: linear-gradient(#a8741c, #61400b); }
+.qp-choice.qp-hard[aria-pressed='true'] { background: linear-gradient(#c8432b, #6e1b10); }
+
+.qp-money {
+  display: flex;
+  align-items: center;
+  gap: 1.6cqw;
+}
+
+.qp-slider {
+  flex: 1;
+  height: 1.2cqw;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 1cqw;
+  background: linear-gradient(90deg, #4fa94f var(--fill, 0%), #3a3a3a var(--fill, 0%));
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.qp-slider::-webkit-slider-thumb {
+  width: 2.6cqw;
+  height: 2.6cqw;
+  border: 0.25cqw solid #fff;
+  border-radius: 50%;
+  background: #2b6e2b;
+  -webkit-appearance: none;
+}
+
+.qp-slider::-moz-range-thumb {
+  width: 2.2cqw;
+  height: 2.2cqw;
+  border: 0.25cqw solid #fff;
+  border-radius: 50%;
+  background: #2b6e2b;
+}
+
+.qp-amount {
+  min-width: 12cqw;
+  text-align: right;
+  font-size: 2.6cqw;
+  font-weight: bold;
+  color: #7fe07f;
+  text-shadow: 0 0.2cqw 0.4cqw #000;
+}
+
+.qp-maps-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.qp-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #9a9a9a;
+  font-size: 1.6cqw;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.qp-link:hover {
+  color: #fff;
+}
+
+.qp-maps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3cqw 1cqw;
+  font-size: 1.75cqw;
+  color: #bbb;
+}
+
+.qp-setup .qp-map {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.8cqw;
+  padding: 0.4cqw 0.6cqw;
+  border-radius: 0.7cqw;
+  color: #bbb;
+  font-size: 1.75cqw;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.qp-map:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.qp-setup .qp-map input {
+  flex: none;
+  width: 1.8cqw;
+  height: 1.8cqw;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: #4fa94f;
+  cursor: pointer;
+}
+
+.qp-setup .qp-map:has(input:checked) {
+  color: #fff;
+}
+
+.qp-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.8cqw;
+  padding-top: 0.8cqw;
+  border-top: 0.15cqw solid #8d8d8d;
+}
+
+.qp-button {
+  padding: 0.6cqw 1cqw;
+  border: 0;
+  background: none;
+  color: #a9a9a9;
+  font-size: 2.4cqw;
+  font-weight: bold;
+  text-shadow: 0 0.2cqw 0.4cqw #000;
+}
+
+.qp-button:hover,
+.qp-button:focus-visible {
+  color: #fff;
+}
+
+.qp-play {
+  padding: 0.6cqw 3cqw;
+  border-radius: 0.9cqw;
+  background: linear-gradient(#c8432b, #7a2112);
+  color: #fff;
+}
+
+.qp-play:hover,
+.qp-play:focus-visible {
+  filter: brightness(1.2);
+}
+
+.qp-play:disabled {
+  filter: grayscale(1) brightness(0.6);
+  cursor: default;
+}
+
+/* The bots' difficulty over Quick Play's round summary (GameUi.showDifficulty). */
+.summary-difficulty {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.summary-difficulty-tag {
+  position: absolute;
+  top: 62.5cqw; /* the summary's bottom row (the stage is 70cqw tall), left of the countdown */
+  left: 10.5cqw;
+  padding: 0.35cqw 1.1cqw;
+  border: 0.15cqw solid rgba(255, 255, 255, 0.55);
+  border-radius: 0.8cqw;
+  font: bold 1.55cqw Arial, Helvetica, sans-serif;
+  color: #fff;
+  text-shadow: 0 0.15cqw 0.3cqw #000;
+}
+
+.summary-difficulty-tag.is-easy { background: rgba(47, 122, 52, 0.9); }
+.summary-difficulty-tag.is-medium { background: rgba(168, 116, 28, 0.9); }
+.summary-difficulty-tag.is-hard { background: rgba(200, 67, 43, 0.92); }

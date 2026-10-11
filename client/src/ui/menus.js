@@ -8,6 +8,9 @@ import { LobbyScreen } from './lobby.js';
 import { installWidgets } from './widgets.js';
 import { FOOTSTEPS, Preferences, resetPreferences, savePreferences } from '../game/preferences.js';
 import { MAX_NPCS } from '../game/npc.js';
+import { QuickPlay, saveQuickPlay } from '../game/quickPlay.js';
+import { practiceMapList } from '../net/MapService.js';
+import { createQuickPlaySetup } from './quickPlaySetup.js';
 
 // MainMenuScreen fade, in frames at 30 fps.
 const PRE_FADE = 5;
@@ -75,6 +78,8 @@ export class FlashMenus {
     this.login_ = null;
     this.loginBox = null;
     this.subscreen = null;
+    this.setup?.remove();
+    this.setup = null;
     this.stage.clear();
     this.state = null;
     this.menuScreen = null;
@@ -108,7 +113,7 @@ export class FlashMenus {
     const panel = (this.buttonsPanel = screen.child('buttonsPanel'));
     const actions = {
       loginButton: () => (this.playSound('ClickLong'), this.serverSelect()),
-      quickPlayButton: () => (this.playSound('ClickShort'), this.handlers.offline()),
+      quickPlayButton: () => (this.playSound('ClickShort'), this.quickPlaySetup()),
       howToPlayButton: () => (this.playSound('ClickShort'), this.howToPlay()),
       optionsButton: () => (this.playSound('ClickShort'), this.options()),
     };
@@ -144,6 +149,8 @@ export class FlashMenus {
 
   closeSubscreen() {
     this.closeConfig(null);
+    this.setup?.remove();
+    this.setup = null;
     for (const screen of [this.subscreen, this.login_]) {
       if (!screen) continue;
       this.stage.removeChild(screen);
@@ -153,6 +160,23 @@ export class FlashMenus {
     this.login_ = null;
     this.loginBox = null;
     if (this.buttonsPanel) this.buttonsPanel.visible = true;
+  }
+
+  /** Quick Play's setup (bot difficulty, starting money, maps), then the practice game. */
+  quickPlaySetup() {
+    this.ensureMainMenu();
+    this.buttonsPanel.visible = false;
+    this.setup = createQuickPlaySetup(this.root, {
+      settings: QuickPlay,
+      maps: practiceMapList(),
+      playSound: (name) => this.playSound(name),
+      back: () => (this.playSound('ClickShort'), this.closeSubscreen()),
+      play: (settings) => {
+        this.playSound('ClickLong');
+        saveQuickPlay(settings);
+        this.handlers.offline();
+      },
+    });
   }
 
   /** ServerSelectScreen: one server here; "connect" or "back". */

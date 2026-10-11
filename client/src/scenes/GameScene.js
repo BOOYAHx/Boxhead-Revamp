@@ -7,9 +7,10 @@ import { DIRECTIONS, byVector } from '../game/Direction.js';
 import { KeyState, isKey } from '../game/controls.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
-import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, bountyCrateTypes, chatLines, cleanChat, newStats, offlineAwards, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
+import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, START_SCORE, bountyCrateTypes, chatLines, cleanChat, newStats, offlineAwards, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
+import { QuickPlay, playableMaps } from '../game/quickPlay.js';
 import { ShopState } from '../game/shop.js';
 import { DEBUG, FREE_GUNS } from '../config.js';
 import { loadLook } from '../game/profile.js';
@@ -42,7 +43,6 @@ const FLOOD_TIME = 2000;
 const MAX_CHAT_LENGTH = 120;
 const LEADER_COLOR = 0xffffff;
 const AUTO_SHOP_DELAY = 3000; // ShopGame.AUTO_SHOP_DELAY
-const OFFLINE_MONEY = 1000000; // practice: enough to try everything
 const OFFLINE_ROUND = 600; // practice rounds: 10 minutes, like the server's (round_length 630 with the summary)
 const MAX_CRATES = 199; // crate indexes 000-198, like the game server
 let lastPracticeMap = null; // practice rounds change map
@@ -188,12 +188,13 @@ export class GameScene extends Phaser.Scene {
     this.app.leaveGame();
   }
 
-  /** Practice: a random map from all of them each round, never the same one twice in a row. */
+  /** Practice: a random map from the ones picked in Quick Play's setup (all by default), never the same one twice in a row. */
   async loadOfflineMap() {
     const { signal } = this.mapLoad;
     // Give the browser a paint (the loading screen) while the list arrives, before constructing the map.
-    const [maps] = await Promise.all([practiceMapList(), this.loadingPaint()]);
+    const [all] = await Promise.all([practiceMapList(), this.loadingPaint()]);
     if (signal.aborted) return;
+    const maps = playableMaps(all);
     const choices = maps.length > 1 ? maps.filter((m) => m.name !== lastPracticeMap) : maps;
     const choice = choices[Math.floor(Math.random() * choices.length)];
     let map;
@@ -1118,7 +1119,9 @@ export class GameScene extends Phaser.Scene {
     for (const award of awards) if (award.player?.local) this.roundBonus += award.bonus;
     if (this.ui) {
       // GameSummary lists everyone in the room (players who never spawned too).
-      this.ui.showSummary(this.scoreRows(everyone), awards, (player) => drawPortrait(this.textures, player.character.look));
+      this.ui.showSummary(this.scoreRows(everyone), awards, (player) => drawPortrait(this.textures, player.character.look), {
+        difficulty: this.mode === 'offline' && this.npcs.length ? QuickPlay.difficulty : null,
+      });
       this.ui.setSummaryCountdown(this.roundTime);
     } else {
       this.hud.showSummary(shown, awards);
@@ -1218,7 +1221,7 @@ export class GameScene extends Phaser.Scene {
     const user = this.connection?.localUser;
     this.player = new Character({ id: this.connection ? this.connection.clientID : 'you', name: user?.name || 'You', local: true, instantWeaponCycling: this.instantWeaponCycling });
     this.player.stats = newStats(this.roundBonus);
-    if (this.mode === 'offline') this.player.stats.money = OFFLINE_MONEY;
+    if (this.mode === 'offline') this.player.stats.money += QuickPlay.money - START_SCORE; // Quick Play's starting money (plus last round's awards)
     this.roundBonus = 0; // Player.newRound spends the bonus
     if (user) Object.assign(this.player.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
     else Object.assign(this.player.look, loadLook()); // offline: the look saved in this browser
@@ -1285,10 +1288,10 @@ export class GameScene extends Phaser.Scene {
     while (this.npcs.length > count) this.removeRemote(this.npcs.pop().ch.id);
     const used = new Set(this.npcs.map((b) => b.ch.name));
     while (this.npcs.length < count) {
-      const ch = createNpc(this.npcCount++, Math.random, used);
+      const ch = createNpc(this.npcCount++, Math.random, used, QuickPlay.difficulty);
       used.add(ch.name);
       ch.stats = newStats();
-      const brain = new NpcBrain(ch);
+      const brain = new NpcBrain(ch, Math.random, QuickPlay.difficulty);
       this.npcs.push(brain);
       this.remotes.set(ch.id, { id: ch.id, character: ch, view: new CharacterView(this, ch, NPC_NAME_COLOR), ping: 0, pings: [], npc: brain });
       this.respawnNpc(brain, false);
@@ -1310,7 +1313,8 @@ export class GameScene extends Phaser.Scene {
   /** Each tick: respawn the dead after their wait, then let every brain decide. */
   thinkNpcs() {
     if (!this.npcs.length) return;
-    const world = { map: this.map, nav: this.nav, characters: [this.player, ...this.npcs.map((b) => b.ch)], now: performance.now() };
+    const crates = [...this.crates.values()].filter(Boolean).map(({ crate }) => crate.end); // where each money crate lands
+    const world = { map: this.map, nav: this.nav, characters: [this.player, ...this.npcs.map((b) => b.ch)], crates, now: performance.now() };
     for (const brain of this.npcs) {
       const ch = brain.ch;
       if (ch.dead && ch.active) {

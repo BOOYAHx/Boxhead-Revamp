@@ -2,6 +2,10 @@
 // guns, and a brain that finds its way round the map, picks a target, lines up
 // one of the eight firing lines (every gun in Boxhead shoots along the facing),
 // keeps its distance, dodges shots and switches guns for the range.
+// Three difficulties (Quick Play's setup): Easy bots react and aim slowly and
+// carry light guns; Hard bots react fast, dodge, go after money crates and
+// chain their heavy guns like good players (Plasma, then Shotgun, then Rifle:
+// each gun reloads on its own, so switching fires the next one at once).
 // Pure logic: the game scene moves, shoots and damages them like any player.
 
 import { Character } from './Character.js';
@@ -18,20 +22,33 @@ export const NPC_NAMES = [
   'Sergeant Stack', 'Pixel Pete', 'Mona Mayhem', 'Count Cornerstone', 'Ziggy Zero', 'Brick Baxter', 'Lady Lockjaw', 'Dutch Dozer',
 ];
 const AUTOMATIC = [WeaponID.AKIMBO_UZIS, WeaponID.AK47, WeaponID.M16, WeaponID.MINIGUN];
+const LIGHT_AUTOMATIC = [WeaponID.AKIMBO_UZIS, WeaponID.AK47, WeaponID.M16];
 const CLOSE = [WeaponID.SHOTGUN];
 const LONG = [WeaponID.RIFLE, WeaponID.MAGNUM, WeaponID.RAILGUN];
+// Hard bots fire these one after another, first loaded one in range first.
+const CYCLE = [WeaponID.PLASMA, WeaponID.SHOTGUN, WeaponID.RIFLE];
 const COLORS = 34; // colour choices per body part
 const FEMALE = new Set(['Croft', 'Bride']);
 const MONSTER = new Set(['Zombie', 'Mummy']);
 
-// How the brain plays (hard): reaction and aim are quick, it rarely misses a dodge.
-const THINK_TIME = 100; // ms between plans
-const AIM_TIME = 120; // ms on a firing line before the first shot
+export const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+/**
+ * How each difficulty plays. think: ms between plans (reaction); aim: ms on a
+ * firing line before the first shot; dodge: chance to step off an enemy's
+ * line; playerBias: the human looks this much closer (below 1: hunted first);
+ * crates: how far (cells) a money crate draws it, 0 for never; cycle: chain
+ * the heavy guns.
+ */
+export const LEVELS = Object.freeze({
+  Easy: { think: 280, aim: 480, dodge: 0.1, playerBias: 1, crates: 0, cycle: false },
+  Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
+  Hard: { think: 70, aim: 50, dodge: 0.9, playerBias: 0.65, crates: 12, cycle: true },
+});
+export const levelFor = (difficulty) => LEVELS[difficulty] || LEVELS.Medium;
 const ALIGNED = FIRE_RADIUS * 0.7; // cells off the line that still hit
-const DODGE_CHANCE = 0.75;
 const DODGE_TIME = 300;
 const TARGET_KEEP = 0.7; // a new target must be this much closer to take over
-const PLAYER_BIAS = 0.8; // the human looks this much closer than they are
+const CRATE_FIGHT = 4; // Hard: an enemy this close is fought before a crate is picked up
 const STUCK_TIME = 900;
 const PATH_REFRESH = 600; // ms before a route to the same cell is worked out again
 const LINES = DIRECTIONS.slice(0, 4); // the four firing lines through a point (each both ways)
@@ -39,8 +56,13 @@ const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], 
 
 const pick = (list, random) => list[Math.floor(random() * list.length)];
 
-/** A computer player: a name from the list, a random costume, the Pistol and two guns with unlimited ammo. */
-export function createNpc(index, random = Math.random, usedNames = new Set()) {
+/**
+ * A computer player: a name from the list, a random costume and guns with
+ * unlimited ammo: Easy the Pistol and a light automatic, Medium the Pistol, an
+ * automatic and a shotgun or long gun, Hard the Pistol, Plasma Cannon,
+ * Shotgun, Rifle and an automatic.
+ */
+export function createNpc(index, random = Math.random, usedNames = new Set(), difficulty = 'Medium') {
   const free = NPC_NAMES.filter((n) => !usedNames.has(n));
   const name = free.length ? pick(free, random) : `Bot ${index + 1}`;
   const ch = new Character({ id: 'n' + String((index % 99) + 1).padStart(2, '0'), name }); // 3 characters, like a server slot id
@@ -57,7 +79,11 @@ export function createNpc(index, random = Math.random, usedNames = new Set()) {
   ch.weapons = [];
   ch.banks = {};
   ch.weapon = null;
-  for (const id of [WeaponID.PISTOL, pick(AUTOMATIC, random), pick(random() < 0.5 ? CLOSE : LONG, random)]) ch.pickupWeapon(new Weapon(id, { remote: true }));
+  const guns = {
+    Easy: () => [WeaponID.PISTOL, pick(LIGHT_AUTOMATIC, random)],
+    Hard: () => [WeaponID.PISTOL, ...CYCLE, pick(AUTOMATIC, random)],
+  }[difficulty]?.() || [WeaponID.PISTOL, pick(AUTOMATIC, random), pick(random() < 0.5 ? CLOSE : LONG, random)];
+  for (const id of guns) ch.pickupWeapon(new Weapon(id, { remote: true }));
   ch.selectWeapon(ch.weapons.find((w) => AUTOMATIC.includes(w.id)) || ch.weapons[0]);
   return ch;
 }
@@ -191,9 +217,11 @@ export function clearShot(map, from, to, altitude = 20) {
  * fires and which gun it holds. world: { map, nav, characters, now, random }.
  */
 export class NpcBrain {
-  constructor(character, random = Math.random) {
+  constructor(character, random = Math.random, difficulty = 'Medium') {
     this.ch = character;
     this.random = random;
+    this.difficulty = LEVELS[difficulty] ? difficulty : 'Medium';
+    this.level = levelFor(difficulty);
     this.target = null;
     this.nextThink = 0;
     this.goal = null;
@@ -225,7 +253,7 @@ export class NpcBrain {
     }
     if (now >= this.nextThink) {
       this.think(world);
-      this.nextThink = now + THINK_TIME * (0.8 + this.random() * 0.4);
+      this.nextThink = now + this.level.think * (0.8 + this.random() * 0.4);
     }
     this.aimAndFire(world);
   }
@@ -238,7 +266,7 @@ export class NpcBrain {
     const ch = this.ch;
     const { map, nav, now } = world;
     // Pick a target: the nearest enemy in sight, the human slightly first; keep it unless a much better one shows up.
-    const score = (c) => Math.hypot(c.pos.x - ch.pos.x, c.pos.y - ch.pos.y) * (c.npc ? 1 : PLAYER_BIAS) + (clearShot(map, ch.pos, c.pos) ? 0 : 8);
+    const score = (c) => Math.hypot(c.pos.x - ch.pos.x, c.pos.y - ch.pos.y) * (c.npc ? 1 : this.level.playerBias) + (clearShot(map, ch.pos, c.pos) ? 0 : 8);
     const enemies = this.enemies(world);
     if (this.target && (!this.target.active || this.target.dead)) this.target = null;
     let best = null;
@@ -262,6 +290,13 @@ export class NpcBrain {
       this.lastProgress = { x: ch.pos.x, y: ch.pos.y, at: now };
     }
 
+    // Money: a crate close enough is picked up first, unless a fight is right here.
+    const crate = this.crateToTake(world, target);
+    if (crate && now >= this.unstickUntil) {
+      this.goal = crate;
+      return;
+    }
+
     if (!target || now < this.unstickUntil) {
       if (!this.wander || Math.hypot(this.wander.x - ch.pos.x, this.wander.y - ch.pos.y) < 1) this.wander = nav.randomCell(this.random);
       this.goal = this.wander;
@@ -278,8 +313,8 @@ export class NpcBrain {
         return along > 0 && Math.abs(dx * e.dir.dy - dy * e.dir.dx) < FIRE_RADIUS + 0.3 && clearShot(map, e.pos, ch.pos);
       });
       const mine = bestLine(ch.pos, target.pos);
-      const readyToShoot = mine.offset <= ALIGNED && this.alignedSince !== null && now - this.alignedSince >= AIM_TIME;
-      if (threat && !readyToShoot && this.random() < DODGE_CHANCE) {
+      const readyToShoot = mine.offset <= ALIGNED && this.alignedSince !== null && now - this.alignedSince >= this.level.aim;
+      if (threat && !readyToShoot && this.random() < this.level.dodge) {
         const side = this.random() < 0.5 ? 1 : -1;
         this.dodgeDir = facingFor(-threat.dir.dy * side, threat.dir.dx * side);
         this.dodgeUntil = now + DODGE_TIME;
@@ -307,14 +342,56 @@ export class NpcBrain {
     this.goal = goal || { x: target.pos.x, y: target.pos.y };
   }
 
+  /**
+   * The nearest money crate worth walking to: none on Easy, near ones when no
+   * enemy is in sight on Medium, on Hard any within reach unless an enemy is
+   * close. world.crates: [{ x, y }].
+   */
+  crateToTake(world, target) {
+    const range = this.level.crates;
+    if (!range || !world.crates?.length) return null;
+    const ch = this.ch;
+    let best = null;
+    let bestDistance = range;
+    for (const c of world.crates) {
+      const d = Math.hypot(c.x - ch.pos.x, c.y - ch.pos.y);
+      if (d < bestDistance && world.nav.walkable(Math.floor(c.x), Math.floor(c.y))) {
+        best = c;
+        bestDistance = d;
+      }
+    }
+    if (!best || !target) return best;
+    const targetDistance = Math.hypot(target.pos.x - ch.pos.x, target.pos.y - ch.pos.y);
+    const inSight = clearShot(world.map, ch.pos, target.pos);
+    if (this.level.cycle) return targetDistance > CRATE_FIGHT || !inSight ? best : null;
+    return inSight ? null : best;
+  }
+
   /** The gun for the range: the shotgun up close, a long gun far off, otherwise the automatic. */
   chooseGun(target) {
     const ch = this.ch;
     if (!target) return;
+    // Hard: walk with the automatic (the heavy guns are slower); aimAndFire picks the gun for each shot.
+    if (this.level.cycle) {
+      if (this.alignedSince === null) ch.selectWeapon(ch.weapons.find((w) => AUTOMATIC.includes(w.id)) || ch.weapon);
+      return;
+    }
     const d = Math.hypot(target.pos.x - ch.pos.x, target.pos.y - ch.pos.y);
     const has = (ids) => ch.weapons.find((w) => ids.includes(w.id));
     const want = (d < 3.5 && has(CLOSE)) || (d > 9 && has(LONG)) || has(AUTOMATIC) || ch.weapon;
     if (want !== ch.weapon) ch.selectWeapon(want);
+  }
+
+  /**
+   * Hard: the first loaded heavy gun that reaches (Plasma, Shotgun, Rifle),
+   * else the automatic, so a shot goes out every time one is ready.
+   */
+  cycleGuns(distance) {
+    const ch = this.ch;
+    const ready = (w) => w.isLoaded && distance <= w.range * 0.95;
+    const heavy = CYCLE.map((id) => ch.weaponByID(id)).find((w) => w && ready(w));
+    const next = heavy || ch.weapons.find((w) => AUTOMATIC.includes(w.id) && ready(w));
+    if (next) ch.selectWeapon(next);
   }
 
   aimAndFire(world) {
@@ -344,10 +421,15 @@ export class NpcBrain {
     }
     const line = bestLine(ch.pos, target.pos);
     ch.dir = line.dir;
-    const inRange = line.along <= ch.weapon.range * 0.95;
+    // Hard bots switch to whichever gun reaches, so the longest of them counts (up to a screen away).
+    const reach = this.level.cycle ? Math.min(25, Math.max(...ch.weapons.filter((w) => w.kind === 'gun' || w.kind === 'projectile').map((w) => w.range))) : ch.weapon.range;
+    const inRange = line.along <= reach * 0.95;
     if (line.offset <= ALIGNED && inRange && clearShot(map, ch.pos, target.pos)) {
       if (this.alignedSince === null) this.alignedSince = now;
-      if (now - this.alignedSince >= AIM_TIME) ch.firing = true;
+      if (now - this.alignedSince >= this.level.aim) {
+        if (this.level.cycle) this.cycleGuns(line.along);
+        ch.firing = true;
+      }
       // Lined up: hold the line (only step along it), so the shots keep landing.
       if (ch.moveDir && now >= this.dodgeUntil) {
         const along = ch.moveDir.dx * line.dir.dx + ch.moveDir.dy * line.dir.dy;

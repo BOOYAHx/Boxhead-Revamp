@@ -190,9 +190,10 @@ export class GameUi {
    * each winner's picture, and the countdown to the next round.
    * awards: from roundAwards(); portrait(player) gives a picture canvas.
    */
-  showSummary(players, awards, portrait) {
+  showSummary(players, awards, portrait, { difficulty = null } = {}) {
     this.summary?.destroy();
     const summary = (this.summary = this.stage.addChild(this.lib.create('boxhead.ui.score.GameSummary')));
+    this.showDifficulty(difficulty);
     this.showScoreboard(null);
     summary.child('nextGameField').text = '';
     fillEntries(summary, players);
@@ -218,6 +219,21 @@ export class GameUi {
       else if (award.player) box?.drawCharacter?.(portrait(award.player));
       else box?.clear?.();
     });
+  }
+
+  /** Quick Play: the bots' difficulty over the summary ("Bot Difficulty: Hard"); null removes it. */
+  showDifficulty(difficulty) {
+    this.difficultyTag?.remove();
+    this.difficultyTag = null;
+    if (!difficulty) return;
+    const layer = document.createElement('div');
+    layer.className = 'summary-difficulty';
+    const tag = document.createElement('span');
+    tag.className = 'summary-difficulty-tag is-' + difficulty.toLowerCase();
+    tag.textContent = 'Bot Difficulty: ' + difficulty;
+    layer.append(tag);
+    this.root.append(layer);
+    this.difficultyTag = layer;
   }
 
   setSummaryCountdown(seconds) {
