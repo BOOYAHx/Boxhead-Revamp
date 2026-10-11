@@ -74,6 +74,7 @@ export class GameScene extends Phaser.Scene {
     this.unsubscribe = [];
     this.remotes = new Map(); // peer id -> { id, character, view, ping, ... }
     this.pendingJoins = new Set(); // wait for the handshake to supply the name
+    this.newPeers = new Set(); // joined this round; told our gun upgrades once their handshake arrives
     this.joinNoticesReady = false; // initial roster arrives before the room-info reply
     // Player messages wait here until the map is loaded (Game.messageInQueue).
     // It carries over to the next round: peers that start it sooner announce
@@ -293,11 +294,13 @@ export class GameScene extends Phaser.Scene {
 
   peerJoined(id) {
     if (this.joinNoticesReady) this.pendingJoins.add(id);
+    this.newPeers.add(id);
     this.updateScores();
   }
 
   peerHandshake(user) {
     if (user.name && this.pendingJoins.delete(user.id)) this.hud.addMessage(`${user.name} has joined the game`, { chat: true });
+    if (this.newPeers.delete(user.id)) this.announceUpgrades();
     if (this.map) this.applyHandshakeStats(this.ensureRemote(user), user);
     this.forcePositionUpdate = true; // let the newcomer see where we are
     this.updateScores();
@@ -417,6 +420,23 @@ export class GameScene extends Phaser.Scene {
         break;
       default:
         break;
+    }
+  }
+
+  /**
+   * Our gun upgrades again ("0l<weapon2><1|2>"), for a player who joined after
+   * we bought them: each player's game judges the hits on them with its own
+   * copy of our guns, which starts without upgrades (an upgraded Shotgun
+   * still did 6 a pellet to them, not 7). Players who have them already
+   * ignore the repeat.
+   */
+  announceUpgrades() {
+    if (this.mode !== 'online' || !this.shop || !this.connection) return;
+    for (const item of this.shop.weapons) {
+      if (!item.owned) continue;
+      item.weapon.upgrades.forEach((upgrade, i) => {
+        if (upgrade?.owned) this.connection.sendGameMessage('0l' + padInt(item.id, 2) + (i + 1));
+      });
     }
   }
 
