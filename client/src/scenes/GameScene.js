@@ -824,6 +824,7 @@ export class GameScene extends Phaser.Scene {
       if (this.autoSelectWeapon?.id === id) this.autoSelectWeapon = null;
     }
     if (this.mode === 'online') this.connection.sendGameMessage('0l' + padInt(id, 2) + result.action);
+    if (p.weapon === result.weapon) p.animSpeed = p.weapon.moveSpeed;
     if (p.active) this.ui.slider.setBanks(p.banks);
     this.ui.slider.update(p.weapon, true);
     this.updateScores();
@@ -1237,6 +1238,9 @@ export class GameScene extends Phaser.Scene {
     this.equipmentView = new EquipmentView(this, this.equipment);
     // The round starts in the shop (BountyGame.showInitUI); we spawn when it closes.
     this.shop = new ShopState(this.player.stats, { freeGuns: FREE_GUNS });
+    // Share the shop's pistol so upgrades apply to the weapon in hand.
+    this.player.dropWeapon(this.player.weapon);
+    this.player.selectWeapon(this.player.pickupWeapon(this.shop.item(PISTOL_ID).weapon));
     const lib = this.app?.menus?.lib;
     const root = document.getElementById('game-ui');
     if (lib && root) {
