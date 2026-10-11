@@ -623,8 +623,8 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
 * **Bot Difficulty**: every bot starts each round with the Pistol, a Shotgun and
   $0, and works its way up: the bounty crates it picks up pay for its guns and
   ammo at the shop's prices, bought in this order as the money comes in: Rifle,
-  Plasma Cannon, Magnum (a line in the kill feed says when one buys a gun). **Easy** bots react and aim slowly and only pick up crates right beside
-  them; **Medium** bots fight like Step 17 below; **Hard** bots react and aim
+  Plasma Cannon, Magnum (a line in the kill feed says when one buys a gun). **Easy** bots fight like the original practice bots (Step 17 below) and only
+  pick up crates right beside them; **Medium** bots react and aim a little slower; **Hard** bots react and aim
   quicker, usually sidestep your line, go for you a little first, pick up money
   crates nearby (unless a fight is right next to them) and chain their guns like
   good players: Plasma, then Shotgun, then Rifle, then Magnum (each gun reloads

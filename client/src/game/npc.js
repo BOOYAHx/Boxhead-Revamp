@@ -5,8 +5,8 @@
 // Bots start every round with the Pistol, a Shotgun and no money: the bounty
 // crates they pick up pay for guns and ammo from their own shop, at the
 // shop's prices, in this order: Rifle, Plasma Cannon, Magnum.
-// Three difficulties (Quick Play's setup): Easy bots react and aim slowly;
-// Hard bots react fast, dodge, go after money crates and chain their guns like
+// Three difficulties (Quick Play's setup): Easy bots fight like the original
+// practice bots; Hard bots react fast, dodge, go after money crates and chain their guns like
 // good players (Plasma, Shotgun, Rifle, Magnum: each gun reloads on its own,
 // so switching fires the next one at once).
 // Pure logic: the game scene moves, shoots and damages them like any player.
@@ -44,7 +44,8 @@ export const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
  * the heavy guns, switching at most every switchDelay ms.
  */
 export const LEVELS = Object.freeze({
-  Easy: { think: 280, aim: 480, dodge: 0.1, playerBias: 1, crates: 3, cycle: false },
+  // Easy fights exactly like the original practice bots did (before there were difficulties).
+  Easy: { think: 100, aim: 120, dodge: 0.75, playerBias: 0.8, crates: 3, cycle: false },
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
   Hard: { think: 95, aim: 115, dodge: 0.72, playerBias: 0.75, crates: 10, cycle: true, switchDelay: 170 },
 });

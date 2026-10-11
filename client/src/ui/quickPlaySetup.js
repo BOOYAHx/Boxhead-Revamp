@@ -8,7 +8,7 @@ import { MAX_MONEY, MIN_MONEY, MONEY_STEP, cleanSettings, formatMoney } from '..
 // Every bot starts with the Pistol and a Shotgun and buys a Rifle, the Plasma
 // Cannon and a Magnum, in that order, with the crates it picks up.
 const HINTS = {
-  Easy: 'Slow to react. Starts with a Shotgun, then buys Rifle, Plasma and Magnum as it earns.',
+  Easy: 'Fights like the original bots. Starts with a Shotgun, then buys Rifle, Plasma and Magnum.',
   Medium: 'A fair fight. Starts with a Shotgun, then buys Rifle, Plasma and Magnum as it earns.',
   Hard: 'Fast, grabs every crate. Starts with a Shotgun, buys Rifle, Plasma, Magnum, and chains them.',
 };

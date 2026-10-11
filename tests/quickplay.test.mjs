@@ -178,12 +178,12 @@ test('Hard bots skip a heavy gun that cannot reach', () => {
   assert.equal(npc.weapon.id, WeaponID.RIFLE);
 });
 
-test('Easy bots take longer to shoot than Hard ones', () => {
+test('Easy bots aim like the original practice bots: a short moment, then they fire', () => {
   const easy = duel('Easy');
   easy.brain.update(easy.world(0));
-  easy.brain.update(easy.world(300));
+  easy.brain.update(easy.world(60));
   assert.equal(easy.npc.firing, false, 'still lining up');
-  easy.brain.update(easy.world(800));
+  easy.brain.update(easy.world(200));
   assert.equal(easy.npc.firing, true);
 });
 
