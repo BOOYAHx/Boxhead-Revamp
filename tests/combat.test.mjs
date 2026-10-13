@@ -135,6 +135,23 @@ test('respawn picks the spawn point farthest from enemies', () => {
   assert.equal(chooseSpawn([], [enemy]), null);
 });
 
+test('respawn: a near spawn point early in the list is not kept, deployables block, ties are random', () => {
+  // Map.evaluateSpawnPoint scores, in list order 1.0, 0.6, 0.35 against one enemy at the origin.
+  const enemy = { pos: { x: 0, y: 0 } };
+  const near = { x: 1, y: 0 };
+  const middle = { x: 1 / 0.6, y: 0 };
+  const far = { x: 1 / 0.35, y: 0 };
+  for (const r of [0, 0.5, 0.99]) assert.notEqual(chooseSpawn([near, middle, far], [enemy], null, () => r), near, 'three times as close as the safest');
+  // A barricade or mine on the far point's cell: the next safest instead.
+  const blocked = (x, y) => x === Math.floor(far.x) && y === Math.floor(far.y);
+  assert.equal(chooseSpawn([near, middle, far], [enemy], blocked, () => 0), middle);
+  // Every point blocked: still somewhere.
+  assert.ok(chooseSpawn([near, far], [enemy], () => true));
+  // Nobody to fear: any point.
+  const all = [{ x: 1, y: 1 }, { x: 5, y: 5 }, { x: 9, y: 9 }, { x: 13, y: 13 }];
+  assert.deepEqual(new Set([0, 0.3, 0.6, 0.9].map((r) => chooseSpawn(all, [], null, () => r))), new Set(all));
+});
+
 test('combat packets match the Flash client', () => {
   assert.equal(encodeFire(0), '40000');
   assert.equal(encodeFire(-Math.PI / 2), '42700');

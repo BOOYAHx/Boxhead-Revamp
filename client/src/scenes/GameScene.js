@@ -1040,8 +1040,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   pickSpawn() {
-    const enemies = [...this.remotes.values()].map((r) => r.character).filter((ch) => ch.active && !ch.dead && !this.friendly(ch, this.player));
-    return chooseSpawn(this.map.spawns, enemies) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
+    // Map.evaluateSpawnPoint: the players who could hurt us (nobody during Infected's warm-up).
+    const enemies = this.preparing ? [] : [...this.remotes.values()].map((r) => r.character).filter((ch) => ch.active && !ch.dead && !this.friendly(ch, this.player));
+    return chooseSpawn(this.map.spawns, enemies, (x, y) => this.deployableOn(x, y)) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
+  }
+
+  /** Whether a barricade, mine or other deployable stands on cell (x, y): nobody spawns there. */
+  deployableOn(x, y) {
+    for (const d of this.map.deployables.values()) if (d.cellX === x && d.cellY === y) return true;
+    return false;
   }
 
   /** KillMessage: "X killed Y", "You" for the local player; highlighted when we are involved. */
@@ -1469,7 +1476,7 @@ export class GameScene extends Phaser.Scene {
   respawnNpc(brain, sound = true) {
     const ch = brain.ch;
     const others = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== ch && c.active && !c.dead);
-    const spawn = chooseSpawn(this.map.spawns, others) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
+    const spawn = chooseSpawn(this.map.spawns, others, (x, y) => this.deployableOn(x, y)) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
     ch.respawn(spawn.x, spawn.y);
     ch.selectWeapon(ch.weaponByID(PISTOL_ID) || ch.weapon); // back in with the Pistol, the bots' default
     brain.reset();

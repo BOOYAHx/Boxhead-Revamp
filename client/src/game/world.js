@@ -675,26 +675,29 @@ export function traceShot(map, start, angle, altitude, maxRange, characters, sho
 }
 
 /**
- * Map.spawnCharacter / evaluateSpawnPoint: score each spawn point by how
- * close the enemies are (sum of 1 / distance) and pick randomly among the
- * best ones (up to three within a factor of two of the best score).
+ * Map.evaluateSpawnPoint: a spawn point's danger is the sum of 1 / distance
+ * (1 to 999 cells) to every enemy; one with a deployable on its cell is never
+ * used (unless every one has). Then a random pick among the up to three
+ * safest, those within a factor of two of the safest (all of the equally
+ * safe ones when no enemy is about).
+ *
+ * The original kept, as it went down the list, every point that was the
+ * safest so far, so a point near the enemies that came first in the list
+ * could still be picked; this compares them all with the safest.
+ *
+ * blocked(cellX, cellY): whether a deployable is on that cell.
  */
-export function chooseSpawn(spawns, enemies, random = Math.random) {
-  let best = Infinity;
-  let candidates = [];
-  for (const spawn of spawns) {
-    let score = 0;
-    for (const enemy of enemies) score += 1 / Math.min(999, Math.max(1, Math.hypot(enemy.pos.x - spawn.x, enemy.pos.y - spawn.y)));
-    if (score < best) {
-      if (score * 2 < best) candidates = [spawn];
-      else {
-        candidates.push(spawn);
-        if (candidates.length > 3) candidates.shift();
-      }
-      best = score;
-    } else if (score === best) {
-      candidates.push(spawn);
-    }
-  }
-  return candidates.length ? candidates[Math.floor(random() * candidates.length)] : null;
+export function spawnDanger(spawn, enemies) {
+  let score = 0;
+  for (const enemy of enemies) score += 1 / Math.min(999, Math.max(1, Math.hypot(enemy.pos.x - spawn.x, enemy.pos.y - spawn.y)));
+  return score;
+}
+
+export function chooseSpawn(spawns, enemies, blocked = null, random = Math.random) {
+  if (!spawns.length) return null;
+  const free = blocked ? spawns.filter((s) => !blocked(Math.floor(s.x), Math.floor(s.y))) : spawns;
+  const scored = (free.length ? free : spawns).map((spawn) => ({ spawn, score: spawnDanger(spawn, enemies) })).sort((a, b) => a.score - b.score);
+  const best = scored[0].score;
+  const candidates = best === 0 ? scored.filter((c) => c.score === 0) : scored.slice(0, 3).filter((c) => c.score <= best * 2);
+  return candidates[Math.floor(random() * candidates.length)].spawn;
 }
