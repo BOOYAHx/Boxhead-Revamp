@@ -16,3 +16,6 @@ export const SERVER_NAME = user.serverName || 'Squaresville';
 export const FREE_GUNS = !!user.freeGuns;
 // ?debug in the page URL: T shows hit boxes and coordinates (for testing; players never see them).
 export const DEBUG = params.has('debug');
+// ?testmap: straight into Quick Play on the map from the map editor's "Test play" (kept in this browser).
+export const TEST_MAP = params.has('testmap');
+export const TEST_MAP_KEY = 'bbh.editor.test';

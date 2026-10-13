@@ -97,6 +97,7 @@ The port is built in small steps. Each one is tested before the next starts.
 | 14 | Lighting pass (Enhanced Graphics): lights from muzzle flashes and explosions on walls, props, people and the floor; contact shadows; ambient occlusion where walls meet the floor | **ready to test** |
 | 15 | Hand-redrawn 4x art: templates and loading (`tools/redrawn_art.py`); the drawing itself is done by an artist | tools ready |
 | 19 | Game modes for online rooms: Team Deathmatch and Infected (Host Game → Game Modes) | **ready to test** |
+| 20 | Map editor (`editor.html`): build maps with the game's art, test them in Quick Play, share them as a map code | **ready to test** |
 | later | Turrets | |
 
 ## Repository layout
@@ -641,6 +642,35 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   every box is ticked).
 
 The Game Summary at the end of a round shows the bots' difficulty.
+
+### Step 20: the map editor
+
+`editor.html` (the homepage's **Map editor** card, or **Map editor** in the
+game page's menu) builds maps with the game's own art, in the game's own map
+format. Everything stays in your browser until you share it.
+
+* **Ground** paints the floor (grass, asphalt, road, tiles, wood...): **Brush**
+  (size 1-5), **Box** (drag a rectangle) or **Fill** (the touching area of the
+  same ground). **Bare ground** shows the map's background colour.
+* **Marks** paints road lines, curbs, sidewalk edges, grass edges, grass bits and cracks.
+* **Props** places trees, rocks, crates, bins, hydrants, mailboxes, wooden
+  fences, brick, concrete and castle walls, warehouse and shop pieces, cars,
+  trucks and wrecks. The green outline shows where it goes (red: something is
+  in the way). Drag to place a row.
+* **Spawns** places the points players start from (8 or more is best) and has the eraser.
+* Right click removes what is under the pointer. **Ctrl+Z** / **Ctrl+Y** undo
+  and redo, **G** the grid, **Ctrl+wheel** zoom, **Space+drag** or the middle
+  button moves around. **Map settings** sets the size (10 to 100 cells each
+  way), the background colour and the shading.
+* **Open** starts from one of the game's maps (as a copy), the Nuke Town and
+  Junkyard examples, a map file or a pasted map code.
+* **Test play** opens the game in a new tab straight into Quick Play on the
+  map, with the bots (`play.html?testmap`).
+* **Share** shows the map code (copy it and paste it in a message) and
+  **Download file** saves it as a `.boxhead-map.json` file, which **Open** reads back.
+
+To put a shared map in the game, send the code or the file: it is added to
+the map list like the others (the game itself is not changed by the editor).
 
 ### Step 19: Team Deathmatch and Infected
 

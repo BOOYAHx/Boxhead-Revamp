@@ -4,7 +4,7 @@
 // tools/save_maps.py come first, so play does not depend on the service; the
 // bundled Warehouse is the last resort.
 
-import { API_URL } from '../config.js';
+import { API_URL, TEST_MAP, TEST_MAP_KEY } from '../config.js';
 import { ASSET_ROOT } from '../render/assets.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
 
@@ -41,8 +41,20 @@ async function savedMapList() {
  * there are none.
  */
 export async function practiceMapList() {
+  const test = TEST_MAP && editorTestMap();
+  if (test) return [test];
   const saved = ((await savedMapList()) || []).filter((map) => map?.data);
   return saved.length ? saved : [{ name: 'Warehouse', data: FALLBACK_MAPS[0].data }];
+}
+
+/** The map editor's "Test play" map ({ name, data }), or null. */
+function editorTestMap() {
+  try {
+    const map = JSON.parse(localStorage.getItem(TEST_MAP_KEY) || 'null');
+    return map && typeof map.data === 'string' && map.data.startsWith('1') ? { name: String(map.name || 'Test map'), data: map.data } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Map list indexed by slot id (MapInfo.mapList): [{ slot, name }]. */

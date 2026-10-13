@@ -1,0 +1,89 @@
+// The map editor's map codes: every saved map reads in and writes back out to
+// a code the game loads into exactly the same map.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import test from 'node:test';
+
+import { MapDoc, decodeMap, encodeMap, footprintOf } from '../client/src/editor/mapCode.js';
+import { FALLBACK_MAPS } from '../client/src/game/maps.js';
+import { parseMap } from '../client/src/game/world.js';
+
+const saved = JSON.parse(fs.readFileSync(new URL('../client/assets/game/maps/maps.json', import.meta.url), 'utf8'));
+const maps = [...saved, { name: 'Warehouse', data: FALLBACK_MAPS[0].data }];
+
+/** What the game makes of a map code, minus random choices (variant 0 picks a random look). */
+function summary(code) {
+  const map = parseMap(code);
+  return {
+    size: [map.width, map.height],
+    background: map.backgroundColor,
+    relief: map.relief,
+    border: map.border,
+    textures: map.cells.map((c) => c.texture).join(','),
+    props: map.props.map((p) => `${p.kind}@${p.x},${p.y}:${p.footprint}`).sort(),
+    // (decals written past the bottom edge are never seen; the editor leaves them out)
+    decals: map.decals.filter((d) => d.y < map.height).map((d) => `${d.image}@${d.x},${d.y}:${d.variant}`).sort(),
+    spawns: map.spawns.map((s) => `${s.x},${s.y}:${s.team}`).sort(),
+  };
+}
+
+for (const { name, data } of maps) {
+  test(`${name}: read and written back, the game loads the same map`, () => {
+    const doc = decodeMap(data, name);
+    assert.deepEqual(summary(encodeMap(doc)), summary(data));
+    assert.equal(encodeMap(decodeMap(encodeMap(doc))), encodeMap(doc), 'stable once written');
+  });
+}
+
+test('a new map: props cannot overlap each other or a spawn point, and the code loads', () => {
+  const doc = new MapDoc({ name: 'Test', width: 20, height: 12, texture: 1, relief: 1 });
+  assert.ok(doc.place('a', 1, 2, 2)); // a car: 3 x 2
+  assert.equal(doc.place('c', 1, 4, 3), null, 'inside the car');
+  assert.ok(doc.place('c', 1, 5, 3));
+  assert.ok(doc.setSpawn(8, 8));
+  assert.equal(doc.place('t', 2, 7, 7), null, 'a big tree over the spawn point');
+  assert.equal(doc.setSpawn(3, 3), false, 'a spawn point inside the car');
+  assert.equal(doc.place('w', 2, 16, 0), null, 'a wall hanging over the edge');
+  doc.setDecal(10, 5, 'c', 2);
+  doc.setTexture(0, 0, 10);
+  const map = parseMap(encodeMap(doc));
+  assert.equal(map.props.length, 2);
+  assert.deepEqual(map.spawns, [{ x: 8.5, y: 8.5, team: 0 }]);
+  assert.equal(map.cells[0].texture, 10);
+  assert.equal(map.cells[1].texture, 1);
+  assert.equal(map.decals[0].image, 'RoadLines');
+  assert.equal(map.relief, 'Relief2');
+  assert.deepEqual(footprintOf('a', 1), [3, 2]);
+});
+
+test('resizing keeps what still fits', () => {
+  const doc = new MapDoc({ width: 30, height: 30 });
+  doc.place('a', 7, 26, 26); // a truck, 2 x 3
+  doc.place('c', 2, 3, 3);
+  doc.setSpawn(25, 2);
+  doc.setTexture(27, 27, 4);
+  const small = doc.resized(20, 20);
+  assert.equal(small.props.length, 1);
+  assert.equal(small.spawns.size, 0);
+  const big = small.resized(40, 25);
+  assert.equal(big.width, 40);
+  assert.equal(big.props[0].code, 'c');
+});
+
+test('broken codes are refused with a reason', () => {
+  assert.throws(() => decodeMap('hello'), /map code/);
+  assert.throws(() => decodeMap('1500;20;;ebdcc71b;;0'), /at most/);
+});
+
+test('a shared map opens from a code, a downloaded file or a maps.json list', async () => {
+  const { parseShared } = await import('../client/src/editor/mapCode.js');
+  const doc = new MapDoc({ name: 'Shared', width: 12, height: 10, texture: 2 });
+  doc.setSpawn(1, 1);
+  const code = encodeMap(doc);
+  assert.equal(encodeMap(parseShared(code)), code);
+  assert.equal(encodeMap(parseShared(code.slice(0, 20) + '\n' + code.slice(20))), code, 'line breaks from pasting are ignored');
+  const fromFile = parseShared(JSON.stringify({ name: 'Shared', data: code }));
+  assert.equal(fromFile.name, 'Shared');
+  assert.equal(parseShared(JSON.stringify([{ slot: 0, name: 'List', data: code }])).name, 'List');
+  assert.throws(() => parseShared('{"name":"x"}'), /No map/);
+});

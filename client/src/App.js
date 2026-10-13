@@ -4,7 +4,7 @@
 // art (ui/menus.js); when the asset build has not exported it, the plain HTML
 // menus (ui/Screens.js) are used instead.
 
-import { BRIDGE_URL, SERVER_NAME } from './config.js';
+import { BRIDGE_URL, SERVER_NAME, TEST_MAP } from './config.js';
 import { Preferences, savePreferences } from './game/preferences.js';
 import { MAX_NPCS } from './game/npc.js';
 import { runModeratorCommand } from './game/moderation.js';
@@ -81,7 +81,11 @@ export class App {
     this.game.sound.once('unlocked', () => this.applyPreferences()); // browsers start audio muted until a click
     this.ready = true;
     if (this.menus) this.createConsole();
-    if (this.menus) {
+    if (TEST_MAP) {
+      // The map editor's "Test play": straight into Quick Play on its map.
+      if (this.menus) this.ui = this.menus;
+      this.playOffline();
+    } else if (this.menus) {
       this.ui = this.menus;
       this.showMainMenu({ fade: true });
     } else {

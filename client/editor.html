@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0909" />
+    <title>Map Editor · Boxhead: Bounty Hunter</title>
+    <link rel="icon" href="assets/site/favicon.png" type="image/png" />
+    <link rel="preload" href="assets/site/Anton-Regular.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="stylesheet" href="css/play.css" />
+    <link rel="stylesheet" href="css/editor.css" />
+  </head>
+  <body class="play-page editor-page">
+    <header class="play-header">
+      <a class="play-brand" href="index.html" aria-label="Boxhead Bounty Hunter homepage">
+        <img src="assets/site/hunters-logo.png" alt="" width="542" height="296" />
+        <span>BOXHEAD<small>MAP EDITOR</small></span>
+      </a>
+      <nav class="play-nav" aria-label="Website">
+        <a href="index.html">Home</a>
+        <a href="play.html">Play</a>
+        <a href="editor.html" aria-current="page">Map editor</a>
+      </nav>
+      <a class="play-back" href="play.html"><span aria-hidden="true">←</span> Back to the game</a>
+    </header>
+    <div class="play-hazard" aria-hidden="true"></div>
+
+    <main class="ed-main">
+      <aside class="ed-palette" aria-label="What to place">
+        <div class="ed-tabs" role="tablist">
+          <button type="button" role="tab" data-tab="ground" aria-selected="true">Ground</button>
+          <button type="button" role="tab" data-tab="marks">Marks</button>
+          <button type="button" role="tab" data-tab="props">Props</button>
+          <button type="button" role="tab" data-tab="other">Spawns</button>
+        </div>
+        <div class="ed-tools" id="ed-ground-tools">
+          <span class="ed-label">Paint</span>
+          <div class="ed-seg" id="ed-shape">
+            <button type="button" data-shape="brush" aria-pressed="true" title="Paint where you drag">Brush</button>
+            <button type="button" data-shape="rect" title="Drag a box to fill">Box</button>
+            <button type="button" data-shape="fill" title="Fill the area of the same ground">Fill</button>
+          </div>
+          <span class="ed-label">Size</span>
+          <div class="ed-seg" id="ed-brush">
+            <button type="button" data-size="1" aria-pressed="true">1</button>
+            <button type="button" data-size="2">2</button>
+            <button type="button" data-size="3">3</button>
+            <button type="button" data-size="5">5</button>
+          </div>
+        </div>
+        <div class="ed-items" id="ed-items"></div>
+        <p class="ed-help">
+          <b>Left click / drag</b> places, <b>right click</b> removes.
+          <b>Ctrl+Z</b> undo, <b>G</b> grid, <b>Ctrl+wheel</b> zoom, <b>Space+drag</b> or middle drag to move around.
+        </p>
+      </aside>
+
+      <section class="ed-work">
+        <div class="ed-toolbar">
+          <label class="ed-field ed-name">Name <input id="ed-name" maxlength="24" spellcheck="false" /></label>
+          <button type="button" id="ed-settings" class="ed-btn" title="Size, background colour and shading">Map settings</button>
+          <span class="ed-gap"></span>
+          <button type="button" id="ed-new" class="ed-btn">New</button>
+          <button type="button" id="ed-open" class="ed-btn">Open</button>
+          <button type="button" id="ed-undo" class="ed-btn" title="Undo (Ctrl+Z)">↶</button>
+          <button type="button" id="ed-redo" class="ed-btn" title="Redo (Ctrl+Y)">↷</button>
+          <button type="button" id="ed-grid" class="ed-btn" aria-pressed="true" title="Grid (G)">Grid</button>
+          <button type="button" id="ed-zoom-out" class="ed-btn" title="Zoom out">−</button>
+          <span id="ed-zoom" class="ed-zoom">100%</span>
+          <button type="button" id="ed-zoom-in" class="ed-btn" title="Zoom in">+</button>
+          <button type="button" id="ed-test" class="ed-btn ed-primary" title="Play it in Quick Play (opens a new tab)">Test play</button>
+          <button type="button" id="ed-share" class="ed-btn ed-primary">Share</button>
+        </div>
+        <div class="ed-view" id="ed-view">
+          <div class="ed-canvas" id="ed-canvas">
+            <canvas id="ed-map"></canvas>
+            <canvas id="ed-over"></canvas>
+          </div>
+        </div>
+        <div class="ed-status"><span id="ed-where"></span><span id="ed-info"></span></div>
+      </section>
+    </main>
+
+    <dialog class="ed-dialog" id="ed-dialog">
+      <form method="dialog">
+        <h2 id="ed-dialog-title"></h2>
+        <div id="ed-dialog-body"></div>
+        <div class="ed-dialog-actions" id="ed-dialog-actions"></div>
+      </form>
+    </dialog>
+
+    <script type="module" src="src/editor/editor.js"></script>
+  </body>
+</html>

@@ -187,7 +187,7 @@ em { color: var(--gold); font-style: normal; }
 .section-heading > p { max-width: 460px; color: var(--muted); }
 
 /* Cards made like the crates on the warehouse floor: wood inside a steel frame. */
-.mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+.mode-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
 .crate-card {
   position: relative; display: flex; flex-direction: column; gap: 14px; padding: 34px 30px 30px; min-height: 360px;
   background:
