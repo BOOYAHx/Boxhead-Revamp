@@ -665,7 +665,8 @@ format. Everything stays in your browser until you share it.
 * **Open** starts from one of the game's maps (as a copy), the Nuke Town and
   Junkyard examples, a map file or a pasted map code.
 * **Test play** opens the game in a new tab straight into Quick Play on the
-  map, with the bots (`play.html?testmap`).
+  map (`play.html?testmap`), always with Easy bots (the original ones); your
+  own Quick Play setup is left as it is.
 * **Share** shows the map code (copy it and paste it in a message) and
   **Download file** saves it as a `.boxhead-map.json` file, which **Open** reads back.
 

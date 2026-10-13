@@ -12,7 +12,7 @@ import { FALLBACK_MAPS } from '../game/maps.js';
 import { Preferences } from '../game/preferences.js';
 import { QuickPlay, playableMaps } from '../game/quickPlay.js';
 import { ShopState } from '../game/shop.js';
-import { DEBUG, FREE_GUNS } from '../config.js';
+import { DEBUG, FREE_GUNS, TEST_MAP } from '../config.js';
 import { loadLook } from '../game/profile.js';
 import { PISTOL_ID, SPLASH, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
 import { EquipmentWorld, gunSplash } from '../game/equipment.js';
@@ -1273,7 +1273,7 @@ export class GameScene extends Phaser.Scene {
     if (this.ui) {
       // GameSummary lists everyone in the room (players who never spawned too).
       this.ui.showSummary(this.scoreRows(everyone), awards, (player) => drawPortrait(this.textures, player.character.look), {
-        difficulty: this.mode === 'offline' && this.npcs.length ? QuickPlay.difficulty : null,
+        difficulty: this.mode === 'offline' && this.npcs.length ? this.botDifficulty : null,
         result: result && { text: result.text, color: teamColor(this.gameType, result.winner) },
       });
       this.ui.setSummaryCountdown(this.roundTime);
@@ -1440,6 +1440,11 @@ export class GameScene extends Phaser.Scene {
 
   // --- computer players (offline practice) -------------------------------------------
 
+  /** The bots' difficulty: Quick Play's setting; the map editor's Test play always has Easy bots (the original ones). */
+  get botDifficulty() {
+    return TEST_MAP ? 'Easy' : QuickPlay.difficulty;
+  }
+
   /** Add or remove computer players until there are `count` (0 to MAX_NPCS). */
   setNpcCount(count) {
     if (this.mode !== 'offline' || !this.map) return;
@@ -1451,7 +1456,7 @@ export class GameScene extends Phaser.Scene {
       used.add(ch.name);
       ch.stats = newStats();
       ch.stats.money = 0; // bots earn their guns: the crates they pick up pay for them
-      const brain = new NpcBrain(ch, Math.random, QuickPlay.difficulty);
+      const brain = new NpcBrain(ch, Math.random, this.botDifficulty);
       brain.onBuy = (bot, weapon) => this.hud.addMessage(`${bot.name} bought the ${weapon.name}`);
       this.npcs.push(brain);
       this.remotes.set(ch.id, { id: ch.id, character: ch, view: new CharacterView(this, ch, NPC_NAME_COLOR), ping: 0, pings: [], npc: brain });
