@@ -57,6 +57,15 @@ const captureConsole = () => {
 if (game.isRunning) captureConsole();
 else game.events.once('ready', captureConsole);
 
+// Ctrl is Auto-run and W moves up, so playing can press Ctrl+W and close the tab. No page can
+// stop that (outside fullscreen on a secure page, see play-page.js), but it can have the browser
+// ask "Leave site?" first while a game is on.
+window.addEventListener('beforeunload', (event) => {
+  if (!game.scene.isActive('game')) return;
+  event.preventDefault();
+  event.returnValue = ''; // older browsers
+});
+
 // "A new version is available" after the website is updated.
 watchForUpdates(app, document.getElementById('play-stage') || document.body);
 
