@@ -57,22 +57,6 @@ const captureConsole = () => {
 if (game.isRunning) captureConsole();
 else game.events.once('ready', captureConsole);
 
-// Ctrl is Auto-run and W moves up, so playing can press Ctrl+W and close the tab. No page can
-// stop that (outside fullscreen on a secure page, see play-page.js), but it can have the browser
-// ask "Leave site?" first: in the menus and lobby as well as in a game. (Browsers only ask once
-// the page has been clicked or typed in.)
-let leaving = false; // a link on the page or the new-version Refresh button: going was chosen
-document.addEventListener('click', (event) => {
-  if (!event.target.closest?.('a[href], .update-bar button:not(.update-later)')) return;
-  leaving = true;
-  setTimeout(() => (leaving = false), 3000);
-}, true);
-window.addEventListener('beforeunload', (event) => {
-  if (leaving) return;
-  event.preventDefault();
-  event.returnValue = ''; // older browsers
-});
-
 // "A new version is available" after the website is updated.
 watchForUpdates(app, document.getElementById('play-stage') || document.body);
 
