@@ -3,7 +3,7 @@
 // name, hosting a game, the notification popup and the Most Wanted tab.
 
 import { MOST_WANTED_URL } from '../config.js';
-import { COLORS, MODELS, tintFor } from '../game/bodyParts.js';
+import { COLORS, MODEL_LABELS, MODELS, tintFor } from '../game/bodyParts.js';
 import { DIRECTIONS, SW } from '../game/Direction.js';
 import { Social } from '../game/social.js';
 import { moderatorHelp } from '../game/moderation.js';
@@ -264,7 +264,7 @@ export class LobbyScreen {
     const u = this.user || {};
     this.look = { gender: GENDERS.includes(u.gender) ? u.gender : 'Male', headModel: u.headModel || 0, headColor: u.headColor || 0, bodyModel: u.bodyModel || 0, bodyColor: u.bodyColor || 0 };
     const models = MODELS.map((_, i) => i);
-    const name = (i) => MODELS[i];
+    const name = (i) => MODEL_LABELS[MODELS[i]] || MODELS[i];
     this.genderSelector?.displayOptions('', GENDERS, this.look.gender);
     this.headModelSelector?.displayOptions('', models, this.look.headModel, name);
     this.bodyModelSelector?.displayOptions('', models, this.look.bodyModel, name);
@@ -272,6 +272,8 @@ export class LobbyScreen {
     this.previewDir = SW;
     this.drawPreview();
     this.openWindow(this.custom);
+    this.headModelSelector?.refit?.();
+    this.bodyModelSelector?.refit?.();
     this.customizeButton?.disable(); // MMOchaLobby.showCustomizationWindow: greyed out while its window is open
   }
 

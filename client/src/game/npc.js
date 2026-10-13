@@ -14,7 +14,7 @@
 import { Character } from './Character.js';
 import { DIRECTIONS } from './Direction.js';
 import { FIRE_RADIUS } from './constants.js';
-import { MODELS } from './bodyParts.js';
+import { MODELS, ORIGINAL_MODELS } from './bodyParts.js';
 import { ShopState } from './shop.js';
 import { traceShot } from './world.js';
 import { Weapon, WeaponID } from './weapons.js';
@@ -83,11 +83,11 @@ export function createNpc(index, random = Math.random, usedNames = new Set()) {
   const ch = new Character({ id: 'n' + String((index % 99) + 1).padStart(2, '0'), name }); // 3 characters, like a server slot id
   ch.npc = true;
   ch.firePos = ch.pos;
-  const model = Math.floor(random() * MODELS.length);
+  const model = Math.floor(random() * ORIGINAL_MODELS); // the bots wear the original game's costumes
   Object.assign(ch.look, {
     gender: FEMALE.has(MODELS[model]) ? 'Female' : MONSTER.has(MODELS[model]) ? 'Monster' : 'Male', // the voice when hurt
     bodyModel: model,
-    headModel: random() < 0.8 ? model : Math.floor(random() * MODELS.length),
+    headModel: random() < 0.8 ? model : Math.floor(random() * ORIGINAL_MODELS),
     bodyColor: Math.floor(random() * COLORS),
     headColor: Math.floor(random() * COLORS),
   });

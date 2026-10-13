@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import abc_decompile  # noqa: E402
 import build_atlas  # noqa: E402
+import costumes  # noqa: E402
 import swf_extract  # noqa: E402
 import swf_vector  # noqa: E402
 import extra_props  # noqa: E402
@@ -121,6 +122,7 @@ def main():
         sys.argv = ['build_atlas', '--assets-as', assets_as, '--images', os.path.join(raw, 'images'), '--out', args.out]
         build_atlas.main()
         extra_props.add(args.out)  # the bus, truck and deck props, drawn for this port
+        costumes.add(args.out)  # the costumes drawn for this port (over the original models)
 
         for name in sorted(game_images):
             shutil.copy(os.path.join(raw, 'images', name + '.png'), os.path.join(args.out, 'images', name + '.png'))

@@ -192,6 +192,17 @@ function tickBox(ui) {
   };
 }
 
+/** A one-line text a little smaller when it is too long for its box (a long model name like "Ghost Rider"). */
+function shrinkToFit(field) {
+  const size = field.def?.size || 12;
+  const box = field.box;
+  box.style.fontSize = `${size}px`;
+  if (!box.clientWidth) return; // not on screen yet: done again when it is (refit)
+  const room = box.clientWidth - 4; // its 2px gutters
+  const width = box.scrollWidth - 4;
+  if (width > room) box.style.fontSize = `${Math.max(7, Math.floor((size * room) / width * 10) / 10)}px`;
+}
+
 /** OptionSelector: "< value >" with arrow buttons; fires "change". */
 function optionSelector() {
   return (clip) => {
@@ -208,7 +219,10 @@ function optionSelector() {
       if (i >= options.length - 1) right?.disable?.();
       else right?.enable?.();
       index = i;
-      if (valueField) valueField.text = options[i] === undefined ? '' : label(options[i]);
+      if (valueField) {
+        valueField.text = options[i] === undefined ? '' : label(options[i]);
+        shrinkToFit(valueField);
+      }
       if (notify) clip.el.dispatchEvent(new Event('change'));
     };
     left?.onClick?.(() => index > 0 && select(index - 1));
@@ -224,6 +238,7 @@ function optionSelector() {
     Object.defineProperty(clip, 'selectedOption', { get: () => options[index] });
     Object.defineProperty(clip, 'selectedIndex', { get: () => index });
     clip.selectIndex = select;
+    clip.refit = () => valueField && shrinkToFit(valueField); // once its window is showing
   };
 }
 
