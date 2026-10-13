@@ -143,7 +143,96 @@ export class MapDoc {
   spawnPoints() {
     return [...this.spawns.keys()].map((i) => ({ x: i % this.width, y: Math.floor(i / this.width) }));
   }
+
+  // --- selections: { props: Set of props, spawns: Set of cell indexes, decals: Set of cell indexes } ---
+
+  /** Everything touching the cells x0..x1, y0..y1 (a prop when any of its cells is inside). */
+  selectArea(x0, y0, x1, y1) {
+    const sel = emptySelection();
+    for (let y = Math.max(0, y0); y <= Math.min(this.height - 1, y1); y++) {
+      for (let x = Math.max(0, x0); x <= Math.min(this.width - 1, x1); x++) {
+        const index = this.index(x, y);
+        const prop = this.covers.get(index);
+        if (prop) sel.props.add(prop);
+        if (this.spawns.has(index)) sel.spawns.add(index);
+        if (this.decals.has(index)) sel.decals.add(index);
+      }
+    }
+    return sel;
+  }
+
+  selectAll() {
+    return { props: new Set(this.props), spawns: new Set(this.spawns.keys()), decals: new Set(this.decals.keys()) };
+  }
+
+  /** Whether the selection fits moved by (dx, dy) cells: inside the map, clear of everything else. */
+  canMove(sel, dx, dy) {
+    const taken = new Set(); // cells the moved props will cover
+    for (const p of sel.props) {
+      const [w, h] = footprintOf(p.code, p.variant);
+      for (let j = 0; j < h; j++) {
+        for (let i = 0; i < w; i++) {
+          const x = p.x + i + dx;
+          const y = p.y + j + dy;
+          if (!this.inside(x, y)) return false;
+          const index = this.index(x, y);
+          const other = this.covers.get(index);
+          if ((other && !sel.props.has(other)) || taken.has(index)) return false;
+          if (this.spawns.has(index) && !sel.spawns.has(index)) return false;
+          taken.add(index);
+        }
+      }
+    }
+    for (const index of sel.spawns) {
+      const x = (index % this.width) + dx;
+      const y = Math.floor(index / this.width) + dy;
+      if (!this.inside(x, y)) return false;
+      const other = this.covers.get(this.index(x, y));
+      if (taken.has(this.index(x, y)) || (other && !sel.props.has(other))) return false;
+    }
+    for (const index of sel.decals) if (!this.inside((index % this.width) + dx, Math.floor(index / this.width) + dy)) return false;
+    return true;
+  }
+
+  /** Move the selection by (dx, dy) cells when it fits: the moved selection, or null. Marks it lands on are replaced. */
+  moveSelection(sel, dx, dy) {
+    if (!this.canMove(sel, dx, dy)) return null;
+    const props = [...sel.props];
+    const spawns = [...sel.spawns].map((index) => [index, this.spawns.get(index)]);
+    const decals = [...sel.decals].map((index) => [index, this.decals.get(index)]);
+    for (const p of props) this.removeProp(p);
+    for (const [index] of spawns) this.spawns.delete(index);
+    for (const [index] of decals) this.decals.delete(index);
+    const moved = emptySelection();
+    for (const p of props) moved.props.add(this.place(p.code, p.variant, p.x + dx, p.y + dy));
+    const at = (index) => [(index % this.width) + dx, Math.floor(index / this.width) + dy];
+    for (const [index, team] of spawns) {
+      const [x, y] = at(index);
+      this.setSpawn(x, y, team);
+      moved.spawns.add(this.index(x, y));
+    }
+    for (const [index, d] of decals) {
+      const [x, y] = at(index);
+      this.setDecal(x, y, d.code, d.variant);
+      moved.decals.add(this.index(x, y));
+    }
+    return moved;
+  }
+
+  removeSelection(sel) {
+    let changed = false;
+    for (const p of sel.props) changed = this.removeProp(p) || changed;
+    for (const index of sel.spawns) changed = this.spawns.delete(index) || changed;
+    for (const index of sel.decals) changed = this.decals.delete(index) || changed;
+    return changed;
+  }
 }
+
+export function emptySelection() {
+  return { props: new Set(), spawns: new Set(), decals: new Set() };
+}
+
+export const selectionSize = (sel) => sel.props.size + sel.spawns.size + sel.decals.size;
 
 function clampSize(n) {
   return Math.max(MIN_SIZE, Math.min(MAX_SIZE, Math.trunc(Number(n)) || MIN_SIZE));

@@ -85,3 +85,4 @@ export const PROPS = [
 
 export const SPAWN = { type: 'spawn', label: 'Spawn point' };
 export const ERASER = { type: 'erase', label: 'Eraser' };
+export const SELECT = { type: 'select', label: 'Select / move' };

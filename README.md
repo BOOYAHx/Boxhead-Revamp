@@ -658,6 +658,12 @@ format. Everything stays in your browser until you share it.
   trucks and wrecks. The green outline shows where it goes (red: something is
   in the way). Drag to place a row.
 * **Spawns** places the points players start from (8 or more is best) and has the eraser.
+* **Select** (or **V**) picks things up to move them: click a prop, spawn
+  point or mark, or drag a box round a group (start on bare ground, or hold
+  **Alt** to start anywhere; **Shift** adds to what is picked, **Ctrl+A** picks
+  everything). Drag the pick to move it: it shows where it lands, red when
+  something is in the way or it would go off the map (then it stays put).
+  **Arrow keys** nudge it a cell (**Shift**: 5), **Delete** removes it, **Esc** lets go.
 * Right click removes what is under the pointer. **Ctrl+Z** / **Ctrl+Y** undo
   and redo, **G** the grid, **Ctrl+wheel** zoom, **Space+drag** or the middle
   button moves around. **Map settings** sets the size (10 to 100 cells each

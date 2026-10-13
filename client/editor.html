@@ -51,6 +51,9 @@
         <div class="ed-items" id="ed-items"></div>
         <p class="ed-help">
           <b>Left click / drag</b> places, <b>right click</b> removes.
+          <b>Select</b> (V): click a thing, or drag a box round a group (from bare ground, or anywhere with
+          <b>Alt</b>; <b>Shift</b> adds more), then drag it to move it. <b>Arrow keys</b> nudge, <b>Delete</b>
+          removes, <b>Esc</b> lets go, <b>Ctrl+A</b> picks everything.
           <b>Ctrl+Z</b> undo, <b>G</b> grid, <b>Ctrl+wheel</b> zoom, <b>Space+drag</b> or middle drag to move around.
         </p>
       </aside>
@@ -62,6 +65,7 @@
           <span class="ed-gap"></span>
           <button type="button" id="ed-new" class="ed-btn">New</button>
           <button type="button" id="ed-open" class="ed-btn">Open</button>
+          <button type="button" id="ed-select" class="ed-btn" aria-pressed="false" title="Select and move things (V)">Select</button>
           <button type="button" id="ed-undo" class="ed-btn" title="Undo (Ctrl+Z)">↶</button>
           <button type="button" id="ed-redo" class="ed-btn" title="Redo (Ctrl+Y)">↷</button>
           <button type="button" id="ed-grid" class="ed-btn" aria-pressed="true" title="Grid (G)">Grid</button>

@@ -87,3 +87,33 @@ test('a shared map opens from a code, a downloaded file or a maps.json list', as
   assert.equal(parseShared(JSON.stringify([{ slot: 0, name: 'List', data: code }])).name, 'List');
   assert.throws(() => parseShared('{"name":"x"}'), /No map/);
 });
+
+test('a selection moves as one: blocked by anything else, carrying its spawn points and marks', async () => {
+  const { selectionSize } = await import('../client/src/editor/mapCode.js');
+  const doc = new MapDoc({ width: 20, height: 12 });
+  const car = doc.place('a', 1, 2, 2); // 3 x 2 at 2..4, 2..3
+  const crate = doc.place('c', 1, 6, 2);
+  doc.setSpawn(2, 5);
+  doc.setDecal(3, 5, 'c', 1);
+  const tree = doc.place('t', 1, 12, 3);
+  let sel = doc.selectArea(1, 1, 6, 5); // the car, the crate, the spawn point and the mark
+  assert.equal(selectionSize(sel), 4);
+  assert.ok(!sel.props.has(tree));
+  assert.equal(doc.canMove(sel, 6, 1), false, 'the crate would land on the tree');
+  assert.equal(doc.canMove(sel, 0, -3), false, 'off the top edge');
+  assert.ok(doc.canMove(sel, 1, 0), 'overlapping its own old cells is fine');
+  sel = doc.moveSelection(sel, 1, 1);
+  assert.deepEqual([...sel.props].map((p) => [p.code, p.x, p.y]).sort(), [['a', 3, 3], ['c', 7, 3]]);
+  assert.ok(doc.spawns.has(doc.index(3, 6)) && !doc.spawns.has(doc.index(2, 5)));
+  assert.deepEqual(doc.decals.get(doc.index(4, 6)), { code: 'c', variant: 1 });
+  assert.equal(doc.propAt(2, 2), null, 'the old cells are free');
+  assert.equal(doc.place('c', 2, 2, 2) !== null, true);
+  // A loose prop cannot be dropped onto a spawn point that stays put.
+  const lone = doc.selectArea(12, 3, 12, 3);
+  doc.setSpawn(14, 3);
+  assert.equal(doc.canMove(lone, 2, 0), false);
+  assert.ok(doc.removeSelection(lone));
+  assert.equal(doc.props.includes(tree), false);
+  assert.equal(selectionSize(doc.selectAll()), doc.props.length + doc.spawns.size + doc.decals.size);
+  assert.ok(car && crate);
+});

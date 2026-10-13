@@ -7,14 +7,16 @@ import { DECALS } from '../game/world.js';
 import { ASSET_ROOT } from '../render/assets.js';
 import { EXAMPLES } from './examples.js';
 import { Art, CELL_HEIGHT, CELL_WIDTH, MapPainter, decalCell, propLook } from './MapPainter.js';
-import { MAX_SIZE, MIN_SIZE, MapDoc, decodeMap, encodeMap, footprintOf, parseShared } from './mapCode.js';
-import { ERASER, GROUND, GROUND_NAMES, MARKS, PROPS, SPAWN } from './palette.js';
+import { MAX_SIZE, MIN_SIZE, MapDoc, decodeMap, emptySelection, encodeMap, footprintOf, parseShared, selectionSize } from './mapCode.js';
+import { ERASER, GROUND, GROUND_NAMES, MARKS, PROPS, SELECT, SPAWN } from './palette.js';
 
 const SAVE_KEY = 'bbh.editor.map'; // the map being edited, kept in this browser
 const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.5, 2, 3];
 const HISTORY = 100;
 const SPAWN_COLOR = '#35d07f';
 const RECOMMENDED_SPAWNS = 8;
+const SELECTED = '#4fd1ff';
+const BLOCKED = '#ff5a4a';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -65,6 +67,9 @@ class Editor {
     this.redoStack = [];
     this.hover = null; // the cell under the pointer
     this.stroke = null; // the drag in progress
+    this.selection = emptySelection(); // what the Select tool has picked up
+    this.drag = null; // the Select tool's drag: a box being drawn, or the selection being moved
+    this.hoverPx = null; // the pointer in map pixels
     this.panning = null;
     this.spaceHeld = false;
     this.drawQueued = false;
@@ -132,7 +137,12 @@ class Editor {
   select(item) {
     this.tool = item;
     for (const b of this.itemButtons) b.setAttribute('aria-pressed', String(b.item === item));
+    $('ed-select').setAttribute('aria-pressed', String(item === SELECT));
+    if (item !== SELECT) this.selection = emptySelection();
+    this.flash = null;
+    this.over.style.cursor = item === SELECT ? 'default' : '';
     this.drawOverlay();
+    this.updateStatus();
   }
 
   drawThumbs() {
@@ -205,6 +215,7 @@ class Editor {
     $('ed-settings').addEventListener('click', () => this.settingsDialog());
     $('ed-new').addEventListener('click', () => this.newDialog());
     $('ed-open').addEventListener('click', () => this.openDialog());
+    $('ed-select').addEventListener('click', () => this.select(SELECT));
     $('ed-undo').addEventListener('click', () => this.undo());
     $('ed-redo').addEventListener('click', () => this.redo());
     $('ed-grid').addEventListener('click', () => this.toggleGrid());
@@ -252,6 +263,7 @@ class Editor {
   }
 
   changed() {
+    this.pruneSelection();
     this.save();
     this.redraw();
     this.updateStatus();
@@ -260,6 +272,7 @@ class Editor {
   load(doc, { remember = true } = {}) {
     if (remember) this.remember();
     this.doc = doc;
+    this.selection = emptySelection();
     this.syncFields();
     this.changed();
     this.drawThumbs();
@@ -270,6 +283,7 @@ class Editor {
     if (!previous) return;
     this.redoStack.push(this.snapshot());
     this.doc = decodeMap(previous.data, previous.name);
+    this.selection = emptySelection();
     this.syncFields();
     this.changed();
   }
@@ -279,6 +293,7 @@ class Editor {
     if (!next) return;
     this.undoStack.push(this.snapshot());
     this.doc = decodeMap(next.data, next.name);
+    this.selection = emptySelection();
     this.syncFields();
     this.changed();
   }
@@ -371,7 +386,7 @@ class Editor {
     requestAnimationFrame(() => {
       this.drawQueued = false;
       const sized = this.mapCanvas.width !== this.doc.width * CELL_WIDTH || this.mapCanvas.height !== this.doc.height * CELL_HEIGHT;
-      this.painter.draw(this.mapCanvas, this.doc);
+      this.painter.draw(this.mapCanvas, this.doc, this.drag?.moved ? this.selection : null);
       if (sized) this.applyZoom(this.zoom);
       this.drawOverlay();
       this.updateStatus();
@@ -405,8 +420,201 @@ class Editor {
         ctx.stroke();
       }
     }
-    for (const { x, y } of doc.spawnPoints()) this.drawSpawn(ctx, (x + 0.5) * CELL_WIDTH, (y + 0.5) * CELL_HEIGHT);
-    this.drawGhost(ctx);
+    const moving = this.drag?.moved;
+    for (const index of doc.spawns.keys()) {
+      if (moving && this.selection.spawns.has(index)) continue; // drawn where it is being dragged to
+      this.drawSpawn(ctx, ((index % doc.width) + 0.5) * CELL_WIDTH, (Math.floor(index / doc.width) + 0.5) * CELL_HEIGHT);
+    }
+    if (this.tool === SELECT) this.drawSelection(ctx);
+    else this.drawGhost(ctx);
+  }
+
+  /** The Select tool: the picked-up things outlined (where they are being dragged to, red when they do not fit), the box being drawn, and what a click would pick. */
+  drawSelection(ctx) {
+    const { doc, selection: sel, drag } = this;
+    const outline = (x, y, w, h, color, dashed = true) => {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.setLineDash(dashed ? [6, 4] : []);
+      ctx.strokeRect(x * CELL_WIDTH + 1, y * CELL_HEIGHT + 1, w * CELL_WIDTH - 2, h * CELL_HEIGHT - 2);
+      ctx.setLineDash([]);
+    };
+    const moving = drag?.moved;
+    const dx = moving ? drag.dx : 0;
+    const dy = moving ? drag.dy : 0;
+    const color = moving && !drag.ok ? BLOCKED : SELECTED;
+    const cell = (index) => [(index % doc.width) + dx, Math.floor(index / doc.width) + dy];
+    if (moving) {
+      ctx.save();
+      ctx.globalAlpha = drag.ok ? 0.9 : 0.45;
+      for (const index of sel.decals) {
+        const d = doc.decals.get(index);
+        if (d) this.painter.drawDecal(ctx, d.code, d.variant, ...cell(index));
+      }
+      const props = [...sel.props].sort((a, b) => a.y + footprintOf(a.code, a.variant)[1] - (b.y + footprintOf(b.code, b.variant)[1]));
+      for (const p of props) this.painter.drawProp(ctx, p.code, p.variant, p.x + dx, p.y + dy);
+      ctx.restore();
+      for (const index of sel.spawns) {
+        const [x, y] = cell(index);
+        this.drawSpawn(ctx, (x + 0.5) * CELL_WIDTH, (y + 0.5) * CELL_HEIGHT);
+      }
+    }
+    for (const p of sel.props) {
+      const [w, h] = footprintOf(p.code, p.variant);
+      outline(p.x + dx, p.y + dy, w, h, color);
+    }
+    for (const index of [...sel.spawns, ...sel.decals]) outline(...cell(index), 1, 1, color);
+    if (drag?.mode === 'box') {
+      const r = this.rectOf(drag.start, drag.end);
+      ctx.fillStyle = 'rgba(79, 209, 255, 0.12)';
+      ctx.fillRect(r.x0 * CELL_WIDTH, r.y0 * CELL_HEIGHT, (r.x1 - r.x0 + 1) * CELL_WIDTH, (r.y1 - r.y0 + 1) * CELL_HEIGHT);
+      outline(r.x0, r.y0, r.x1 - r.x0 + 1, r.y1 - r.y0 + 1, SELECTED);
+    } else if (!drag && this.hover) {
+      const hit = this.hitAt(this.hoverPx, this.hover);
+      if (hit && !this.isSelected(hit)) {
+        const [x, y, w, h] = this.hitBox(hit);
+        outline(x, y, w, h, 'rgba(255,255,255,0.8)', false);
+      }
+    }
+  }
+
+  // --- the Select tool -------------------------------------------------------------------
+
+  /** The thing a click at map pixel `px` (cell `cell`) picks: a spawn point, a prop (its cells, then its picture) or a mark. */
+  hitAt(px, cell) {
+    const doc = this.doc;
+    if (!cell) return null;
+    const index = doc.index(cell.x, cell.y);
+    if (doc.spawns.has(index)) return { spawn: index };
+    const prop = doc.propAt(cell.x, cell.y);
+    if (prop) return { prop };
+    if (px) {
+      // Tall pictures (trees, buildings) stand over the cells behind them: the front-most one under the pointer.
+      let best = null;
+      for (const p of doc.props) {
+        const b = this.painter.propBounds(p);
+        if (!b || px.x < b[0] || px.y < b[1] || px.x >= b[0] + b[2] || px.y >= b[1] + b[3]) continue;
+        const depth = p.y + footprintOf(p.code, p.variant)[1];
+        if (!best || depth >= best.depth) best = { prop: p, depth };
+      }
+      if (best) return { prop: best.prop };
+    }
+    if (doc.decals.has(index)) return { decal: index };
+    return null;
+  }
+
+  hitBox(hit) {
+    const doc = this.doc;
+    if (hit.prop) return [hit.prop.x, hit.prop.y, ...footprintOf(hit.prop.code, hit.prop.variant)];
+    const index = hit.spawn ?? hit.decal;
+    return [index % doc.width, Math.floor(index / doc.width), 1, 1];
+  }
+
+  isSelected(hit) {
+    const sel = this.selection;
+    return hit.prop ? sel.props.has(hit.prop) : hit.spawn !== undefined ? sel.spawns.has(hit.spawn) : sel.decals.has(hit.decal);
+  }
+
+  toggleHit(hit, on) {
+    const sel = this.selection;
+    const [set, key] = hit.prop ? [sel.props, hit.prop] : hit.spawn !== undefined ? [sel.spawns, hit.spawn] : [sel.decals, hit.decal];
+    if (on) set.add(key);
+    else set.delete(key);
+  }
+
+  /** Left button with the Select tool: pick up what is under the pointer (Shift adds or drops it), or start a box (always with Alt). */
+  selectDown(e, cell) {
+    this.flash = null;
+    const hit = e.altKey ? null : this.hitAt(this.pixelAt(e), cell);
+    this.over.setPointerCapture(e.pointerId);
+    if (hit) {
+      if (e.shiftKey && this.isSelected(hit)) {
+        this.toggleHit(hit, false);
+        this.drawOverlay();
+        this.updateStatus();
+        return;
+      }
+      if (!this.isSelected(hit)) {
+        if (!e.shiftKey) this.selection = emptySelection();
+        this.toggleHit(hit, true);
+      }
+      this.drag = { mode: 'move', start: cell, dx: 0, dy: 0, moved: false, ok: true };
+    } else {
+      if (!e.shiftKey) this.selection = emptySelection();
+      this.drag = { mode: 'box', start: cell, end: cell, add: e.shiftKey };
+    }
+    this.drawOverlay();
+    this.updateStatus();
+  }
+
+  selectDrag(cell) {
+    const drag = this.drag;
+    if (!cell) return;
+    if (drag.mode === 'box') {
+      drag.end = cell;
+      return this.drawOverlay();
+    }
+    const dx = cell.x - drag.start.x;
+    const dy = cell.y - drag.start.y;
+    if (dx === drag.dx && dy === drag.dy && drag.moved) return;
+    drag.dx = dx;
+    drag.dy = dy;
+    drag.ok = this.doc.canMove(this.selection, dx, dy);
+    if (!drag.moved && (dx || dy)) {
+      drag.moved = true;
+      this.redraw(); // the map without what is being moved
+    } else this.drawOverlay();
+  }
+
+  selectUp() {
+    const drag = this.drag;
+    this.drag = null;
+    if (drag.mode === 'box') {
+      const r = this.rectOf(drag.start, drag.end);
+      const picked = this.doc.selectArea(r.x0, r.y0, r.x1, r.y1);
+      if (drag.add) for (const key of ['props', 'spawns', 'decals']) for (const item of picked[key]) this.selection[key].add(item);
+      else this.selection = picked;
+    } else if (drag.moved && (drag.dx || drag.dy)) this.nudge(drag.dx, drag.dy);
+    this.redraw();
+    this.updateStatus();
+  }
+
+  /** Move what is selected by (dx, dy) cells, as one undoable step. */
+  nudge(dx, dy) {
+    if (!selectionSize(this.selection)) return false;
+    const before = this.snapshot();
+    const moved = this.doc.moveSelection(this.selection, dx, dy);
+    if (!moved) {
+      this.flash = 'It does not fit there: something is in the way, or it would go off the map.';
+      this.updateStatus();
+      return false;
+    }
+    this.flash = null;
+    this.selection = moved;
+    this.remember(before);
+    this.changed();
+    return true;
+  }
+
+  deleteSelection() {
+    if (!selectionSize(this.selection)) return;
+    this.edit(() => this.doc.removeSelection(this.selection));
+    this.selection = emptySelection();
+    this.drawOverlay();
+    this.updateStatus();
+  }
+
+  /** After other edits (right-click removals, undo...): keep only what is still on the map. */
+  pruneSelection() {
+    const { doc, selection: sel } = this;
+    for (const p of sel.props) if (!doc.props.includes(p)) sel.props.delete(p);
+    for (const index of sel.spawns) if (!doc.spawns.has(index)) sel.spawns.delete(index);
+    for (const index of sel.decals) if (!doc.decals.has(index)) sel.decals.delete(index);
+  }
+
+  pixelAt(event) {
+    const r = this.over.getBoundingClientRect();
+    return { x: ((event.clientX - r.left) / r.width) * this.doc.width * CELL_WIDTH, y: ((event.clientY - r.top) / r.height) * this.doc.height * CELL_HEIGHT };
   }
 
   drawSpawn(ctx, cx, cy, k = 1) {
@@ -489,6 +697,7 @@ class Editor {
       if (e.button === 1 || (e.button === 0 && this.spaceHeld)) return this.startPan(e);
       const cell = this.cellAt(e);
       if (!cell || (e.button !== 0 && e.button !== 2)) return;
+      if (this.tool === SELECT && e.button === 0) return this.selectDown(e, cell);
       over.setPointerCapture(e.pointerId);
       const erase = e.button === 2 || this.tool.type === 'erase';
       this.stroke = { before: this.snapshot(), changed: false, erase, last: null, start: cell, end: cell, rect: !erase && this.tool.type === 'ground' && this.shape === 'rect' };
@@ -501,6 +710,15 @@ class Editor {
       const cell = this.cellAt(e);
       const moved = cell?.x !== this.hover?.x || cell?.y !== this.hover?.y;
       this.hover = cell;
+      this.hoverPx = this.pixelAt(e);
+      if (this.drag) return moved && this.selectDrag(cell);
+      if (this.tool === SELECT) {
+        const hit = this.hitAt(this.hoverPx, cell);
+        over.style.cursor = hit ? (this.isSelected(hit) ? 'move' : 'pointer') : 'default';
+        this.drawOverlay();
+        if (moved) this.updateStatus();
+        return;
+      }
       if (this.stroke && cell && moved) {
         if (this.stroke.rect) this.stroke.end = cell;
         else if (!(this.tool.type === 'ground' && this.shape === 'fill')) this.applyAt(cell, false);
@@ -513,6 +731,7 @@ class Editor {
     });
     const end = () => {
       if (this.panning) return this.endPan();
+      if (this.drag) return this.selectUp();
       const stroke = this.stroke;
       if (!stroke) return;
       if (stroke.rect) stroke.changed = this.fillRect(stroke.start, stroke.end, this.tool.texture) || stroke.changed;
@@ -526,7 +745,7 @@ class Editor {
     over.addEventListener('pointerup', end);
     over.addEventListener('pointercancel', end);
     over.addEventListener('pointerleave', () => {
-      if (this.stroke) return;
+      if (this.stroke || this.drag) return;
       this.hover = null;
       this.drawOverlay();
       this.updateStatus();
@@ -644,7 +863,25 @@ class Editor {
         e.preventDefault();
         this.spaceHeld = true;
         this.view.classList.add('is-panning');
-      } else if (!ctrl && e.key.toLowerCase() === 'g') this.toggleGrid();
+      } else if (ctrl && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        this.select(SELECT);
+        this.selection = this.doc.selectAll();
+        this.drawOverlay();
+        this.updateStatus();
+      } else if (selectionSize(this.selection) && e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        const step = e.shiftKey ? 5 : 1;
+        this.nudge({ ArrowLeft: -step, ArrowRight: step }[e.key] || 0, { ArrowUp: -step, ArrowDown: step }[e.key] || 0);
+      } else if (selectionSize(this.selection) && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
+        this.deleteSelection();
+      } else if (e.key === 'Escape' && selectionSize(this.selection)) {
+        this.selection = emptySelection();
+        this.drawOverlay();
+        this.updateStatus();
+      } else if (!ctrl && e.key.toLowerCase() === 'v') this.select(SELECT);
+      else if (!ctrl && e.key.toLowerCase() === 'g') this.toggleGrid();
       else if (!ctrl && (e.key === '+' || e.key === '=')) this.stepZoom(1);
       else if (!ctrl && e.key === '-') this.stepZoom(-1);
       else if (!ctrl && e.key.toLowerCase() === 'e') {
@@ -676,7 +913,12 @@ class Editor {
       if (doc.spawns.has(doc.index(cell.x, cell.y))) parts.push('spawn point');
       where = parts.join(' · ');
     }
+    const picked = selectionSize(this.selection);
+    if (this.flash) where = this.flash;
+    else if (picked) where = `${picked} selected · drag to move · arrow keys nudge (Shift: 5) · Delete removes · Esc lets go`;
+    else if (this.tool === SELECT && !where) where = 'Click a thing or drag a box round a group to pick it up';
     $('ed-where').textContent = where;
+    $('ed-where').classList.toggle('is-warning', !!this.flash);
     const spawns = doc.spawns.size;
     const info = $('ed-info');
     info.replaceChildren(`${doc.width} × ${doc.height} cells · ${doc.props.length} props · `, el('span', { className: spawns < RECOMMENDED_SPAWNS ? 'is-warning' : '', textContent: spawns === 0 ? 'no spawn points yet (players need some)' : `${spawns} spawn point${spawns === 1 ? '' : 's'}${spawns < RECOMMENDED_SPAWNS ? ` (${RECOMMENDED_SPAWNS} or more is best)` : ''}` }));

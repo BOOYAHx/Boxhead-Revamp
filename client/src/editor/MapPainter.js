@@ -91,8 +91,12 @@ export class MapPainter {
     this.shadowCanvas = document.createElement('canvas');
   }
 
-  /** The whole map onto `canvas` (sized to the map, one canvas pixel per game pixel). */
-  draw(canvas, doc) {
+  /**
+   * The whole map onto `canvas` (sized to the map, one canvas pixel per game
+   * pixel). hidden: a selection being dragged, drawn by the editor instead.
+   */
+  draw(canvas, doc, hidden = null) {
+    this.hidden = hidden;
     const W = doc.width * CELL_WIDTH;
     const H = doc.height * CELL_HEIGHT;
     if (canvas.width !== W || canvas.height !== H) {
@@ -132,12 +136,40 @@ export class MapPainter {
 
   drawDecals(ctx, doc) {
     for (const [index, { code, variant }] of doc.decals) {
-      // FloorDamage is vector art the asset build does not export: the game leaves it out too.
-      const sheet = DECALS[code] === 'FloorDamage' ? null : this.art.image(DECALS[code]);
-      if (!sheet) continue;
-      const [sx, sy] = decalCell(sheet.width, sheet.height, variant);
-      ctx.drawImage(sheet, sx, sy, CELL_WIDTH, CELL_HEIGHT, (index % doc.width) * CELL_WIDTH, Math.floor(index / doc.width) * CELL_HEIGHT, CELL_WIDTH, CELL_HEIGHT);
+      if (!this.hidden?.decals.has(index)) this.drawDecal(ctx, code, variant, index % doc.width, Math.floor(index / doc.width));
     }
+  }
+
+  /** A mark in cell (x, y). */
+  drawDecal(ctx, code, variant, x, y) {
+    // FloorDamage is vector art the asset build does not export: the game leaves it out too.
+    const sheet = DECALS[code] === 'FloorDamage' ? null : this.art.image(DECALS[code]);
+    if (!sheet) return;
+    const [sx, sy] = decalCell(sheet.width, sheet.height, variant);
+    ctx.drawImage(sheet, sx, sy, CELL_WIDTH, CELL_HEIGHT, x * CELL_WIDTH, y * CELL_HEIGHT, CELL_WIDTH, CELL_HEIGHT);
+  }
+
+  /** A prop with its top-left cell at (x, y), with its shadow (shadow: false leaves that out). */
+  drawProp(ctx, code, variant, x, y, { shadow = true } = {}) {
+    const look = propLook(code, variant);
+    if (!look) return;
+    const px = Math.round((x + look.width / 2) * CELL_WIDTH);
+    const py = Math.round((y + look.height / 2) * CELL_HEIGHT);
+    if (shadow && look.shadow) {
+      ctx.save();
+      ctx.globalAlpha *= SHADOW_ALPHA;
+      this.art.drawSprite(ctx, look.shadow, px, py);
+      ctx.restore();
+    }
+    if (look.display) this.art.drawSprite(ctx, look.display, px, py);
+  }
+
+  /** The prop's picture in map pixels, [left, top, width, height], for clicking on it. */
+  propBounds(p) {
+    const look = propLook(p.code, p.variant);
+    const s = look?.display && this.art.sprite(look.display);
+    if (!s) return null;
+    return [Math.round((p.x + look.width / 2) * CELL_WIDTH) + s.dx, Math.round((p.y + look.height / 2) * CELL_HEIGHT) + s.dy, s.w, s.h];
   }
 
   /** ShadowLayer: every shadow at full strength on one layer, laid down at SHADOW_ALPHA (overlaps do not darken twice). */
@@ -148,7 +180,7 @@ export class MapPainter {
     const sctx = layer.getContext('2d');
     for (const p of doc.props) {
       const look = propLook(p.code, p.variant);
-      if (!look?.shadow) continue;
+      if (!look?.shadow || this.hidden?.props.has(p)) continue;
       this.art.drawSprite(sctx, look.shadow, Math.round((p.x + look.width / 2) * CELL_WIDTH), Math.round((p.y + look.height / 2) * CELL_HEIGHT));
     }
     ctx.save();
@@ -161,7 +193,7 @@ export class MapPainter {
     const list = [];
     for (const p of doc.props) {
       const look = propLook(p.code, p.variant);
-      if (!look?.display) continue;
+      if (!look?.display || this.hidden?.props.has(p)) continue;
       const cx = p.x + look.width / 2;
       const cy = p.y + look.height / 2;
       list.push({ look, cx, cy, depth: cy + look.depthOffset });
