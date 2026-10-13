@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-"""Draw the school bus and the box truck props and add them to the sprite atlas.
+"""Draw the props this port adds to the game's own and put them in the sprite atlas.
 
-The original game has cars but no bus or truck, so these are drawn here, in
-the cars' style (seen from above and the front, dark outline, light from the
-top left), each across and up-down:
+The original game has cars but no bus or truck, and no raised deck, so these
+are drawn here in the game's style (seen from above and the front, dark
+outline, light from the top left):
 
     Bus1    school bus across, facing left   (prop a16, 6 x 2 cells)
     Bus2    school bus up-down, facing up    (prop a17, 2 x 6 cells)
     Truck1  box truck across, facing left    (prop a18, 4 x 2 cells)
     Truck2  box truck up-down, facing up     (prop a19, 2 x 4 cells)
+    Deck1   raised wooden deck on posts, stairs down on the right (prop b31, 7 x 2)
+    Deck2   the same with the stairs on the left                  (prop b32, 7 x 2)
 
 plus a shadow for each (Bus_Shadow1, ...). tools/build_assets.py runs this
 after baking the atlas; to redraw them on their own:
 
-    python3 tools/vehicles.py [--out client/assets/game]
+    python3 tools/extra_props.py [--out client/assets/game]
 
 Each picture is drawn around the centre of the prop's footprint (x right, y
 down, in game pixels: 40 x 28 per cell), the point the game places it at;
@@ -229,21 +231,87 @@ def truck_up_down():
     return c.finish()
 
 
-def cast_shadow(body, height):
+def cast_shadow(body, height, *more):
     """The cars' kind of shadow: the ground under the body, stretched to the
-    bottom right by the vehicle's height. body: (x0, y0, x1, y1) around the
-    centre. Returns (picture, offset)."""
-    x0, y0, x1, y1 = body
-    sx, sy = round(height * 0.8), round(height * 0.7)
-    w, h = x1 - x0 + sx + 1, y1 - y0 + sy + 1
-    mask = Image.new('RGB', (w, h), (0, 0, 0))
+    bottom right by its height. body: (x0, y0, x1, y1) around the centre;
+    more: further (body, height) pairs in the same shadow. Returns (picture, offset)."""
+    parts = [(body, height), *more]
+    stretch = [(round(h * 0.8), round(h * 0.7)) for _, h in parts]
+    left = min(b[0] for b, _ in parts)
+    top = min(b[1] for b, _ in parts)
+    right = max(b[2] + sx for (b, _), (sx, _) in zip(parts, stretch))
+    bottom = max(b[3] + sy for (b, _), (_, sy) in zip(parts, stretch))
+    mask = Image.new('RGB', (right - left + 1, bottom - top + 1), (0, 0, 0))
     d = ImageDraw.Draw(mask)
-    d.polygon([(0, 0), (x1 - x0, 0), (w - 1, sy), (w - 1, h - 1), (sx, h - 1), (0, y1 - y0)], fill=(255, 255, 255))
+    for ((x0, y0, x1, y1), _), (sx, sy) in zip(parts, stretch):
+        x0, x1, y0, y1 = x0 - left, x1 - left, y0 - top, y1 - top
+        d.polygon([(x0, y0), (x1, y0), (x1 + sx, y0 + sy), (x1 + sx, y1 + sy), (x0 + sx, y1 + sy), (x0, y1)], fill=(255, 255, 255))
     img, pad = soft_shadow(mask)
-    return img, [x0 - pad, y0 - pad]
+    return img, [left - pad, top - pad]
 
 
-def vehicles():
+WOOD_TOP = (164, 112, 66, 255)
+WOOD_PLANK = (138, 92, 52, 255)
+WOOD_EDGE = (104, 66, 38, 255)
+WOOD_POST = (124, 82, 46, 255)
+WOOD_DARK = (92, 58, 32, 255)
+WOOD_RAIL = (150, 102, 58, 255)
+DECK_HEIGHT = 56  # the floor's height above the ground, in pixels: players walk under it
+
+
+def deck():
+    """Deck1: the floor over x -140..60 (5 cells), y -28..28 (2 cells), stairs
+    down to the right over x 60..140 in the front row (y 0..28)."""
+    H = DECK_HEIGHT
+    c = Canvas(-143, -105, 143, 34)
+    # back railing, along the far edge of the floor
+    c.box(-140, -28 - H - 18, 60, -28 - H - 15, WOOD_RAIL)
+    for x in range(-140, 61, 8):
+        c.box(x, -28 - H - 15, x + 1, -28 - H, WOOD_DARK)
+    # front posts, under the floor's front edge
+    for x in (-140, -43, 53):
+        c.box(x, 28 - H + 7, x + 6, 28, WOOD_POST)
+        c.box(x + 4, 28 - H + 7, x + 6, 28, WOOD_DARK)
+    # the floor: planks, then its edge board
+    c.box(-140, -28 - H, 60, 28 - H, WOOD_TOP)
+    for y in range(-28 - H + 6, 28 - H, 7):
+        c.line(-140, y, 60, y, WOOD_PLANK)
+    c.shade(-140, -28 - H, 60, 28 - H - 1, 8, 18)
+    c.box(-140, 28 - H, 60, 28 - H + 7, WOOD_EDGE)
+    # side railings
+    for x in (-140, 58):
+        c.box(x, -28 - H - 18, x + 2, 28 - H - 16, WOOD_RAIL)
+    # front railing, open at the top of the stairs
+    c.box(-140, 28 - H - 18, 40, 28 - H - 15, WOOD_RAIL)
+    for x in range(-140, 41, 8):
+        c.box(x, 28 - H - 15, x + 1, 28 - H, WOOD_RAIL)
+    for x in (-140, -43, 38):
+        c.box(x, 28 - H - 20, x + 3, 28 - H, WOOD_POST)
+    # stairs: eight steps down to the ground at the right
+    steps = 8
+    rise = H // steps
+    for i in range(steps):
+        x0 = 60 + i * 10
+        h = H - (i + 1) * rise
+        c.box(x0, 0 - h, x0 + 10, 28 - h, WOOD_TOP)
+        c.line(x0, 0 - h, x0, 28 - h, WOOD_PLANK)
+        c.box(x0, 28 - h, x0 + 10, 28 - h + rise - 1, WOOD_EDGE)
+    c.d.polygon([(60 + c.ox, 28 - H + 7 + c.oy), (140 + c.ox, 28 + c.oy), (140 + c.ox, 31 + c.oy), (60 + c.ox, 28 - H + 14 + c.oy)], fill=WOOD_DARK)
+    c.d.line([40 + c.ox, 28 - H - 17 + c.oy, 136 + c.ox, 28 - 17 + c.oy], fill=WOOD_RAIL, width=3)
+    for i in (0, 4, 7):
+        x = 62 + i * 10
+        h = H - (i + 1) * rise
+        c.box(x, 28 - h - 17, x + 2, 28 - h, WOOD_POST)
+    return c.finish()
+
+
+def mirrored(picture):
+    """The picture flipped left to right about the prop's centre (the canvas is symmetric)."""
+    img, offset = picture
+    return img.transpose(Image.FLIP_LEFT_RIGHT), offset
+
+
+def pictures():
     """name -> (picture, [dx, dy])"""
     return {
         'Bus1': bus_across(),
@@ -254,6 +322,11 @@ def vehicles():
         'Bus_Shadow2': cast_shadow((-26, -78, 26, 78), 24),
         'Truck_Shadow1': cast_shadow((-74, -20, 74, 20), 30),
         'Truck_Shadow2': cast_shadow((-26, -52, 26, 52), 30),
+        'Deck1': deck(),
+        'Deck2': mirrored(deck()),
+        # the floor's shadow falls beside it (light from the top left), the stairs' under them
+        'Deck_Shadow1': cast_shadow((-140, -28, 60, 28), DECK_HEIGHT, ((60, 0, 140, 28), DECK_HEIGHT // 2)),
+        'Deck_Shadow2': cast_shadow((-60, -28, 140, 28), DECK_HEIGHT, ((-140, 0, -60, 28), DECK_HEIGHT // 2)),
     }
 
 
@@ -263,12 +336,12 @@ def add(out):
     with open(path) as f:
         atlas = json.load(f)
     os.makedirs(os.path.join(out, 'sprites'), exist_ok=True)
-    for name, (img, (dx, dy)) in vehicles().items():
+    for name, (img, (dx, dy)) in pictures().items():
         img.save(os.path.join(out, 'sprites', name + '.png'), optimize=True)
         atlas[name] = {'image': name, 'frames': [[0, 0, img.width, img.height, dx, dy]]}
     with open(path, 'w') as f:
         json.dump(atlas, f, separators=(',', ':'))
-    print('  bus and truck: 4 vehicles, 4 shadows')
+    print('  extra props: bus, truck and deck')
 
 
 def main():

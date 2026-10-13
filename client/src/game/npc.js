@@ -109,7 +109,7 @@ export class NavGrid {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const inside = x >= b.x && y >= b.y && x < b.x + b.width && y < b.y + b.height;
-        this.open[y * this.width + x] = inside && !map.cellAt(x, y)?.prop ? 1 : 0;
+        this.open[y * this.width + x] = inside && !map.solidAt(x, y) ? 1 : 0;
       }
     }
     this.fields = new Map(); // goal cell -> { field, made }

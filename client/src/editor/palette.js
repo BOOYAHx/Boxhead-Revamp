@@ -71,6 +71,7 @@ export const PROPS = [
       prop('b', 6, 'Warehouse roof (with a vent)'), prop('b', 7, 'Warehouse roof'),
       prop('b', 11, 'Shop front (2 cells)'), prop('b', 12, 'Shop front'), prop('b', 13, 'Shop roof'), prop('b', 14, 'Shop roof (no shadow)'),
       ...range(21, 24).map((v) => prop('b', v, 'Tall building front')), prop('b', 25, 'Tall building roof'),
+      prop('b', 31, 'Raised deck, stairs on the right (7 x 2): walk under it'), prop('b', 32, 'Raised deck, stairs on the left (7 x 2): walk under it'),
     ],
   },
   {

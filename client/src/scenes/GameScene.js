@@ -752,8 +752,7 @@ export class GameScene extends Phaser.Scene {
       const distance = 0.4 + Math.random() * 1.1;
       const x = pos.x + Math.cos(angle) * distance;
       const y = pos.y + Math.sin(angle) * distance;
-      const cell = this.map.cellAt(x, y);
-      if (cell && !cell.prop) return { x, y };
+      if (this.map.cellAt(x, y) && !this.map.solidAt(x, y)) return { x, y };
     }
     return { x: pos.x, y: pos.y };
   }
@@ -1540,6 +1539,7 @@ export class GameScene extends Phaser.Scene {
       view?.update(alpha);
     }
     this.drawCrates();
+    this.mapView.seeThrough(this.spy || (this.player.active && !this.player.dead ? this.player.pos : null));
     this.equipmentView.update(alpha, this.player, this.spy);
     const camera = this.cameras.main;
     this.placeCamera(this.spy ? this.spy.x * CELL_WIDTH : this.playerView.container.x, this.spy ? this.spy.y * CELL_HEIGHT : this.playerView.container.y);

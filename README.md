@@ -658,6 +658,11 @@ format. Everything stays in your browser until you share it.
   a school bus and a box truck (both drawn for this port: the original game
   has neither) and wrecks. The green outline shows where it goes (red:
   something is in the way). Drag to place a row.
+* **Raised deck** (Buildings, stairs on the right or the left, 7 × 2 cells;
+  also drawn for this port): a wooden deck on posts. Players walk and fight
+  under its floor; only the front posts and the stairs block them and
+  shots, and bots find their way under it too. The deck fades while you
+  stand under it so you can see yourself.
 * **Spawns** places the points players start from (8 or more is best) and has the eraser.
 * **Select** (or **V**) picks things up to move them: click a prop, spawn
   point or mark, or drag a box round a group (start on bare ground, or hold
@@ -822,8 +827,9 @@ the original art and are not tracked by git (`art/templates/`); committing
 * `tools/save_maps.py` — saves every online bounty map into the game files (see "Website and updates").
 * `tools/export_intro.py` — exports the original loading screen from BBH.swf (see step 18).
 * `tools/redrawn_art.py` — drawing templates for, and loading of, hand-redrawn 4x art (see step 15).
-* `tools/vehicles.py` — draws the school bus and box truck props (across and
-  up-down, with shadows) into the sprites and atlas; `build_assets.py` runs it.
+* `tools/extra_props.py` — draws the props this port adds (the school bus and
+  box truck, across and up-down, and the raised deck), with their shadows,
+  into the sprites and atlas; `build_assets.py` runs it.
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound
   (MP3/WAV) from a SWF, including embedded SWFs.
 * `tools/abc_decompile.py` — a small ActionScript 3 bytecode decompiler that

@@ -28,7 +28,7 @@ import abc_decompile  # noqa: E402
 import build_atlas  # noqa: E402
 import swf_extract  # noqa: E402
 import swf_vector  # noqa: E402
-import vehicles  # noqa: E402
+import extra_props  # noqa: E402
 from export_intro import export_intro  # noqa: E402
 
 
@@ -120,7 +120,7 @@ def main():
         print('Baking sprite atlas')
         sys.argv = ['build_atlas', '--assets-as', assets_as, '--images', os.path.join(raw, 'images'), '--out', args.out]
         build_atlas.main()
-        vehicles.add(args.out)  # the bus and truck props, drawn for this port
+        extra_props.add(args.out)  # the bus, truck and deck props, drawn for this port
 
         for name in sorted(game_images):
             shutil.copy(os.path.join(raw, 'images', name + '.png'), os.path.join(args.out, 'images', name + '.png'))

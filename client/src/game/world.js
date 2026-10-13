@@ -171,7 +171,7 @@ const CRATE_HEIGHT = 27;
  */
 export function describeProp(code, variant) {
   const rect = (xRad, yRad, ox = 0, oy = 0) => ({ type: 'rect', xRad, yRad, ox, oy });
-  const circle = (radius) => ({ type: 'circle', radius, ox: 0, oy: 0 });
+  const circle = (radius, ox = 0, oy = 0) => ({ type: 'circle', radius, ox, oy });
   const p = { kind: code, variant, footprint: [1, 1], hits: [], height: 0, depthOffset: 0, display: null, shadow: null };
   switch (code) {
     case 'w': {
@@ -231,6 +231,7 @@ export function describeProp(code, variant) {
       if (variant >= 10) return brickWall(p, variant - 10 || 1);
       return fence(p, variant || 1);
     case 'b':
+      if (variant >= 31 && variant <= 32) return deck(p, variant - 30);
       if (variant >= 20) return storeFrontLarge(p, variant - 20 || 1);
       if (variant >= 10) return storeFrontSmall(p, variant - 10 || 1);
       return factory(p, variant || 1);
@@ -322,7 +323,7 @@ export function describeProp(code, variant) {
     return q;
   }
 
-  // Drawn for this port (tools/vehicles.py): 16 school bus across, 17 up-down, 18 box truck across, 19 up-down.
+  // Drawn for this port (tools/extra_props.py): 16 school bus across, 17 up-down, 18 box truck across, 19 up-down.
   function bigVehicle(q, v) {
     const bus = v <= 17;
     const across = v % 2 === 0;
@@ -331,6 +332,34 @@ export function describeProp(code, variant) {
     const [w, h] = bus ? (across ? [6, 2] : [2, 6]) : across ? [4, 2] : [2, 4];
     const hit = bus ? (across ? rect(100 / 40, 20 / 28) : rect(26 / 40, 78 / 28)) : across ? rect(74 / 40, 20 / 28) : rect(26 / 40, 52 / 28);
     Object.assign(q, { display: name + look, shadow: name + '_Shadow' + look, hits: [hit], height: bus ? 40 : 50, footprint: [w, h], depthOffset: hit.yRad });
+    return q;
+  }
+
+  /**
+   * Drawn for this port (tools/extra_props.py): a raised wooden deck, 7 x 2
+   * cells, its floor over five of them and stairs down to the ground in the
+   * front row of the other two (1: on the right, 2: on the left). Players
+   * walk under the floor (open cells), drawn behind it; only the posts and
+   * the stairs block them and shots.
+   */
+  function deck(q, v) {
+    const left = v === 2;
+    const at = (x) => (left ? 7 - x : x) - 3.5; // cells from the left edge -> from the centre
+    const post = (x, y) => circle(0.12, at(x), y - 1);
+    const stairs = left ? [0, 1] : [5, 6];
+    const open = [];
+    for (let y = 0; y < 2; y++) for (let x = 0; x < 7; x++) if (!(y === 1 && stairs.includes(x))) open.push([x, y]);
+    Object.assign(q, {
+      kind: 'deck',
+      display: 'Deck' + v,
+      shadow: 'Deck_Shadow' + v,
+      footprint: [7, 2],
+      height: 74,
+      depthOffset: 1, // the front edge: whoever is under the floor is behind it
+      // the front posts (the back of a deck stands against a house: no posts there, so the way behind the stairs stays open)
+      hits: [post(0.1, 1.88), post(2.5, 1.88), post(4.9, 1.88), rect(1, 0.5, at(6), 0.5)],
+      open,
+    });
     return q;
   }
 }
@@ -385,6 +414,12 @@ export class GameMap {
     return this.cells[y * this.width + x];
   }
 
+  /** Whether cell (x, y) is taken by a prop that blocks the whole cell (not the open ground under a deck). */
+  solidAt(x, y) {
+    const cell = this.cellAt(x, y);
+    return !!cell?.prop && !cell.open;
+  }
+
   setBorder(border) {
     this.border = Math.max(0, Math.min(9, border));
     const { width, height } = this;
@@ -401,10 +436,14 @@ export class GameMap {
   plantProp(prop) {
     const [fw, fh] = prop.footprint;
     for (let i = 0; i < fw; i++) for (let j = 0; j < fh; j++) if (this.cellAt(prop.x + i, prop.y + j)?.prop) return false;
+    const open = new Set((prop.open || []).map(([i, j]) => `${i},${j}`));
     for (let i = 0; i < fw; i++) {
       for (let j = 0; j < fh; j++) {
         const cell = this.cellAt(prop.x + i, prop.y + j);
-        if (cell) cell.prop = prop;
+        if (cell) {
+          cell.prop = prop;
+          cell.open = open.has(`${i},${j}`); // under the deck's floor: walkable
+        }
       }
     }
     this.props.push(prop);

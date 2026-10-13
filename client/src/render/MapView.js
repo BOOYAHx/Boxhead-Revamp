@@ -171,6 +171,7 @@ export class MapView {
   }
 
   drawProps() {
+    this.roofs = []; // props players can walk under (a deck): see-through while you are under them
     for (const prop of this.map.props) {
       const x = Math.round(prop.renderPos.x * CELL_WIDTH);
       const y = Math.round(prop.renderPos.y * CELL_HEIGHT);
@@ -179,8 +180,15 @@ export class MapView {
         const sprite = createSprite(this.scene, prop.display, 0, x, y).setDepth(prop.depth);
         this.scene.lighting?.add(sprite);
         this.objects.push(sprite);
+        if (prop.open) this.roofs.push({ prop, sprite });
       }
     }
+  }
+
+  /** Fade the deck you stand under, so you can see yourself and who is under there with you. */
+  seeThrough(pos) {
+    const cell = pos && this.map.cellAt(pos.x, pos.y);
+    for (const { prop, sprite } of this.roofs) sprite.setAlpha(cell?.open && cell.prop === prop ? 0.5 : 1);
   }
 
   destroy() {

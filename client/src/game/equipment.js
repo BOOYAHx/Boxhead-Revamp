@@ -82,7 +82,7 @@ export class EquipmentWorld {
 
   canPlace(character) {
     const cell = this.map.cellAt(character.pos.x, character.pos.y);
-    return !!cell && !cell.prop && ![...this.deployables.values()].some((d) => d.cellX === cell.x && d.cellY === cell.y);
+    return !!cell && !this.map.solidAt(cell.x, cell.y) && ![...this.deployables.values()].some((d) => d.cellX === cell.x && d.cellY === cell.y);
   }
 
   placeOffline(character, weapon) {
@@ -300,8 +300,8 @@ export class EquipmentWorld {
       this.advance(p, p.vx, p.vy);
       if (p.dead) continue;
       if (p.weaponID !== ID.PLASMA) {
-        const prop = this.map.cellAt(p.pos.x, p.pos.y)?.prop;
-        const floor = prop?.height || 0;
+        const cell = this.map.cellAt(p.pos.x, p.pos.y);
+        const floor = cell?.prop && !cell.open ? cell.prop.height : 0; // under a deck: the ground
         p.altitude += p.vz;
         p.vz -= 5;
         if (p.altitude <= floor && p.vz < 0) {
