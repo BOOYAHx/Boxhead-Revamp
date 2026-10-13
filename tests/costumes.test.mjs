@@ -24,6 +24,16 @@ test('Ghost Rider: a model with all four sheets, every frame of the Ninja it is 
   assert.equal(tintFor('GhostRiderHead', 0), 0xffffff);
 });
 
+test('Venom: the next model, all four sheets, one colour', () => {
+  assert.equal(MODELS.indexOf('Venom'), ORIGINAL_MODELS + 1);
+  for (const layer of ['Body', 'BodyCustom', 'Head', 'HeadCustom']) {
+    assert.equal(atlas['Venom' + layer]?.frames.length, atlas['Ninja' + layer].frames.length, layer);
+    assert.ok(fs.existsSync(new URL(`../client/assets/game/sprites/Venom${layer}.png`, import.meta.url)), layer);
+  }
+  assert.equal(COLORS.VenomHead.length, 1);
+  assert.equal(cleanLook({ headModel: 13, bodyModel: 13 }).bodyModel, 13);
+});
+
 test('Ghost Rider: a saved look keeps it; the bots stick to the original costumes', () => {
   assert.deepEqual(cleanLook({ gender: 'Male', headModel: 12, headColor: 0, bodyModel: 12, bodyColor: 0 }).headModel, 12);
   assert.equal(cleanLook({ headModel: MODELS.length }).headModel, 0);

@@ -4,6 +4,8 @@
     GhostRider  a flaming LEGO-style skull (black eyes with yellow pupils,
                 angry brows, a stitched grin) and a black leather jacket with
                 silver studs and a chain; drawn over the Ninja model's frames
+    Venom       glossy black, big white eyes, a toothy grin with a red tongue
+                and the white spider on the chest and back; over the Ninja too
 
 Each costume is a model like the original twelve (game/bodyParts.js MODELS):
 four sheets, <Model>Body, <Model>BodyCustom, <Model>Head and <Model>HeadCustom,
@@ -270,7 +272,162 @@ def ghost_rider(src, i):
     return bc, bf, hc, hf
 
 
-COSTUMES = {'GhostRider': ('Ninja', ghost_rider)}
+# --- Venom ------------------------------------------------------------------------------------
+
+WHITE = (246, 247, 251, 255)
+GOO_SHINE = [(104, 120, 160, 255), (54, 62, 86, 255)]  # the blue-grey streak along a lit top edge
+MOUTH = (58, 4, 14, 255)
+TONGUE = (214, 38, 66, 255)
+TONGUE_DARK = (150, 18, 42, 255)
+# The white spider: upper legs out to the top of the chest, lower legs round the ribs.
+SPIDER = [
+    'WW........WW',
+    '.WW......WW.',
+    '..WWWWWWWW..',
+    '...WWWWWW...',
+    '....WWWW....',
+    '.....WW.....',
+    '....WWWW....',
+    '...WWWWWW...',
+    '..WW.WW.WW..',
+    '.WW..WW..WW.',
+    'WW........WW',
+    'W..........W',
+]
+SPIDER_NARROW = [  # squeezed for the three-quarter views
+    'W......W',
+    '.WWWWWW.',
+    '..WWWW..',
+    '...WW...',
+    '..WWWW..',
+    '.WWWWWW.',
+    'WW.WW.WW',
+    'W......W',
+]
+GRIN = [
+    'W        W',
+    'WWWWWWWWWW',
+    '.W.W..W.W.',
+    'W.W.TT.W.W',
+    'WWWWTTWWWW',
+]
+# From three quarters, sheared along the side of the head like Ghost Rider's.
+VENOM_THREE_QUARTER = [
+    'W.....W',
+    'WW...WW',
+    'WWW.WWW',  # the eyes (on the model's eye slit)
+    '.WW.WW.',
+    '.......',
+    'WWWWWWW',  # the grin
+    'M.WMW.M',
+    'WMWTWMW',
+    'WWWTWWW',
+]
+
+
+def goo(im):
+    """The model's white geometry -> glossy black, a blue-grey shine along lit top edges."""
+    px = im.load()
+    lum = {(x, y): sum(px[x, y][:3]) / 3 for y in range(H) for x in range(W) if px[x, y][3]}
+    top = {p for p, l in lum.items() if l >= 225}
+    for (x, y), l in lum.items():
+        v = int(7 + l * 0.095)
+        c = (v, v + 4, v + 14, 255)
+        if (x, y) in top:
+            if (x, y - 1) not in top:
+                c = GOO_SHINE[0]
+            elif (x, y - 2) not in top:
+                c = GOO_SHINE[1]
+        px[x, y] = c
+
+
+def stamp(im, art, x0, y0, colors, where):
+    for dy, row in enumerate(art):
+        for dx, ch in enumerate(row):
+            if ch in colors and where(x0 + dx, y0 + dy):
+                put(im, x0 + dx, y0 + dy, colors[ch])
+
+
+def venom(src, i):
+    bc, bf, hc, hf = (src.frame(layer, i) for layer in LAYERS)
+    direction, step = divmod(i, FRAMES_PER_DIRECTION)
+    dying = step >= DEATH_START
+    slit = [(x, y) for y in range(H) for x in range(W) if (lambda p: p[3] and p[0] > 55 and p[0] > p[2] + 15)(hf.getpixel((x, y)))]
+    for x, y in slit:
+        put(hf, x, y, CLEAR)
+    fpx = bf.load()
+    for y in range(H):
+        for x in range(W):
+            r, g, b, a = fpx[x, y]
+            if a and r > 70 and abs(r - b) < 25:  # the Ninja's sash
+                fpx[x, y] = CLEAR
+    goo(bc)
+    goo(hc)
+    head, body_mask = Mask(hc, hf), Mask(bc, bf)
+    hb = head.bbox()
+    if dying or not hb or not body_mask.bbox():
+        return bc, bf, hc, hf
+    hx0, _, hx1, hy1 = hb
+    body = lambda x, y: body_mask(x, y) and not head(x, y)
+    colors = {'W': WHITE, 'M': MOUTH, 'T': TONGUE}
+    if len(slit) >= 2:
+        fx0, fx1 = min(x for x, _ in slit), max(x for x, _ in slit)
+        fy0, fy1 = min(y for _, y in slit), max(y for _, y in slit)
+        c0 = (fx0 + fx1) // 2
+        if direction % 2:
+            cols = {}
+            for x, y in slit:
+                cols.setdefault(x, []).append(y)
+            xs = sorted(cols)
+            slope = 1 if min(cols[xs[-1]]) > min(cols[xs[0]]) else -1
+            mid = xs[len(xs) // 2]
+            seam = (hx0 + hx1) // 2
+            lo, hi = (hx0 + 1, seam) if sum(xs) / len(xs) < (hx0 + hx1) / 2 else (seam + 1, hx1 - 1)
+            cx = (lo + hi) // 2
+            for u in range(7):
+                x = cx - 3 + u
+                top = min(cols[mid]) + slope * (x - mid) - 2
+                for v, row in enumerate(VENOM_THREE_QUARTER):
+                    if row[u] in colors and head(x, top + v):
+                        put(hf, x, top + v, colors[row[u]])
+            stamp(bf, SPIDER_NARROW, c0 - 3, hy1 + 2, colors, body)
+        else:
+            eye = [(-1, -5), (-1, -4), (0, -4), (-1, -3), (0, -3), (1, -3), (-1, -2), (0, -2), (1, -2), (2, -2),
+                   (0, -1), (1, -1), (2, -1), (1, 0), (2, 0)]
+            for dx, dy in eye:
+                for x, ok in ((fx0 + dx, fx0 + dx <= c0), (fx1 - dx, fx1 - dx > c0)):
+                    if ok and head(x, fy0 + dy):
+                        put(hf, x, fy0 + dy, WHITE)
+            stamp(hf, GRIN, c0 - 4, fy1, {'W': WHITE, '.': MOUTH, 'T': TONGUE}, head)
+            for x, y, c in ((c0, fy1 + 5, TONGUE), (c0 + 1, fy1 + 5, TONGUE), (c0 + 1, fy1 + 6, TONGUE),
+                            (c0, fy1 + 6, TONGUE_DARK), (c0 + 2, fy1 + 6, TONGUE_DARK)):
+                put(hf, x, y, c)  # the tongue lolls out over the chin
+            stamp(bf, SPIDER if direction == 0 else SPIDER_NARROW, c0 - (5 if direction == 0 else 3), hy1 + 2, colors, body)
+    elif direction in (2, 6):  # profile: one big eye, the grin, the spider's legs round the side
+        facing_left = direction == 2
+        edge, stp = (hx0, 1) if facing_left else (hx1, -1)
+        fy = hy1 - 7
+        for dx, dy in ((1, -3), (1, -2), (2, -2), (1, -1), (2, -1), (3, -1), (1, 0), (2, 0), (3, 0), (4, 0), (3, 1), (4, 1)):
+            if head(edge + stp * dx, fy + dy):
+                put(hf, edge + stp * dx, fy + dy, WHITE)
+        for k, row in enumerate(['WWWWW', 'T.W.W', 'WWWW.']):
+            for d, ch in enumerate(row):
+                x, y = edge + stp * d, fy + 3 + k
+                if head(x, y):
+                    put(hf, x, y, WHITE if ch == 'W' else TONGUE if ch == 'T' else MOUTH)
+        for k in range(6):
+            for x, y in ((edge + stp * (1 + k), hy1 + 2 + k), (edge + stp * (2 + k), hy1 + 2 + k),
+                         (edge + stp * (6 - k), hy1 + 8 + k), (edge + stp * (7 - k), hy1 + 8 + k)):
+                if body(x, y):
+                    put(bf, x, y, WHITE)
+    else:  # the spider carries on round the back
+        cx = (hx0 + hx1) // 2
+        art = SPIDER if direction == 4 else SPIDER_NARROW
+        stamp(bf, art, cx - (len(art[0]) // 2 - 1), hy1 + 2, colors, body)
+    return bc, bf, hc, hf
+
+
+COSTUMES = {'GhostRider': ('Ninja', ghost_rider), 'Venom': ('Ninja', venom)}
 
 
 # --- sheets -----------------------------------------------------------------------------------
