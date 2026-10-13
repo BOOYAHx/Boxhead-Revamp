@@ -402,6 +402,19 @@
   min-height: 1.5em;
 }
 
+/* Laptop screens: a tighter toolbar so it stays on one line. */
+@media (max-width: 1400px) {
+  .ed-toolbar {
+    column-gap: 6px;
+  }
+  .ed-name input {
+    width: 120px;
+  }
+  .ed-btn {
+    padding: 0 9px;
+  }
+}
+
 @media (max-width: 900px) {
   .ed-main {
     grid-template-columns: 220px 1fr;

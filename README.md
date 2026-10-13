@@ -664,6 +664,16 @@ format. Everything stays in your browser until you share it.
   everything). Drag the pick to move it: it shows where it lands, red when
   something is in the way or it would go off the map (then it stays put).
   **Arrow keys** nudge it a cell (**Shift**: 5), **Delete** removes it, **Esc** lets go.
+* **Rotate** (or **R**) gives what is picked a quarter turn clockwise about its
+  middle: a group keeps its layout turned (a house, a wall corner) and each
+  piece becomes its turned version. Fences, brick, concrete and castle walls,
+  mailboxes, hydrants, road lines, curbs and grass edges turn; cars across
+  become up-down cars (there are three colours of those; turned back, a car
+  gets its own colour again). Trees, rocks, crates, bins, wrecks, building
+  pieces, sidewalk edges and cracks look the same from every side, so they
+  only move with the group. With nothing picked, **R** turns the prop or mark
+  you are about to place. When the turned pick would not fit, it stays as it
+  is and the bar under the map says so.
 * Right click removes what is under the pointer. **Ctrl+Z** / **Ctrl+Y** undo
   and redo, **G** the grid, **Ctrl+wheel** zoom, **Space+drag** or the middle
   button moves around. **Map settings** sets the size (10 to 100 cells each

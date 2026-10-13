@@ -9,6 +9,7 @@ import { EXAMPLES } from './examples.js';
 import { Art, CELL_HEIGHT, CELL_WIDTH, MapPainter, decalCell, propLook } from './MapPainter.js';
 import { MAX_SIZE, MIN_SIZE, MapDoc, decodeMap, emptySelection, encodeMap, footprintOf, parseShared, selectionSize } from './mapCode.js';
 import { ERASER, GROUND, GROUND_NAMES, MARKS, PROPS, SELECT, SPAWN } from './palette.js';
+import { turnDecal, turnProp, turnsDecal, turnsProp } from './rotation.js';
 
 const SAVE_KEY = 'bbh.editor.map'; // the map being edited, kept in this browser
 const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.5, 2, 3];
@@ -136,6 +137,7 @@ class Editor {
 
   select(item) {
     this.tool = item;
+    this.toolTurnedFrom = undefined;
     for (const b of this.itemButtons) b.setAttribute('aria-pressed', String(b.item === item));
     $('ed-select').setAttribute('aria-pressed', String(item === SELECT));
     if (item !== SELECT) this.selection = emptySelection();
@@ -216,6 +218,7 @@ class Editor {
     $('ed-new').addEventListener('click', () => this.newDialog());
     $('ed-open').addEventListener('click', () => this.openDialog());
     $('ed-select').addEventListener('click', () => this.select(SELECT));
+    $('ed-rotate').addEventListener('click', () => this.rotate());
     $('ed-undo').addEventListener('click', () => this.undo());
     $('ed-redo').addEventListener('click', () => this.redo());
     $('ed-grid').addEventListener('click', () => this.toggleGrid());
@@ -596,6 +599,53 @@ class Editor {
     return true;
   }
 
+  /**
+   * A quarter turn clockwise: what is selected turns about its middle, as one
+   * undoable step; with nothing selected, the piece in hand turns instead.
+   */
+  rotate() {
+    if (this.drag) return false;
+    if (selectionSize(this.selection)) {
+      const before = this.snapshot();
+      const turned = this.doc.rotateSelection(this.selection);
+      if (!turned) {
+        this.flash = 'Not enough room to turn it there: something is in the way, or it would go off the map.';
+        this.updateStatus();
+        return false;
+      }
+      this.flash = null;
+      this.selection = turned;
+      this.remember(before);
+      this.changed();
+      return true;
+    }
+    const tool = this.tool;
+    const prop = tool.type === 'prop';
+    if (!prop && tool.type !== 'mark') {
+      this.flash = 'Pick something to turn: select it on the map, or choose a fence, wall, car or mark';
+      this.updateStatus();
+      return false;
+    }
+    if (!this.toolTurns()) {
+      this.flash = 'This one looks the same turned';
+      this.updateStatus();
+      return false;
+    }
+    const variant = prop ? turnProp(tool.code, tool.variant, this.toolTurnedFrom) : turnDecal(tool.code, tool.variant);
+    const button = this.itemButtons.find((b) => b.item.type === tool.type && b.item.code === tool.code && b.item.variant === variant);
+    if (!button) return false;
+    this.select(button.item);
+    this.toolTurnedFrom = tool.variant;
+    button.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+
+  /** Whether the piece in hand has a turned version. */
+  toolTurns() {
+    const { type, code, variant } = this.tool;
+    return type === 'prop' ? turnsProp(code, variant) : type === 'mark' && turnsDecal(code, variant);
+  }
+
   deleteSelection() {
     if (!selectionSize(this.selection)) return;
     this.edit(() => this.doc.removeSelection(this.selection));
@@ -880,7 +930,8 @@ class Editor {
         this.selection = emptySelection();
         this.drawOverlay();
         this.updateStatus();
-      } else if (!ctrl && e.key.toLowerCase() === 'v') this.select(SELECT);
+      } else if (!ctrl && e.key.toLowerCase() === 'r') this.rotate();
+      else if (!ctrl && e.key.toLowerCase() === 'v') this.select(SELECT);
       else if (!ctrl && e.key.toLowerCase() === 'g') this.toggleGrid();
       else if (!ctrl && (e.key === '+' || e.key === '=')) this.stepZoom(1);
       else if (!ctrl && e.key === '-') this.stepZoom(-1);
@@ -915,8 +966,9 @@ class Editor {
     }
     const picked = selectionSize(this.selection);
     if (this.flash) where = this.flash;
-    else if (picked) where = `${picked} selected · drag to move · arrow keys nudge (Shift: 5) · Delete removes · Esc lets go`;
+    else if (picked) where = `${picked} selected · drag to move · arrow keys nudge (Shift: 5) · R turns it · Delete removes · Esc lets go`;
     else if (this.tool === SELECT && !where) where = 'Click a thing or drag a box round a group to pick it up';
+    else if (this.toolTurns()) where = where ? `${where} · R turns it` : 'R turns it';
     $('ed-where').textContent = where;
     $('ed-where').classList.toggle('is-warning', !!this.flash);
     const spawns = doc.spawns.size;

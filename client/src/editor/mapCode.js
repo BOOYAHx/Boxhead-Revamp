@@ -5,6 +5,7 @@
 
 import { DECALS, describeProp } from '../game/world.js';
 import { WAREHOUSE_FIXED, WAREHOUSE_ORIGINAL } from '../game/maps.js';
+import { turnDecal, turnProp } from './rotation.js';
 import { fromAlphaCharacter, fromAlphaNumericCharacter, toAlphaNumericCharacter } from '../util/strings.js';
 
 export const MIN_SIZE = 10;
@@ -165,17 +166,67 @@ export class MapDoc {
     return { props: new Set(this.props), spawns: new Set(this.spawns.keys()), decals: new Set(this.decals.keys()) };
   }
 
-  /** Whether the selection fits moved by (dx, dy) cells: inside the map, clear of everything else. */
-  canMove(sel, dx, dy) {
-    const taken = new Set(); // cells the moved props will cover
-    for (const p of sel.props) {
-      const [w, h] = footprintOf(p.code, p.variant);
+  /** Where the selection goes moved by (dx, dy) cells (see fits and apply). */
+  planMove(sel, dx, dy) {
+    const at = (index) => ({ x: (index % this.width) + dx, y: Math.floor(index / this.width) + dy });
+    return {
+      props: [...sel.props].map((p) => ({ code: p.code, variant: p.variant, x: p.x + dx, y: p.y + dy, turnedFrom: p.turnedFrom })),
+      spawns: [...sel.spawns].map((index) => ({ team: this.spawns.get(index), ...at(index) })),
+      decals: [...sel.decals].map((index) => ({ ...this.decals.get(index), ...at(index) })),
+    };
+  }
+
+  /**
+   * Where the selection goes turned a quarter turn clockwise about its middle:
+   * the layout turns, and each piece becomes its turned version (rotation.js;
+   * a piece without one keeps its shape, centred where it would be).
+   */
+  planTurn(sel) {
+    let X0 = Infinity;
+    let Y0 = Infinity;
+    let X1 = -Infinity;
+    let Y1 = -Infinity;
+    const grow = (x, y, w, h) => {
+      X0 = Math.min(X0, x);
+      Y0 = Math.min(Y0, y);
+      X1 = Math.max(X1, x + w);
+      Y1 = Math.max(Y1, y + h);
+    };
+    for (const p of sel.props) grow(p.x, p.y, ...footprintOf(p.code, p.variant));
+    for (const index of [...sel.spawns, ...sel.decals]) grow(index % this.width, Math.floor(index / this.width), 1, 1);
+    // The turned box (h wide, w tall) keeps the same middle; trunc brings four turns back to the start.
+    const w = X1 - X0;
+    const h = Y1 - Y0;
+    const bx = X0 + Math.trunc((w - h) / 2);
+    const by = Y0 + Math.trunc((h - w) / 2);
+    const turn = (index) => ({ x: bx + (Y1 - 1 - Math.floor(index / this.width)), y: by + ((index % this.width) - X0) });
+    return {
+      props: [...sel.props].map((p) => {
+        const [pw, ph] = footprintOf(p.code, p.variant);
+        const variant = turnProp(p.code, p.variant, p.turnedFrom);
+        const [nw, nh] = footprintOf(p.code, variant);
+        // Its cells turned: ph wide and pw tall, from here.
+        const left = bx + (Y1 - (p.y + ph));
+        const top = by + (p.x - X0);
+        return { code: p.code, variant, x: left + Math.trunc((ph - nw) / 2), y: top + Math.trunc((pw - nh) / 2), turnedFrom: p.variant };
+      }),
+      spawns: [...sel.spawns].map((index) => ({ team: this.spawns.get(index), ...turn(index) })),
+      decals: [...sel.decals].map((index) => {
+        const d = this.decals.get(index);
+        return { code: d.code, variant: turnDecal(d.code, d.variant), ...turn(index) };
+      }),
+    };
+  }
+
+  /** Whether a plan for the selection fits: inside the map, clear of everything not in the selection, and of itself. */
+  fits(sel, plan) {
+    const taken = new Set(); // cells the planned props cover
+    for (const t of plan.props) {
+      const [w, h] = footprintOf(t.code, t.variant);
       for (let j = 0; j < h; j++) {
         for (let i = 0; i < w; i++) {
-          const x = p.x + i + dx;
-          const y = p.y + j + dy;
-          if (!this.inside(x, y)) return false;
-          const index = this.index(x, y);
+          if (!this.inside(t.x + i, t.y + j)) return false;
+          const index = this.index(t.x + i, t.y + j);
           const other = this.covers.get(index);
           if ((other && !sel.props.has(other)) || taken.has(index)) return false;
           if (this.spawns.has(index) && !sel.spawns.has(index)) return false;
@@ -183,40 +234,53 @@ export class MapDoc {
         }
       }
     }
-    for (const index of sel.spawns) {
-      const x = (index % this.width) + dx;
-      const y = Math.floor(index / this.width) + dy;
-      if (!this.inside(x, y)) return false;
-      const other = this.covers.get(this.index(x, y));
-      if (taken.has(this.index(x, y)) || (other && !sel.props.has(other))) return false;
+    for (const s of plan.spawns) {
+      if (!this.inside(s.x, s.y)) return false;
+      const index = this.index(s.x, s.y);
+      const other = this.covers.get(index);
+      if (taken.has(index) || (other && !sel.props.has(other))) return false;
     }
-    for (const index of sel.decals) if (!this.inside((index % this.width) + dx, Math.floor(index / this.width) + dy)) return false;
-    return true;
+    return plan.decals.every((d) => this.inside(d.x, d.y));
   }
 
-  /** Move the selection by (dx, dy) cells when it fits: the moved selection, or null. Marks it lands on are replaced. */
+  /** Lift the selection and put it down as planned (fits first): the new selection. Marks it lands on are replaced. */
+  apply(sel, plan) {
+    for (const p of sel.props) this.removeProp(p);
+    for (const index of sel.spawns) this.spawns.delete(index);
+    for (const index of sel.decals) this.decals.delete(index);
+    const out = emptySelection();
+    for (const t of plan.props) {
+      const prop = this.place(t.code, t.variant, t.x, t.y);
+      if (t.turnedFrom !== undefined) prop.turnedFrom = t.turnedFrom; // what it was before it was turned (rotation.js turnProp)
+      out.props.add(prop);
+    }
+    for (const sp of plan.spawns) {
+      this.setSpawn(sp.x, sp.y, sp.team);
+      out.spawns.add(this.index(sp.x, sp.y));
+    }
+    for (const d of plan.decals) {
+      this.setDecal(d.x, d.y, d.code, d.variant);
+      out.decals.add(this.index(d.x, d.y));
+    }
+    return out;
+  }
+
+  /** Whether the selection fits moved by (dx, dy) cells. */
+  canMove(sel, dx, dy) {
+    return this.fits(sel, this.planMove(sel, dx, dy));
+  }
+
+  /** Move the selection by (dx, dy) cells when it fits: the moved selection, or null. */
   moveSelection(sel, dx, dy) {
-    if (!this.canMove(sel, dx, dy)) return null;
-    const props = [...sel.props];
-    const spawns = [...sel.spawns].map((index) => [index, this.spawns.get(index)]);
-    const decals = [...sel.decals].map((index) => [index, this.decals.get(index)]);
-    for (const p of props) this.removeProp(p);
-    for (const [index] of spawns) this.spawns.delete(index);
-    for (const [index] of decals) this.decals.delete(index);
-    const moved = emptySelection();
-    for (const p of props) moved.props.add(this.place(p.code, p.variant, p.x + dx, p.y + dy));
-    const at = (index) => [(index % this.width) + dx, Math.floor(index / this.width) + dy];
-    for (const [index, team] of spawns) {
-      const [x, y] = at(index);
-      this.setSpawn(x, y, team);
-      moved.spawns.add(this.index(x, y));
-    }
-    for (const [index, d] of decals) {
-      const [x, y] = at(index);
-      this.setDecal(x, y, d.code, d.variant);
-      moved.decals.add(this.index(x, y));
-    }
-    return moved;
+    const plan = this.planMove(sel, dx, dy);
+    return this.fits(sel, plan) ? this.apply(sel, plan) : null;
+  }
+
+  /** Turn the selection a quarter turn clockwise when it fits: the turned selection, or null. */
+  rotateSelection(sel) {
+    if (!selectionSize(sel)) return null;
+    const plan = this.planTurn(sel);
+    return this.fits(sel, plan) ? this.apply(sel, plan) : null;
   }
 
   removeSelection(sel) {

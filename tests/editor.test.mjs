@@ -117,3 +117,51 @@ test('a selection moves as one: blocked by anything else, carrying its spawn poi
   assert.equal(selectionSize(doc.selectAll()), doc.props.length + doc.spawns.size + doc.decals.size);
   assert.ok(car && crate);
 });
+
+test('turning: pieces become their turned versions, groups turn about their middle, four turns come back', async () => {
+  const { selectionSize } = await import('../client/src/editor/mapCode.js');
+  const { turnProp, turnDecal } = await import('../client/src/editor/rotation.js');
+  // Every turn table entry is a piece the game knows, and four turns come back for the fences, walls and mailboxes.
+  for (const [code, variant] of [['f', 8], ['f', 7], ['f', 11], ['w', 2], ['u', 21], ['u', 11]]) {
+    let v = variant;
+    for (let i = 0; i < 4; i++) v = turnProp(code, v);
+    assert.equal(v, variant, `${code}${variant}`);
+  }
+  for (const code of ['c', 'b', 'e', 'f']) for (let v = 0; v < 5; v++) assert.ok(Number.isInteger(turnDecal(code, v)));
+  assert.equal(turnProp('t', 1), 1, 'a tree looks the same from every side');
+  // Six car colours across, three up-down: a car turned back keeps its colour. Fences just carry on round.
+  assert.equal(turnProp('a', 9), 6);
+  assert.equal(turnProp('a', 9, 3), 3);
+  assert.equal(turnProp('f', 6, 8), 2);
+
+  const doc = new MapDoc({ width: 20, height: 20 });
+  // A brick wall across, one cell, then a crate under its left end: turned, the wall goes down.
+  doc.place('f', 11, 5, 5);
+  doc.place('c', 1, 5, 6);
+  doc.setDecal(6, 6, 'c', 0);
+  let sel = doc.selectAll();
+  const start = encodeMap(doc);
+  sel = doc.rotateSelection(sel);
+  assert.ok(sel);
+  const wall = [...sel.props].find((p) => p.code === 'f');
+  assert.equal(wall.variant, 12);
+  assert.deepEqual(footprintOf('f', wall.variant), [1, 2]);
+  assert.equal(doc.decals.get([...sel.decals][0]).variant, 1, 'the road line turned down');
+  for (let i = 0; i < 3; i++) sel = doc.rotateSelection(sel);
+  assert.equal(encodeMap(doc), start, 'four turns: as it was');
+  // A single car turns into an up-down car in place; blocked, nothing changes.
+  const car = new MapDoc({ width: 20, height: 20 });
+  const carSel = car.selectArea(0, 0, 0, 0);
+  carSel.props.add(car.place('a', 6, 5, 5));
+  const turned = car.rotateSelection(carSel);
+  assert.deepEqual([...turned.props].map((p) => [p.variant, ...footprintOf('a', p.variant)]), [[9, 2, 3]]);
+  car.place('c', 1, 7, 6); // beside the up-down car, where the car across would go
+  const before = encodeMap(car);
+  assert.equal(car.rotateSelection(turned), null, 'the crate is in the way');
+  assert.equal(encodeMap(car), before);
+  assert.equal(selectionSize(turned), 1);
+  let red = car.selectArea(0, 0, 0, 0);
+  red.props.add(car.place('a', 3, 10, 10));
+  for (let i = 0; i < 2; i++) red = car.rotateSelection(red);
+  assert.deepEqual([...red.props].map((p) => [p.variant, p.x, p.y]), [[3, 10, 10]], 'turned twice: the same car, where it was');
+});
