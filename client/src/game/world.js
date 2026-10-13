@@ -313,11 +313,24 @@ export function describeProp(code, variant) {
 
   function car(q, v) {
     q.kind = 'car';
+    if (v >= 16 && v <= 19) return bigVehicle(q, v);
     q.display = 'Car' + v;
     if (v <= 6) Object.assign(q, { hits: [rect(41 / 40, 18 / 28)], height: 24, footprint: [3, 2], shadow: 'Car_Shadow1' });
     else if (v <= 9) Object.assign(q, { hits: [rect(22 / 40, 30 / 28)], height: 24, footprint: [2, 3], shadow: 'Car_Shadow7' });
     else Object.assign(q, { hits: [rect(1, 0.5)], height: 66, footprint: [2, 1], shadow: v <= 12 ? 'Car_Shadow10' : 'Car_Shadow13' });
     q.depthOffset = q.hits[0].yRad;
+    return q;
+  }
+
+  // Drawn for this port (tools/vehicles.py): 16 school bus across, 17 up-down, 18 box truck across, 19 up-down.
+  function bigVehicle(q, v) {
+    const bus = v <= 17;
+    const across = v % 2 === 0;
+    const name = bus ? 'Bus' : 'Truck';
+    const look = across ? 1 : 2;
+    const [w, h] = bus ? (across ? [6, 2] : [2, 6]) : across ? [4, 2] : [2, 4];
+    const hit = bus ? (across ? rect(100 / 40, 20 / 28) : rect(26 / 40, 78 / 28)) : across ? rect(74 / 40, 20 / 28) : rect(26 / 40, 52 / 28);
+    Object.assign(q, { display: name + look, shadow: name + '_Shadow' + look, hits: [hit], height: bus ? 40 : 50, footprint: [w, h], depthOffset: hit.yRad });
     return q;
   }
 }

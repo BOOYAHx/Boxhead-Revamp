@@ -655,8 +655,9 @@ format. Everything stays in your browser until you share it.
 * **Marks** paints road lines, curbs, sidewalk edges, grass edges, grass bits and cracks.
 * **Props** places trees, rocks, crates, bins, hydrants, mailboxes, wooden
   fences, brick, concrete and castle walls, warehouse and shop pieces, cars,
-  trucks and wrecks. The green outline shows where it goes (red: something is
-  in the way). Drag to place a row.
+  a school bus and a box truck (both drawn for this port: the original game
+  has neither) and wrecks. The green outline shows where it goes (red:
+  something is in the way). Drag to place a row.
 * **Spawns** places the points players start from (8 or more is best) and has the eraser.
 * **Select** (or **V**) picks things up to move them: click a prop, spawn
   point or mark, or drag a box round a group (start on bare ground, or hold
@@ -667,7 +668,7 @@ format. Everything stays in your browser until you share it.
 * **Rotate** (or **R**) gives what is picked a quarter turn clockwise about its
   middle: a group keeps its layout turned (a house, a wall corner) and each
   piece becomes its turned version. Fences, brick, concrete and castle walls,
-  mailboxes, hydrants, road lines, curbs and grass edges turn; cars across
+  mailboxes, hydrants, the bus and truck, road lines, curbs and grass edges turn; cars across
   become up-down cars (there are three colours of those; turned back, a car
   gets its own colour again). Trees, rocks, crates, bins, wrecks, building
   pieces, sidewalk edges and cracks look the same from every side, so they
@@ -821,6 +822,8 @@ the original art and are not tracked by git (`art/templates/`); committing
 * `tools/save_maps.py` — saves every online bounty map into the game files (see "Website and updates").
 * `tools/export_intro.py` — exports the original loading screen from BBH.swf (see step 18).
 * `tools/redrawn_art.py` — drawing templates for, and loading of, hand-redrawn 4x art (see step 15).
+* `tools/vehicles.py` — draws the school bus and box truck props (across and
+  up-down, with shadows) into the sprites and atlas; `build_assets.py` runs it.
 * `tools/swf_extract.py` — extracts every named bitmap (PNG) and sound
   (MP3/WAV) from a SWF, including embedded SWFs.
 * `tools/abc_decompile.py` — a small ActionScript 3 bytecode decompiler that

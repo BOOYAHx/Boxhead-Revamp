@@ -77,7 +77,9 @@ export const PROPS = [
     label: 'Vehicles',
     items: [
       ...range(1, 6).map((v) => prop('a', v, 'Car (3 x 2)')),
-      ...range(7, 9).map((v) => prop('a', v, 'Truck (2 x 3)')),
+      ...range(7, 9).map((v) => prop('a', v, 'Car, up-down (2 x 3)')),
+      prop('a', 16, 'School bus (6 x 2)'), prop('a', 17, 'School bus, up-down (2 x 6)'),
+      prop('a', 18, 'Box truck (4 x 2)'), prop('a', 19, 'Box truck, up-down (2 x 4)'),
       ...range(10, 15).map((v) => prop('a', v, 'Wreck (2 x 1)')),
     ],
   },

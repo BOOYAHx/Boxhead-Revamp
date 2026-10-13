@@ -16,6 +16,8 @@ const PROPS = {
   // Cars on their side (3 x 2) <-> up-down cars (2 x 3), the nearest colour (there are only three up-down ones).
   'a:1': 7, 'a:2': 8, 'a:3': 9, 'a:4': 8, 'a:5': 7, 'a:6': 9,
   'a:7': 1, 'a:8': 2, 'a:9': 6,
+  // The school bus and the box truck: across <-> up-down.
+  'a:16': 17, 'a:17': 16, 'a:18': 19, 'a:19': 18,
   // Mailboxes face four ways; the two fire hydrants are the same one turned.
   'u:21': 22, 'u:22': 23, 'u:23': 24, 'u:24': 21,
   'u:11': 12, 'u:12': 11,

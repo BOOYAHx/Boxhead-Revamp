@@ -165,3 +165,31 @@ test('turning: pieces become their turned versions, groups turn about their midd
   for (let i = 0; i < 2; i++) red = car.rotateSelection(red);
   assert.deepEqual([...red.props].map((p) => [p.variant, p.x, p.y]), [[3, 10, 10]], 'turned twice: the same car, where it was');
 });
+
+test('the school bus and box truck: pictures in the atlas, sizes, a map code the game reads, turning', async () => {
+  const { describeProp } = await import('../client/src/game/world.js');
+  const { PROPS } = await import('../client/src/editor/palette.js');
+  const { turnProp } = await import('../client/src/editor/rotation.js');
+  const atlas = JSON.parse(fs.readFileSync(new URL('../client/assets/game/atlas.json', import.meta.url), 'utf8'));
+  const sizes = { 16: [6, 2], 17: [2, 6], 18: [4, 2], 19: [2, 4] };
+  for (const [v, size] of Object.entries(sizes)) {
+    const d = describeProp('a', Number(v));
+    assert.deepEqual(d.footprint, size);
+    for (const name of [d.display, d.shadow]) {
+      assert.ok(atlas[name], name);
+      assert.ok(fs.existsSync(new URL(`../client/assets/game/sprites/${atlas[name].image}.png`, import.meta.url)), name);
+    }
+    // The hit box stays inside the footprint.
+    assert.ok(d.hits[0].xRad * 2 <= size[0] && d.hits[0].yRad * 2 <= size[1]);
+    assert.ok(PROPS.some((g) => g.items.some((i) => i.code === 'a' && i.variant === Number(v))), `a${v} in the palette`);
+  }
+  assert.deepEqual([16, 17, 18, 19].map((v) => turnProp('a', v)), [17, 16, 19, 18]);
+  const doc = new MapDoc({ width: 20, height: 12 });
+  assert.ok(doc.place('a', 16, 1, 1));
+  assert.ok(doc.place('a', 19, 10, 4));
+  assert.equal(doc.place('a', 18, 4, 2), null, 'not on top of the bus');
+  const code = encodeMap(doc);
+  const game = parseMap(code);
+  assert.deepEqual(game.props.map((p) => [p.display, p.x, p.y]).sort(), [['Bus1', 1, 1], ['Truck2', 10, 4]]);
+  assert.equal(encodeMap(decodeMap(code)), code);
+});
