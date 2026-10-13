@@ -161,6 +161,10 @@ export class CharacterView {
     this.updateHealthBar(x, y);
   }
 
+  setNameColor(color) {
+    this.nameText.setColor(color);
+  }
+
   /** The placing over the head ("1st", "2nd"...); first place also gets the bullseye behind it. */
   setPlacing(text, first = false) {
     this.placingText.setText(text);

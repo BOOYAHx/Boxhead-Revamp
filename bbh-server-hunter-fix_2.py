@@ -59,6 +59,14 @@ TEAM_A = 2
 TEAM_B = 3
 TDM_TEAMS = (TEAM_A, TEAM_B)
 TEAM_SIZE = 8  # 8v8. Must match TeamBountyGame.TEAM_SIZE in the SWF.
+# Infected: everyone starts as a survivor. After the preparation (the first
+# minute: the displayed clock runs from 10:00 to 9:00, nobody can be hurt) the
+# server infects one random player. A survivor who dies joins the infected; the
+# round ends early when nobody is left to infect. The two sides use the team
+# ids, so the team rules (no friendly fire) cover them too.
+SURVIVORS = TEAM_A
+INFECTED = TEAM_B
+INFECTION_STARTS_AT = 570  # round_remaining() when the preparation ends
 ROOM_JOIN_ERROR = b"099\x00"  # Client shows "Game not found" and stays in the lobby.
 
 # Add moderator account names here if you do not want to edit their `level`
@@ -269,6 +277,20 @@ def room_is_tdm(room) -> bool:
     return bool(room) and room.get("mode") == GAME_MODE_TDM
 
 
+def room_has_teams(room) -> bool:
+    """Team Deathmatch and Infected: teammates cannot hurt each other."""
+    return room_is_tdm(room) or room_is_infected(room)
+
+
+def joining_infected_team(room, account) -> int:
+    """Infected rooms: once the infection has begun a late joiner is infected,
+    as long as someone is still left to infect; otherwise a survivor."""
+    if room.get("outbreak") and any(user_team(acc) == SURVIVORS for acc in list(room.get("players", ()))
+                                    if acc != account):
+        return INFECTED
+    return SURVIVORS
+
+
 def is_private_room(room) -> bool:
     """Client createRoom sends 02 + gameType + useCustom + isPrivate + name;maps."""
     header = room.get("header", "") if room else ""
@@ -348,8 +370,8 @@ def account_by_wire(room, wire):
 
 
 def same_team(room, account_a, account_b) -> bool:
-    """True when two different players are on the same Team Deathmatch team."""
-    if not room_is_tdm(room) or account_a is None or account_b is None or account_a == account_b:
+    """True when two different players are on the same team (Team Deathmatch, or Infected's two sides)."""
+    if not room_has_teams(room) or account_a is None or account_b is None or account_a == account_b:
         return False
     team = user_team(account_a)
     return team in TDM_TEAMS and team == user_team(account_b)
@@ -1202,6 +1224,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
         room['round_state'] = 'active'
         room['round_start'] = time.time()
         room['lives_left'] = {}
+        room['outbreak'] = False
         for key in ('round_snapshot', 'round_awards', 'round_results_until',
                     'round_retry_at', 'round_save_in_progress'):
             room.pop(key, None)
@@ -1217,6 +1240,8 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             user['stats'] = {'score': 10000, 'kills': 0, 'deaths': 0, 'bounty_points': 0}
             user['hp'] = 100
             user['weapon'] = '00'
+            if room_is_infected(room):
+                user['team'] = SURVIVORS
             for key in ('last_pos', 'last_state', 'position_history', 'position_history_room', 'claimed_deaths'):
                 user.pop(key, None)
 
@@ -1262,6 +1287,10 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
         if start_next:
             self._notify_round(room_name, room, f"p{room.get('round_length', 630)}\x00")
             self.sync_lives(room)
+            if room_is_infected(room):
+                for account in list(room['players']):
+                    if account in USERS:
+                        self.relay_raw_to_room(room_name, f"M{wire_id(account)}0k{user_team(account)}", include_self=True)
             return
         try:
             awards = self.get_awards_and_save_db(room_name, room)
@@ -1283,14 +1312,56 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                 room['round_results_until'] = time.time() + ROUND_SUMMARY_SECONDS
                 room['round_save_in_progress'] = False
         if room_is_unranked(room):
-            kind = 'Team Deathmatch' if room_is_tdm(room) else 'Private'
-            if room_is_tdm(room) and is_private_room(room):
-                kind = 'Private Team Deathmatch'
+            kind = 'Team Deathmatch' if room_is_tdm(room) else 'Infected' if room_is_infected(room) else 'Private'
+            if room_has_teams(room) and is_private_room(room):
+                kind = 'Private ' + kind
             print(f'[ROUND END] {round_id} {kind} round finished; stats not saved')
             return
         print(f'[ROUND SAVE] {round_id} saved once for {len(room["round_snapshot"])} players')
         self.refresh_round_profiles(room['round_snapshot'])
         update_most_wanted_xml()
+
+    def update_infection(self, room_name):
+        """Infected rooms: infect a random player when the preparation ends
+        (or when every infected player has left), and end the round once
+        nobody is left to infect. Needs two players."""
+        room = self.server.rooms.get(room_name) if room_name and room_name != '_' else None
+        if not room_is_infected(room):
+            return
+        carrier = None
+        everyone_infected = False
+        with room_round_lock(room):
+            ensure_round_state(room)
+            if room['round_state'] != 'active' or round_remaining(room) > INFECTION_STARTS_AT:
+                return
+            players = [account for account in list(room['players']) if account in USERS]
+            if len(players) < 2:
+                return
+            survivors = [account for account in players if user_team(account) != INFECTED]
+            if len(survivors) == len(players):
+                carrier = random.choice(survivors)
+                USERS[carrier]['team'] = INFECTED
+                room['outbreak'] = True
+            elif not survivors and room.get('outbreak'):
+                # Make the round's time up; check_timer then ends it as usual.
+                play_seconds = max(0, room.get('round_length', 630) - ROUND_SUMMARY_SECONDS)
+                room['round_start'] = min(room['round_start'], time.time() - play_seconds)
+                everyone_infected = True
+        if carrier is not None:
+            print(f"[INFECTED] {USERS[carrier].get('username')} is infected in '{room_name}'")
+            self.relay_raw_to_room(room_name, f"M{wire_id(carrier)}0k{INFECTED}", include_self=True)
+        if everyone_infected:
+            print(f"[INFECTED] everyone is infected in '{room_name}': round over")
+            self.check_timer(room_name)
+
+    def infect_on_death(self, room, account):
+        """Infected rooms: a survivor who dies after the outbreak joins the infected."""
+        if not room_is_infected(room) or not room.get('outbreak') or account not in USERS or user_team(account) == INFECTED:
+            return
+        USERS[account]['team'] = INFECTED
+        print(f"[INFECTED] {USERS[account].get('username')} was infected in '{room['name']}'")
+        self.relay_raw_to_room(room['name'], f"M{wire_id(account)}0k{INFECTED}", include_self=True)
+        self.update_infection(room['name'])
 
     def get_awards_and_save_db(self, room_name, room=None):
         if room is None:
@@ -1330,14 +1401,15 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
         room_name = user.get('room') if user else None
         if room_name:
             self.check_timer(room_name)
+            self.update_infection(room_name)
         # A late damage/pickup packet cannot change a round being saved or shown.
         gameplay = packet.startswith(('1', '4', '6', '7', '8', 'o', '0k', '0l', '0m', '0q'))
         room = self.server.rooms.get(room_name) if room_name and room_name != '_' else None
-        if gameplay and packet.startswith('0k') and room_is_tdm(room):
+        if gameplay and packet.startswith('0k') and room_has_teams(room):
             # Team picks do not affect saved results, and dropping one during
             # the summary screen would leave the client on the wrong team.
             gameplay = False
-        if room_is_infected(room) and packet.startswith(('4', '6', 'o')) and round_remaining(room) > 570:
+        if room_is_infected(room) and packet.startswith(('4', '6', 'o')) and round_remaining(room) > INFECTION_STARTS_AT:
             return  # Preparation: displayed timer is internal remaining minus 30.
         if room is not None and gameplay:
             with room_round_lock(room):
@@ -1567,6 +1639,8 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             room = self.server.rooms[room_name]
             room["players"].add(self.account_id)
             USERS[self.account_id]["room"] = room_name
+            if room_is_infected(room):
+                USERS[self.account_id]["team"] = joining_infected_team(room, self.account_id)
             if eliminated(room, self.account_id):
                 USERS[self.account_id]["hp"] = 0
 
@@ -1804,7 +1878,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
 
                             # TEAM DEATHMATCH: a teammate's barrel/barricade blocks the
                             # shot but takes no damage (matches the client's rule).
-                            if hit_idx and room_is_tdm(room):
+                            if hit_idx and room_has_teams(room):
                                 hit_pack = room.get("deployables", {}).get(hit_idx, "")
                                 if same_team(room, account_by_wire(room, hit_pack[1:4]), self.account_id):
                                     hit_idx = None
@@ -1967,9 +2041,10 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             creator["stats"] = {"score": 10000, "kills": 0, "deaths": 0, "bounty_points": 0}
             creator["hp"] = 100
             creator["last_state"] = None
-            creator["team"] = TEAM_NONE
+            creator["team"] = SURVIVORS if mode in (GAME_MODE_INFECTED, GAME_MODE_LAST_SURVIVOR) else TEAM_NONE
 
-            print(f"[+] {self.username} created {'private ' if header[2:3] == '1' else ''}{'Team Deathmatch' if mode == GAME_MODE_TDM else 'FFA'} room '{room_name}'")
+            mode_name = {GAME_MODE_TDM: 'Team Deathmatch', GAME_MODE_INFECTED: 'Infected', GAME_MODE_LAST_SURVIVOR: 'Last Survivor'}.get(mode, 'FFA')
+            print(f"[+] {self.username} created {'private ' if header[2:3] == '1' else ''}{mode_name} room '{room_name}'")
 
             # Tell creator it joined (with the room's game mode)
             self.send(f"C{wire_id(self.account_id)}{mode}\x00".encode("utf-8"))
@@ -2048,7 +2123,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             if eliminated(damage_room, target_acc) or eliminated(damage_room, account_by_wire(damage_room, raw_attacker)):
                 self.sync_lives(damage_room, target_acc, self.request, restore_hp=True)
                 return
-            if room_is_tdm(damage_room) and same_team(
+            if room_has_teams(damage_room) and same_team(
                     damage_room, account_by_wire(damage_room, raw_attacker), target_acc):
                 return
 
@@ -2299,6 +2374,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                     kill_out = f"M{target_wire}7{attacker_wire}{weapon_wire}{bounty_str}"
                     self.broadcast_to_room((kill_out + "\x00").encode("utf-8"))
                 self.sync_lives(damage_room, target_acc)
+                self.infect_on_death(damage_room, target_acc)
                 
                 # ... (Keep your existing RESPAWN LOGIC Opcodes 6 and 8 below this) ...
 
@@ -2364,26 +2440,30 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             return
 
         # --- RESET HP ON RESPAWN (0k) ---
-        elif packet.startswith("0k") and room_is_tdm(self.server.rooms.get(USERS[self.account_id].get("room"))):
+        elif packet.startswith("0k") and room_has_teams(self.server.rooms.get(USERS[self.account_id].get("room"))):
             # TEAM DEATHMATCH: "0k<team>" picks a team (2 = Team A, 3 = Team B).
             # The client also sends its current team after every map load, which
             # doubles as the "map loaded" signal for deployable sync.
+            # INFECTED: the server decides the sides (2 = survivors, 3 = infected);
+            # "0k" only asks for them, and is the map-loaded signal.
             room_name = USERS[self.account_id]["room"]
             room = self.server.rooms[room_name]
             try:
                 requested = int(packet[2:3])
             except ValueError:
                 return
-            if requested not in (TEAM_NONE,) + TDM_TEAMS:
+            infected_room = room_is_infected(room)
+            if requested not in (TEAM_NONE,) + TDM_TEAMS and not infected_room:
                 return
 
             user = USERS[self.account_id]
             current = user.get("team", TEAM_NONE)
             # A TDM team is locked for this room membership. Joining
             # again resets team to TEAM_NONE and allows a fresh pick.
-            # Infected conversions must still be allowed.
-            team = current if current in TDM_TEAMS and not room_is_infected(room) else requested
-            if team in TDM_TEAMS and team != current and team_count(room, team, exclude=self.account_id) >= TEAM_SIZE:
+            team = current if current in TDM_TEAMS else requested
+            if infected_room:
+                team = current if current in TDM_TEAMS else joining_infected_team(room, self.account_id)
+            elif team in TDM_TEAMS and team != current and team_count(room, team, exclude=self.account_id) >= TEAM_SIZE:
                 if current in TDM_TEAMS:
                     team = current  # Switch refused: stay on the current team.
                 else:
@@ -2391,7 +2471,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                     # (TEAM_SIZE * 2) guarantees it still has a free place.
                     other = TEAM_B if requested == TEAM_A else TEAM_A
                     team = other if team_count(room, other, exclude=self.account_id) < TEAM_SIZE else TEAM_NONE
-            if requested == TEAM_NONE:
+            if requested == TEAM_NONE and not infected_room:
                 team = current  # Map-load sync never drops a chosen team.
             user["team"] = team
             if team != current:

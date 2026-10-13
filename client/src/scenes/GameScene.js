@@ -18,6 +18,7 @@ import { PISTOL_ID, SPLASH, WeaponID, parseWeaponStats, setWeaponStats } from '.
 import { EquipmentWorld, gunSplash } from '../game/equipment.js';
 import { MAX_NPCS, NavGrid, NpcBrain, createNpc } from '../game/npc.js';
 import { runModeratorCommand } from '../game/moderation.js';
+import { BLUE_TEAM, GameType, INFECTED, INFECTION_STARTS_AT, NO_TEAM, RED_TEAM, SURVIVORS, ZOMBIE_LOOK, allies, hasTeams, infectionPreparing, isInfectedMode, isTeam, roundResult, teamColor, teamName, teamTotals } from '../game/teams.js';
 import { EquipmentView } from '../render/EquipmentView.js';
 import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
@@ -105,6 +106,12 @@ export class GameScene extends Phaser.Scene {
     this.npcs = []; // computer players' brains (offline)
     this.npcCount = 0;
     this.nav = null;
+    // Team Deathmatch and Infected (game/teams.js): the room's game type and
+    // everyone's side by id. Team Deathmatch teams last for the whole stay in
+    // the room; Infected starts every round with survivors only.
+    this.gameType = this.connection?.roomGameType || GameType.FFA;
+    this.teams = new Map(isInfectedMode(this.gameType) ? [] : data.teams || []);
+    this.teamRequested = NO_TEAM; // our "Join Team" pick, waiting for the server
   }
 
   create() {
@@ -263,7 +270,8 @@ export class GameScene extends Phaser.Scene {
     this.loadMap(map);
     this.addCrates(this.connection.existingPickups); // crates already lying around
     this.connection.existingPickups = '';
-    this.connection.sendGameMessage('0k1'); // map loaded (BountyGame.loadMap)
+    // Map loaded (BountyGame.loadMap). In team games "0k<team>" also asks for our side (0: whatever it is).
+    this.connection.sendGameMessage(hasTeams(this.gameType) ? '0k0' : '0k1');
     for (const user of this.connection.peers) if (user.handshake) this.ensureRemote(user);
     if (!this.ui) {
       // No shop art: spawn straight away (Game.respawnLocalCharacter).
@@ -276,7 +284,10 @@ export class GameScene extends Phaser.Scene {
 
   /** Game.receiveServerMessage / processServerMessage. */
   receiveServerMessage(message) {
-    if (message.charAt(0) === 'R') this.endGame(message.substr(1)); // "0r<awards>": round over
+    if (message.charAt(0) !== 'R') return;
+    // "0r<awards>": round over. What the server sent before it (the last infection, say) belongs to this round.
+    if (this.map && !this.gameOver) while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
+    this.endGame(message.substr(1));
   }
 
   /** Game.receiveMessage: pings and chat bundles (our own bundle comes back too; skip it). */
@@ -300,6 +311,7 @@ export class GameScene extends Phaser.Scene {
 
   peerHandshake(user) {
     if (user.name && this.pendingJoins.delete(user.id)) this.hud.addMessage(`${user.name} has joined the game`, { chat: true });
+    if (user.handshake) this.setTeam(user.id, user.handshake.team, { quiet: true }); // the server's side for them right now
     if (this.newPeers.delete(user.id)) this.announceUpgrades();
     if (this.map) this.applyHandshakeStats(this.ensureRemote(user), user);
     this.forcePositionUpdate = true; // let the newcomer see where we are
@@ -324,16 +336,20 @@ export class GameScene extends Phaser.Scene {
       };
       this.remotes.set(user.id, remote);
       if (!this.newRound) this.applyHandshakeStats(remote, user);
+      // A handshake from an earlier round may name an old side; this round's "0k" messages say.
+      if (!this.newRound && user.handshake && !this.teams.has(user.id)) this.teams.set(user.id, user.handshake.team);
     }
     const ch = remote.character;
     ch.name = user.name;
-    Object.assign(ch.look, { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor });
+    ch.ownLook = { gender: user.gender, headModel: user.headModel, headColor: user.headColor, bodyModel: user.bodyModel, bodyColor: user.bodyColor };
+    Object.assign(ch.look, ch.ownLook);
     if (user.handshake && !ch.active) ch.hp = user.handshake.hp;
     if (this.map) {
       remote.view?.destroy();
       remote.view = new CharacterView(this, ch, '#ffe08a');
       remote.view.setPlacing(ch.stats.placing ? placingString(ch.stats.placing) : '', ch.stats.placing === 1);
     }
+    this.applyTeam(ch);
     return remote;
   }
 
@@ -353,6 +369,7 @@ export class GameScene extends Phaser.Scene {
 
   removeRemote(id) {
     this.equipment?.removeOwner(id);
+    if (this.mode === 'online') this.teams.delete(id); // the slot id goes to the next player who logs in
     const remote = this.remotes.get(id);
     if (remote) {
       remote.view?.destroy();
@@ -367,6 +384,114 @@ export class GameScene extends Phaser.Scene {
     return this.remotes.get(id)?.character || null;
   }
 
+  // --- sides (Team Deathmatch, Infected) -------------------------------------------
+
+  /** A player's side: their team, Infected's survivors until the server says otherwise, none in FFA. */
+  teamOf(id) {
+    if (!hasTeams(this.gameType)) return NO_TEAM;
+    const team = this.teams.get(id);
+    return isTeam(team) ? team : isInfectedMode(this.gameType) ? SURVIVORS : NO_TEAM;
+  }
+
+  /** Two different players on the same side: they cannot hurt each other or each other's things. */
+  friendly(a, b) {
+    return !!a && !!b && a.id !== b.id && allies(this.gameType, this.teamOf(a.id), this.teamOf(b.id));
+  }
+
+  /** Infected's first minute: nobody can be hurt yet. */
+  get preparing() {
+    return infectionPreparing(this.gameType, this.roundTime);
+  }
+
+  /** Team Deathmatch: we have not joined a team yet (the "Join Team" board is up). */
+  needsTeam() {
+    return this.gameType === GameType.TDM && !!this.player && !isTeam(this.teamOf(this.player.id));
+  }
+
+  /** "Join Team": ask the server for a place on that team (it answers with "0k<team>"). */
+  chooseTeam(team) {
+    if (!this.needsTeam() || this.teamRequested) return;
+    this.app?.playSound('ClickShort');
+    this.teamRequested = team;
+    this.connection.sendGameMessage('0k' + team);
+  }
+
+  /**
+   * "M<id>0k<team>" (and handshakes): the server put a player on a side, a
+   * Team Deathmatch pick or Infected's infection. quiet: no chat line.
+   */
+  setTeam(id, team, { quiet = false } = {}) {
+    if (!hasTeams(this.gameType) || !id) return;
+    const before = this.teamOf(id);
+    const firstInfection = !this.teamPlayers().some((p) => p.team === INFECTED);
+    this.teams.set(id, team);
+    const ch = this.characterByID(id);
+    if (ch) this.applyTeam(ch);
+    if (ch?.local || id === this.connection?.clientID) this.teamRequested = NO_TEAM;
+    if (!quiet && before !== this.teamOf(id) && isTeam(team)) this.announceTeam(id, ch, team, firstInfection);
+    this.updateScores();
+  }
+
+  announceTeam(id, ch, team, firstInfection) {
+    const local = !!ch?.local;
+    const name = ch?.name || this.connection?.peers.find((p) => p.id === id)?.name || 'Someone';
+    if (!isInfectedMode(this.gameType)) {
+      this.hud.addMessage(local ? `You joined the ${teamName(this.gameType, team)}` : `${name} joined the ${teamName(this.gameType, team)}`, { chat: true });
+      return;
+    }
+    if (team !== INFECTED) return;
+    if (local) {
+      this.hud.showWarning(firstInfection ? 'YOU ARE INFECTED! Infect the survivors' : 'YOU HAVE BEEN INFECTED!', 4000);
+      this.hud.addMessage(firstInfection ? 'The infection has begun: you are infected!' : 'You have been infected!', { local: true });
+    } else {
+      if (firstInfection) this.hud.showWarning(`THE INFECTION HAS BEGUN: ${name.toUpperCase()} IS INFECTED`, 4000);
+      this.hud.addMessage(firstInfection ? `The infection has begun: ${name} is infected!` : `${name} has been infected!`, { local: false });
+    }
+  }
+
+  /** A player's side shows: the name's colour over their head, and the infected's zombie look. */
+  applyTeam(ch) {
+    if (!hasTeams(this.gameType)) return;
+    const team = this.teamOf(ch.id);
+    if (!ch.ownLook) ch.ownLook = { ...ch.look };
+    Object.assign(ch.look, isInfectedMode(this.gameType) && team === INFECTED ? ZOMBIE_LOOK : ch.ownLook);
+    const view = ch.local ? this.playerView : this.remotes.get(ch.id)?.view;
+    view?.applyLook();
+    view?.setNameColor(teamColor(this.gameType, team) || '#ffe08a');
+  }
+
+  /** Everyone with their side, for the boards and the round's result. */
+  teamPlayers() {
+    return this.players().map((p) => ({ ...p, team: this.teamOf(p.id) }));
+  }
+
+  showTeamStatus() {
+    if (hasTeams(this.gameType)) this.hud.setTeamStatus(this.teamStatus());
+  }
+
+  /** The HUD line under the placing: the teams' kills, or how many survive. */
+  teamStatus() {
+    const type = this.gameType;
+    if (!hasTeams(type) || !this.player || this.gameOver) return null;
+    const totals = teamTotals(this.teamPlayers());
+    if (isInfectedMode(type)) {
+      const green = teamColor(type, INFECTED);
+      if (this.preparing) return [{ text: `The infection starts in ${Math.max(0, this.roundTime - INFECTION_STARTS_AT)}s`, color: green }];
+      if (!totals[INFECTED].players) return [{ text: totals[SURVIVORS].players < 2 ? 'Waiting for another player to start the infection' : 'The infection is starting…', color: green }];
+      return [
+        { text: `Survivors ${totals[SURVIVORS].players}`, color: teamColor(type, SURVIVORS) },
+        { text: '  ·  ' },
+        { text: `${totals[INFECTED].players} Infected`, color: green },
+      ];
+    }
+    if (this.needsTeam()) return [{ text: 'Join a team to play', color: '#ffffff' }];
+    return [
+      { text: `Blue ${totals[BLUE_TEAM].kills}`, color: teamColor(type, BLUE_TEAM) },
+      { text: '  :  ' },
+      { text: `${totals[RED_TEAM].kills} Red`, color: teamColor(type, RED_TEAM) },
+    ];
+  }
+
   /** Game.processPlayerMessage for the messages handled so far. */
   handlePlayerMessage({ source, message, raw }) {
     const c = this.connection;
@@ -375,6 +500,7 @@ export class GameScene extends Phaser.Scene {
       if (source !== c.clientID) this.remoteRespawn(source, raw.substr(4, 6));
       return;
     }
+    if (message.startsWith('0k')) return this.setTeam(source, parseInt(message.charAt(2), 10) || NO_TEAM);
     if (source === c.clientID) {
       // Our own health and position are decided locally; the server's death
       // announcement (it also arrives when we died ourselves) and crate
@@ -548,7 +674,7 @@ export class GameScene extends Phaser.Scene {
     const weapon = shooter.weapon;
     if (weapon.kind !== 'gun') this.equipment.fire(shooter, weapon, shot);
     // Offline the computer players are judged here too; online only we are.
-    const judged = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== shooter && c.active && !c.dead);
+    const judged = [this.player, ...this.npcs.map((b) => b.ch)].filter((c) => c !== shooter && c.active && !c.dead && !this.friendly(c, shooter));
     const direct = new Set();
     const distances = shot.tracers.map((t) => {
       const result = traceShot(this.map, t.start, t.angle, t.altitude, t.range, judged, shooter, { penetrates: weapon.penetrates });
@@ -575,6 +701,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   hurtCharacter(victim, shooter, weapon, angle = null) {
+    if (this.preparing || this.friendly(victim, shooter)) return; // no friendly fire; nobody is hurt in Infected's first minute
     if (victim.npc) this.npcHurt(victim, shooter, weapon, angle);
     else this.localHurt(shooter, weapon, angle);
   }
@@ -808,7 +935,7 @@ export class GameScene extends Phaser.Scene {
 
   /** ShopGame.closeShop: the first close of a round spawns us with what we bought. */
   closeShop() {
-    if (!this.ui?.shopOpen) return;
+    if (!this.ui?.shopOpen || this.needsTeam()) return; // Team Deathmatch: join a team first
     const p = this.player;
     this.ui.closeShop();
     if (!p.active) {
@@ -913,7 +1040,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   pickSpawn() {
-    const enemies = [...this.remotes.values()].map((r) => r.character).filter((ch) => ch.active && !ch.dead);
+    const enemies = [...this.remotes.values()].map((r) => r.character).filter((ch) => ch.active && !ch.dead && !this.friendly(ch, this.player));
     return chooseSpawn(this.map.spawns, enemies) || this.map.spawns[0] || { x: 5.5, y: 5.5 };
   }
 
@@ -1073,7 +1200,8 @@ export class GameScene extends Phaser.Scene {
   /** Rows for the Scores board and the Game Summary: name, stats, and the Most Wanted colour. */
   scoreRows(players) {
     const users = [this.connection?.localUser, ...(this.connection?.peers || [])].filter(Boolean);
-    return players.map((p) => ({ ...p, wanted: !!users.find((u) => u.id === p.id)?.wanted }));
+    const color = (p) => teamColor(this.gameType, this.teamOf(p.id));
+    return players.map((p) => ({ ...p, wanted: !!users.find((u) => u.id === p.id)?.wanted, color: color(p) ? parseInt(color(p).slice(1), 16) : undefined }));
   }
 
   /** Game.updateScores / GUI.updateLeaderboard. */
@@ -1085,9 +1213,10 @@ export class GameScene extends Phaser.Scene {
     this.hud.setPlacing(this.player.active ? me.placing : 0);
     this.hud.setMoney(me.money);
     this.hud.setBountyPoints(me.bountyPoints);
-    // CharacterPointer: the best-placed other player.
-    const leader = board.length > 1 ? board.find((p) => !p.local) : null;
+    // CharacterPointer: the best-placed other player (in team games, the best enemy).
+    const leader = board.length > 1 ? board.find((p) => !p.local && !this.friendly(p.character, this.player)) : null;
     this.leader = leader ? { character: leader.character, name: leader.name, placing: placingString(leader.stats.placing), color: LEADER_COLOR } : null;
+    this.showTeamStatus();
     window.boxhead && (window.boxhead.remotes = this.remotes);
   }
 
@@ -1119,6 +1248,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.hud.setTime(this.roundTime - ROUND_END_TIME);
+    this.showTeamStatus();
     // Practice: time up; the awards are worked out here like the server does.
     if (!online && this.roundTime <= ROUND_END_TIME) this.endGame(offlineAwards(this.players()));
   }
@@ -1136,12 +1266,15 @@ export class GameScene extends Phaser.Scene {
     const everyone = this.players();
     const shown = rankPlayers(everyone.map((p) => ({ ...p, active: p.local ? this.participated : true })));
     const awards = roundAwards(awardIDs, everyone);
+    const result = roundResult(this.gameType, this.teamPlayers());
+    this.showTeamStatus(); // hidden behind the summary
     // GameSummary.displayAward: award money is added to the winner's next round.
     for (const award of awards) if (award.player?.local) this.roundBonus += award.bonus;
     if (this.ui) {
       // GameSummary lists everyone in the room (players who never spawned too).
       this.ui.showSummary(this.scoreRows(everyone), awards, (player) => drawPortrait(this.textures, player.character.look), {
         difficulty: this.mode === 'offline' && this.npcs.length ? QuickPlay.difficulty : null,
+        result: result && { text: result.text, color: teamColor(this.gameType, result.winner) },
       });
       this.ui.setSummaryCountdown(this.roundTime);
     } else {
@@ -1155,7 +1288,7 @@ export class GameScene extends Phaser.Scene {
   /** Game.newGame: start the next round from scratch with the room's next map. */
   newGame() {
     if (this.mode === 'offline') this.scene.restart({ mode: 'offline', app: this.app, newRound: true, roundBonus: this.roundBonus });
-    else this.scene.restart({ mode: 'online', app: this.app, room: this.room, newRound: true, roundBonus: this.roundBonus, inbox: this.inbox });
+    else this.scene.restart({ mode: 'online', app: this.app, room: this.room, newRound: true, roundBonus: this.roundBonus, inbox: this.inbox, teams: [...this.teams] });
   }
 
   /** Chat line: Enter opens it, Enter sends, Escape cancels (GUI input). */
@@ -1249,11 +1382,16 @@ export class GameScene extends Phaser.Scene {
     const spawn = this.pickSpawn();
     this.player.respawn(spawn.x, spawn.y);
     this.playerView = new CharacterView(this, this.player);
+    this.player.ownLook = { ...this.player.look };
+    this.applyTeam(this.player);
     this.equipment = new EquipmentWorld(map, {
       localID: this.player.id,
       online: this.mode === 'online',
       characters: () => [this.player, ...[...this.remotes.values()].map((r) => r.character)],
-      hurt: (owner, weapon, angle, victim) => (victim?.npc ? this.npcHurt(victim, owner, weapon, angle) : this.localHurt(owner, weapon, angle)),
+      hurt: (owner, weapon, angle, victim) => this.hurtCharacter(victim || this.player, owner, weapon, angle),
+      // Team games: a teammate's shots and blasts leave our barrels and barricades alone, and mines ignore teammates.
+      shields: (attackerID, ownerID) => this.preparing || (attackerID !== ownerID && allies(this.gameType, this.teamOf(attackerID), this.teamOf(ownerID))),
+      allies: (a, b) => a !== b && allies(this.gameType, this.teamOf(a), this.teamOf(b)),
       send: (message) => this.outQueue.push(message),
       activate: (message) => { if (this.mode === 'online') this.chatOutQueue.push(message); },
       effect: (event) => this.effects.equipmentEffect(event),
@@ -1399,7 +1537,10 @@ export class GameScene extends Phaser.Scene {
     this.lighting.update();
     this.hud.pointTo(this.leader, { x: camera.scrollX, y: camera.scrollY });
     const tab = this.keyState.isDown('scores') && this.chatInput === null && (this.mode === 'online' || this.npcs.length > 0);
-    if (this.ui) this.ui.showScoreboard(tab ? this.scoreRows(this.players()) : null);
+    if (this.ui && hasTeams(this.gameType)) {
+      const pick = this.needsTeam() && !this.ui.menuOpen;
+      this.ui.showTeamBoard(tab || pick ? { type: this.gameType, players: this.teamPlayers(), join: pick && !this.teamRequested ? (team) => this.chooseTeam(team) : null } : null);
+    } else if (this.ui) this.ui.showScoreboard(tab ? this.scoreRows(this.players()) : null);
     else this.hud.showScoreboard(`${this.room || 'Quick Play'} · ${this.mapName || ''}`, tab ? rankPlayers(this.players()) : null);
     this.drawDebug();
     const p = this.player.pos;

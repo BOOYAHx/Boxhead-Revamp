@@ -739,3 +739,26 @@ form.host {
 .summary-difficulty-tag.is-medium { background: rgba(168, 116, 28, 0.9); }
 .summary-difficulty-tag.is-hard { background: rgba(200, 67, 43, 0.92); }
 .summary-difficulty-tag.is-super-hard { background: rgba(122, 31, 168, 0.92); }
+
+/* Team Deathmatch and Infected: who won, over the top of the game summary. */
+.summary-result {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.summary-result-banner {
+  position: absolute;
+  top: 1.1cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 0.4cqw 1.6cqw;
+  border: 0.15cqw solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.8cqw;
+  background: rgba(0, 0, 0, 0.82);
+  font: bold 2.3cqw Arial, Helvetica, sans-serif;
+  color: #fff;
+  text-shadow: 0 0.15cqw 0.3cqw #000;
+}

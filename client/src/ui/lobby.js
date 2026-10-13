@@ -7,6 +7,7 @@ import { COLORS, MODELS, tintFor } from '../game/bodyParts.js';
 import { DIRECTIONS, SW } from '../game/Direction.js';
 import { Social } from '../game/social.js';
 import { moderatorHelp } from '../game/moderation.js';
+import { MODE_NAMES } from '../game/teams.js';
 
 const LOBBY_FRAME = 4; // background frames with the premiums tab hidden (Constants.HIDE_PREMIUMS)
 const MOST_WANTED_FRAME = 6;
@@ -23,7 +24,8 @@ const SPAM_LIMIT = 5; // messages per SPAM_TIME (MMOchaLobby.setSpamLimits)
 const SPAM_TIME = 5000;
 const AUTO_REFRESH = 6000; // GameBrowserWindow.AUTO_REFRESH_TIME
 const ROOM_RESTRICT = /[^0-9 a-zA-Z,.]/g; // HostGameWindow.RESTRICT
-const MODES = [{ name: 'FFA', code: 'A' }]; // GAME_MODE_NAMES / CODES: the browser game plays free-for-all so far
+// GAME_MODE_NAMES / CODES: the patched HostGameWindow's "Game Modes" (Last Survivor is not offered).
+const MODES = ['A', 'B', 'C'].map((code) => ({ name: MODE_NAMES[code], code }));
 const MAP_ROW = 18;
 const NAME_INDENT = 15; // room for a player's icon (friend, moderator, most wanted...) before the name
 const CHAT_HINT = 'Type a message…';
@@ -863,7 +865,7 @@ export class LobbyScreen {
     if (!this.selected) return;
     const left = Math.max(0, (info.roundTime || 0) - 30);
     const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-    const mode = { A: 'FFA', B: 'Team Deathmatch', C: 'Infected', D: 'Last Survivor Infected' }[info.gameType] || 'FFA';
+    const mode = MODE_NAMES[info.gameType] || MODE_NAMES.A;
     const map = info.useCustomMaps ? 'Custom' : this.maps[info.mapID]?.name || 'Unknown';
     this.info.text = `${mode}\nMap: ${map}\nPlayers: ${info.players}\nRound Time: ${time}`;
   }

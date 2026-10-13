@@ -99,6 +99,7 @@ Positions are cells × 100, five digits per axis (`x5 y5`); a cell is
 | Client sends | Relayed to peers as | Meaning |
 | --- | --- | --- |
 | `0k1` | `0k1` | map loaded; server resets your HP and sends placed deployables |
+| `0k<team>` | `M<id>0k<team>` (to everyone, sender too) | team games: map loaded (`0k0`) and, in Team Deathmatch, a team pick (`0k2` blue, `0k3` red); the reply is the side the server applied |
 | `1<x5><y5><moveDir1><dir1><flags1>` | `M<id>1...` | movement: moveDir 0 = standing, else direction + 1; flag bit 0 = blocked |
 | `4<angle3><param>` | `M<id>4...` | fired the current weapon at an angle in degrees |
 | `6<attacker3><weapon2><damage2>` | — | **you** were hit (victim-side hit detection) |
@@ -167,3 +168,24 @@ The spy satellite is a local camera mode and sends no extra protocol packet.
 `9` messages are rotated: the first character `d` is a digit 1–9; the
 receiver takes the rest `s` and returns `s.substr(len - d²mod len) +
 s.substr(0, len - d²mod len)`. `9?<n>` pings bounce back as `M<id>9?<n>`.
+
+## Team games
+
+`<mode>` `B` (Team Deathmatch) and `C` (Infected) rooms have two sides, the
+team ids `2` and `3`: blue and red, or survivors and infected. A player's
+side travels in the game handshake's `<team1>` and in `M<id>0k<team>`. The
+server drops hits (`6`) and deployable damage between teammates.
+
+Team Deathmatch: a player joins without a team (`0`) and picks one with
+`0k2` / `0k3`; the team is kept for the stay in the room (a full team of 8
+gives the other one). Optional lives (`;L<n>` on create) are synced with
+`M<id>0v<limit><left>[H<hp>]`.
+
+Infected: the server owns the sides; `0k` only asks for them. Every round
+starts with survivors (`2`) only, announced as `M<id>0k2` for everyone.
+While `round_remaining` is above 570 (the first minute) the server drops shots
+and hits (`4`, `6`, `o`). After that, with at least two players, it infects
+one at random (`M<id>0k3`); a survivor who dies is infected right after their
+death packet; a late joiner is infected while survivors remain. When no
+survivor is left the server ends the round at once (`0r...`, then `p30`).
+

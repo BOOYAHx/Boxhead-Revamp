@@ -96,7 +96,8 @@ The port is built in small steps. Each one is tested before the next starts.
 | 16 | Lobby player options: click a name for View Stats (yours) or Private Message, View Stats, Add Friend and Block (anyone else); private chat tabs | **ready to test** |
 | 14 | Lighting pass (Enhanced Graphics): lights from muzzle flashes and explosions on walls, props, people and the floor; contact shadows; ambient occlusion where walls meet the floor | **ready to test** |
 | 15 | Hand-redrawn 4x art: templates and loading (`tools/redrawn_art.py`); the drawing itself is done by an artist | tools ready |
-| later | Turrets, team deathmatch / infected | |
+| 19 | Game modes for online rooms: Team Deathmatch and Infected (Host Game → Game Modes) | **ready to test** |
+| later | Turrets | |
 
 ## Repository layout
 
@@ -462,6 +463,7 @@ python tools/upscale_textures.py
 
 ```sh
 node --test tests/*.test.mjs
+python3 -m unittest discover -s tests -p "test_*.py"
 ```
 
 ## Weapon prices
@@ -639,6 +641,37 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   every box is ticked).
 
 The Game Summary at the end of a round shows the bots' difficulty.
+
+### Step 19: Team Deathmatch and Infected
+
+**Host Game → Game Modes** offers **FFA**, **Team Deathmatch** and
+**Infected** (the room info in Browse Games shows the mode). Both are online
+rooms and, like private rooms, unranked: their rounds never change saved stats.
+In both, teammates cannot hurt each other (bullets go through them, and their
+blasts, barrels, barricades and mines leave each other alone); the server
+refuses friendly hits too.
+
+* **Team Deathmatch**: on entering the room the original team board comes up
+  with a **Join Team** button for the Blue Team and the Red Team; you spawn
+  once you have joined one (a full team, 8 players, puts you on the other).
+  Your team stays for as long as you are in the room. Names over heads and on
+  the boards are in team colours, the line under your placing shows the teams'
+  kills, and **Tab** shows the team board. When time runs out the team with
+  more kills wins (money earned breaks a tie), shown over the Game Summary.
+* **Infected**: everyone starts as a survivor. The first minute (10:00 to 9:00
+  on the clock) is a warm-up in which nobody can be hurt. Then the server
+  infects one random player: the infected turn into pale green zombies (the
+  Zombie model) and keep their guns. A survivor who dies joins the infected;
+  infected players respawn as usual. Players who join after the infection has
+  begun join the infected (unless nobody is left to infect). The survivors win
+  if any of them are still human when time runs out; once everyone is
+  infected the round ends at once and the infected win. The line under your
+  placing counts both sides, and **Tab** shows Survivors and Infected. It needs
+  two players: alone in the room, nobody is infected.
+
+The game server decides the sides (`bbh-server-hunter-fix_2.py`), so this
+update restarts it: `boxhead-update` / `Update.cmd` does that by itself. The
+restart disconnects everyone for a moment and ends any game in progress.
 
 ### Step 17: practice against computer players
 

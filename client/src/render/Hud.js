@@ -61,6 +61,30 @@ export class Hud {
     this.pointerPlace = text(0, 0, 10, { stroke: '#000000', strokeThickness: 3 }).setOrigin(0.5, 1);
     this.board = text(WINDOW_WIDTH / 2, 70, 12, { fontFamily: 'monospace', backgroundColor: 'rgba(0,0,0,0.75)', padding: { x: 12, y: 10 }, lineSpacing: 3 }).setOrigin(0.5, 0).setVisible(false);
     this.summary = scene.add.container(0, 0).setScrollFactor(0).setDepth(DEPTH + 1).setVisible(false);
+    this.teamTexts = []; // Team Deathmatch's and Infected's line under the placing
+    this.makeTeamText = () => stored(0, 44, 15, SMALL_OUTLINE).setAlpha(1);
+  }
+
+  /**
+   * The sides' line under the placing ("Blue 12 : 9 Red", "Survivors 5 · 3
+   * Infected"): parts [{ text, color }], centred; empty or null hides it.
+   */
+  setTeamStatus(parts) {
+    parts = parts || [];
+    while (this.teamTexts.length < parts.length) this.teamTexts.push(this.makeTeamText());
+    let width = 0;
+    this.teamTexts.forEach((label, i) => {
+      const part = parts[i];
+      label.setVisible(!!part);
+      if (!part) return;
+      label.setText(part.text).setColor(part.color || '#ffffff');
+      width += label.width;
+    });
+    let x = WINDOW_WIDTH / 2 - width / 2;
+    for (const label of this.teamTexts.slice(0, parts.length)) {
+      label.setX(Math.round(x));
+      x += label.width;
+    }
   }
 
   setMoney(value) {
@@ -238,7 +262,7 @@ export class Hud {
 
   destroy() {
     for (const obj of [this.money, this.placing, this.bounty, this.bountyIcon, this.time, this.fps, this.warning, this.input, this.pointer, this.pointerName, this.pointerPlace, this.board, this.summary]) obj.destroy();
-    for (const label of this.messageTexts) label.destroy();
+    for (const label of [...this.messageTexts, ...this.teamTexts]) label.destroy();
     for (const f of this.floaters) f.label.destroy();
   }
 }

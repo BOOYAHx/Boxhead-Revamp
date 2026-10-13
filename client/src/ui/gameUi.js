@@ -5,6 +5,7 @@
 // over the game canvas.
 
 import { scoreOrder } from '../game/bounty.js';
+import { BLUE_TEAM, RED_TEAM, isInfectedMode, teamColor, teamName } from '../game/teams.js';
 import { Stage } from './flash.js';
 import { createControlsScreen, createWeaponBanksScreen } from './configScreens.js';
 import { createOptionsScreen } from './menus.js';
@@ -15,6 +16,9 @@ const DISABLED_ALPHA = 0.4;
 const EXPAND_TIME = 5000;
 const GLOW = [{ type: 'glow', color: [0xb0, 0xb0, 0x40, 255], blurX: 6, blurY: 6, strength: 4, passes: 1 }];
 const AMMO_TICK = 'assets/game/images/WeaponSliderDisplay_AMMO_TICK.png';
+const SVGNS = 'http://www.w3.org/2000/svg';
+const TEAM_ROWS = 10; // TeamBountyScoreBoard: entry0b..entry9b (blue), entry0r..entry9r (red)
+const TITLE_Y = 97; // where the board's "BLUE TEAM" and "RED TEAM" titles sit
 const TICK_WIDTH = 2;
 const TICK_HEIGHT = 5;
 
@@ -175,14 +179,84 @@ export class GameUi {
       if (this.scoreboard) this.scoreboard.visible = false;
       return;
     }
+    this.showTeamBoard(null);
     if (!this.scoreboard) this.scoreboard = this.stage.addChild(this.lib.create('boxhead.ui.score.BountyScoreBoard'));
-    // Reopening the shop appends it above the cached board; held scores belong on top.
-    if (this.stage.el.lastElementChild !== this.scoreboard.el) {
-      this.stage.removeChild(this.scoreboard);
-      this.stage.addChild(this.scoreboard);
-    }
+    this.bringToTop(this.scoreboard);
     this.scoreboard.visible = true;
     fillEntries(this.scoreboard, players);
+  }
+
+  /** Reopening the shop appends it above a cached board; held scores belong on top. */
+  bringToTop(clip) {
+    if (this.stage.el.lastElementChild === clip.el) return;
+    this.stage.removeChild(clip);
+    this.stage.addChild(clip);
+  }
+
+  /**
+   * TeamBountyScoreBoard: the two sides, each by score, with the side's kills
+   * (Team Deathmatch) or head count (Infected) by its title. null hides it.
+   * type: the room's game type; players: [{ name, stats, team }];
+   * join(team): shows the "Join Team" buttons, which call it.
+   */
+  showTeamBoard(sides) {
+    if (!sides) {
+      if (this.teamBoard) this.teamBoard.visible = false;
+      return;
+    }
+    if (this.scoreboard) this.scoreboard.visible = false;
+    const board = this.teamBoard || (this.teamBoard = this.createTeamBoard());
+    this.bringToTop(board);
+    board.visible = true;
+    const { type, players, join = null } = sides;
+    const infected = isInfectedMode(type);
+    board.join = join;
+    board.backdrop.style.display = join ? '' : 'none'; // picking a team: the shop behind it is dimmed
+    for (const [team, side] of [[BLUE_TEAM, board.sides[0]], [RED_TEAM, board.sides[1]]]) {
+      const members = players.filter((p) => p.team === team);
+      side.art.visible = !infected; // the art says BLUE TEAM / RED TEAM
+      side.title.style.display = infected ? '' : 'none';
+      side.title.textContent = teamName(type, team).toUpperCase();
+      side.title.setAttribute('fill', teamColor(type, team));
+      const kills = members.reduce((sum, p) => sum + p.stats.kills, 0);
+      side.total.textContent = infected ? `${members.length} ${members.length === 1 ? 'player' : 'players'}` : `${kills} ${kills === 1 ? 'kill' : 'kills'}`;
+      side.total.setAttribute('x', side.left + (infected ? side.title.getComputedTextLength?.() || 80 : side.artWidth) + 8);
+      fillTeamEntries(board, side.suffix, scoreOrder(members));
+      if (side.button) side.button.visible = !!join;
+    }
+  }
+
+  createTeamBoard() {
+    const board = this.stage.addChild(this.lib.create('boxhead.ui.score.TeamBountyScoreBoard'));
+    board.backdrop = document.createElementNS(SVGNS, 'rect');
+    for (const [k, v] of Object.entries({ width: 700, height: 490, fill: '#000000', 'fill-opacity': 0.82 })) board.backdrop.setAttribute(k, v);
+    board.el.insertBefore(board.backdrop, board.el.firstChild);
+    // The two static titles; our own text replaces them for Infected's sides.
+    const titles = board.children.filter((c) => !c.name && this.lib.chars[c.id]?.type === 'text' && Math.abs(c.y - TITLE_Y) < 3).sort((a, b) => a.x - b.x);
+    const text = (attrs) => {
+      const el = document.createElementNS(SVGNS, 'text');
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+      board.el.appendChild(el);
+      return el;
+    };
+    board.sides = [
+      { suffix: 'b', button: board.child('joinBlueButton'), team: BLUE_TEAM },
+      { suffix: 'r', button: board.child('joinRedButton'), team: RED_TEAM },
+    ].map((side, i) => {
+      const art = titles[i];
+      const [x0, , x1] = this.lib.chars[art?.id]?.bounds || [0, 0, 100];
+      const left = (art?.x || (i ? 339.8 : 9.8)) + x0;
+      side.button?.on('click', () => board.join?.(side.team));
+      return {
+        ...side,
+        art: art || { visible: true },
+        left,
+        artWidth: x1 - x0,
+        title: text({ x: left, y: TITLE_Y + 16, 'font-size': 17, 'font-family': '"BBH Arial", Arial, sans-serif' }),
+        total: text({ x: left, y: TITLE_Y + 16, 'font-size': 11, fill: '#9a9a9a', 'font-family': '"BBH Arial", Arial, sans-serif' }),
+      };
+    });
+    return board;
   }
 
   /**
@@ -190,11 +264,13 @@ export class GameUi {
    * each winner's picture, and the countdown to the next round.
    * awards: from roundAwards(); portrait(player) gives a picture canvas.
    */
-  showSummary(players, awards, portrait, { difficulty = null } = {}) {
+  showSummary(players, awards, portrait, { difficulty = null, result = null } = {}) {
     this.summary?.destroy();
     const summary = (this.summary = this.stage.addChild(this.lib.create('boxhead.ui.score.GameSummary')));
     this.showDifficulty(difficulty);
+    this.showResult(result);
     this.showScoreboard(null);
+    this.showTeamBoard(null);
     summary.child('nextGameField').text = '';
     fillEntries(summary, players);
     const names = ['winnerAwardEntry', 'hunterAwardEntry', 'dominatorAwardEntry', 'scroogeAwardEntry', 'targetDummyAwardEntry'];
@@ -236,6 +312,22 @@ export class GameUi {
     this.difficultyTag = layer;
   }
 
+  /** Team Deathmatch and Infected: who won, over the summary ({ text, color }); null removes it. */
+  showResult(result) {
+    this.resultBanner?.remove();
+    this.resultBanner = null;
+    if (!result) return;
+    const layer = document.createElement('div');
+    layer.className = 'summary-result';
+    const banner = document.createElement('span');
+    banner.className = 'summary-result-banner';
+    banner.textContent = result.text;
+    if (result.color) banner.style.color = result.color;
+    layer.append(banner);
+    this.root.append(layer);
+    this.resultBanner = layer;
+  }
+
   setSummaryCountdown(seconds) {
     const field = this.summary?.child('nextGameField');
     if (field) field.text = 'Next Game begins in ' + Math.max(0, seconds) + ' seconds...';
@@ -258,13 +350,25 @@ function fillEntries(board, players) {
   for (let i = 0; i < 16; i++) {
     const entry = board.child('entry' + i);
     if (!entry) continue;
-    const p = ranked[i];
-    const name = entry.child('nameField');
-    name.text = p ? `${i + 1}) ${p.name}` : '';
-    name.textColor = p?.wanted ? WANTED_COLOR : 0xffffff;
-    entry.child('killsField').text = p ? String(p.stats.kills) : '';
-    entry.child('deathsField').text = p ? String(p.stats.deaths) : '';
-    entry.child('scoreField').text = p ? '$' + p.stats.score : '';
+    showEntry(entry, ranked[i], i);
+  }
+}
+
+/** ScoreBoardEntry.update: "1) Name" (a side's colour, or red when most wanted), kills, deaths, money. */
+function showEntry(entry, p, i) {
+  const name = entry.child('nameField');
+  name.text = p ? `${i + 1}) ${p.name}` : '';
+  name.textColor = p?.color ?? (p?.wanted ? WANTED_COLOR : 0xffffff);
+  entry.child('killsField').text = p ? String(p.stats.kills) : '';
+  entry.child('deathsField').text = p ? String(p.stats.deaths) : '';
+  entry.child('scoreField').text = p ? '$' + p.stats.score : '';
+}
+
+/** One side of the TeamBountyScoreBoard ("entry0b".."entry9b" or "...r"), already in order. */
+function fillTeamEntries(board, suffix, ranked) {
+  for (let i = 0; i < TEAM_ROWS; i++) {
+    const entry = board.child('entry' + i + suffix);
+    if (entry) showEntry(entry, ranked[i] && { ...ranked[i], color: 0xffffff }, i);
   }
 }
 

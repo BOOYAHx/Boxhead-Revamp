@@ -64,8 +64,13 @@ function segmentDistance(point, a, b) {
 }
 
 export class EquipmentWorld {
-  constructor(map, { localID = null, online = false, characters = () => [], hurt = () => {}, send = () => {}, activate = () => {}, effect = () => {}, placed = () => {} } = {}) {
-    Object.assign(this, { map, localID, online, characters, hurt, send, activate, effect, placed });
+  /**
+   * Team games: shields(attackerID, ownerID) is true when that attacker cannot
+   * damage that player's things (a teammate, or Infected's first minute);
+   * allies(a, b) is true for teammates, whom mines leave alone.
+   */
+  constructor(map, { localID = null, online = false, characters = () => [], hurt = () => {}, send = () => {}, activate = () => {}, effect = () => {}, placed = () => {}, shields = () => false, allies = () => false } = {}) {
+    Object.assign(this, { map, localID, online, characters, hurt, send, activate, effect, placed, shields, allies });
     this.deployables = map.deployables;
     this.projectiles = [];
     this.serial = 0;
@@ -145,6 +150,7 @@ export class EquipmentWorld {
 
   damage(d, attacker, amount, detonate = false) {
     if (!this.deployables.has(d.index) || d.ownerID !== this.localID || amount <= 0 || (!d.solid && !detonate)) return;
+    if (!detonate && attacker && this.shields(attacker.id, d.ownerID)) return;
     if (d.pendingDamage >= d.hp) return;
     d.lastAttacker = attacker;
     if (this.online) {
@@ -278,7 +284,7 @@ export class EquipmentWorld {
       if (d.countdown !== null) {
         d.countdown = Math.max(0, d.countdown - 1);
         if (d.countdown === 0) this.detonate(d);
-      } else if (d.ownerID === this.localID && this.characters().some((ch) => ch.id !== d.ownerID && ch.active && !ch.dead && Math.hypot(ch.pos.x - d.pos.x, ch.pos.y - d.pos.y) <= d.radius + ch.moveHit.radius)) {
+      } else if (d.ownerID === this.localID && this.characters().some((ch) => ch.id !== d.ownerID && !this.allies(ch.id, d.ownerID) && ch.active && !ch.dead && Math.hypot(ch.pos.x - d.pos.x, ch.pos.y - d.pos.y) <= d.radius + ch.moveHit.radius)) {
         this.activateMine(d.index, d.ownerID);
         this.activate('a' + d.index);
       }
