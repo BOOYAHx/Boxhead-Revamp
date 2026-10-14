@@ -706,6 +706,10 @@ format. Everything stays in your browser until you share it.
 
 To put a shared map in the game, send the code or the file: it is added to
 the map list like the others (the game itself is not changed by the editor).
+Maps added this way live in `client/src/game/customMaps.js`, after the saved
+bounty maps, each in its own slot (a room names its maps by slot letter, A-Z):
+so far **Hedge Town** (slot 7) and **Nuketown** (slot 8). They are in Quick
+Play's map list and in Host Game's, and `tools/save_maps.py` leaves them alone.
 
 ### Step 19: Team Deathmatch and Infected
 

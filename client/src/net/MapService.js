@@ -2,11 +2,13 @@
 // xgen.stickarena.maps.list / maps.get for the BBHBOUNTYMAPS account, here
 // through BBHServer.py's /api/ gateway. The maps saved into the game files by
 // tools/save_maps.py come first, so play does not depend on the service; the
-// bundled Warehouse is the last resort.
+// bundled Warehouse is the last resort. The maps made for this port
+// (game/customMaps.js) are always added in their own slots.
 
 import { API_URL, TEST_MAP, TEST_MAP_KEY } from '../config.js';
 import { ASSET_ROOT } from '../render/assets.js';
 import { FALLBACK_MAPS } from '../game/maps.js';
+import { withCustomMaps } from '../game/customMaps.js';
 
 const ACCOUNT = 'BBHBOUNTYMAPS';
 
@@ -44,7 +46,7 @@ export async function practiceMapList() {
   const test = TEST_MAP && editorTestMap();
   if (test) return [test];
   const saved = ((await savedMapList()) || []).filter((map) => map?.data);
-  return saved.length ? saved : [{ name: 'Warehouse', data: FALLBACK_MAPS[0].data }];
+  return [...(saved.length ? saved : [{ name: 'Warehouse', data: FALLBACK_MAPS[0].data }]), ...withCustomMaps().filter(Boolean)];
 }
 
 /** The map editor's "Test play" map ({ name, data }), or null. */
@@ -60,7 +62,7 @@ function editorTestMap() {
 /** Map list indexed by slot id (MapInfo.mapList): [{ slot, name }]. */
 export async function fetchMapList() {
   const saved = await savedMapList();
-  if (saved) return saved;
+  if (saved) return withCustomMaps(saved);
   try {
     const rsp = await request({ method: 'xgen.stickarena.maps.list' });
     const list = [];
@@ -68,11 +70,11 @@ export async function fetchMapList() {
       const slot = parseInt(node.getAttribute('slot_id'), 10);
       if (slot >= 0) list[slot] = { slot, name: node.querySelector('name')?.textContent || `Map ${slot}`, online: true };
     }
-    if (list.some(Boolean)) return list;
+    if (list.some(Boolean)) return withCustomMaps(list);
     throw new Error('empty map list');
   } catch (error) {
     console.warn('Map service unavailable, using the bundled map:', error.message);
-    return FALLBACK_MAPS.map((map) => ({ ...map, online: false }));
+    return withCustomMaps(FALLBACK_MAPS.map((map) => ({ ...map, online: false })));
   }
 }
 
