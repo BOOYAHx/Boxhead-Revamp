@@ -45,6 +45,10 @@ export async function loadHdSheets(game, busy) {
     } catch {
       continue; // missing or broken: that sheet keeps the original art
     }
+    // An HD copy made from an older version of the sheet (another size) would cut the
+    // frames in the wrong places: keep the original art until it is upscaled again.
+    const original = game.textures.exists('sheet:' + image) && game.textures.get('sheet:' + image).getSourceImage();
+    if (original?.width && (img.naturalWidth !== original.width * scale || img.naturalHeight !== original.height * scale)) continue;
     while (busy()) await wait(1000);
     const keep = usefulScale(scale);
     swapSheet(game.textures, image, shrink(img, scale, keep), keep);

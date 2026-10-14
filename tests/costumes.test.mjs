@@ -52,3 +52,17 @@ test('Ghost Rider: a saved look keeps it; the bots stick to the original costume
     assert.ok(look.bodyModel < ORIGINAL_MODELS && look.headModel < ORIGINAL_MODELS);
   }
 });
+
+test('costume sheets keep a gap round every frame (the HD sheets are drawn smoothly)', () => {
+  for (const model of ['GhostRider', 'Venom', 'Batman']) {
+    for (const layer of ['Body', 'BodyCustom', 'Head', 'HeadCustom']) {
+      const frames = atlas[model + layer].frames;
+      const sorted = [...frames].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+      for (const f of frames) assert.ok(f[0] >= 2 && f[1] >= 2, `${model}${layer}: off the sheet's edge`);
+      for (let i = 1; i < sorted.length; i++) {
+        const [a, b] = [sorted[i - 1], sorted[i]];
+        if (a[1] === b[1]) assert.ok(b[0] >= a[0] + a[2] + 4, `${model}${layer}: frames ${a} and ${b} touch`);
+      }
+    }
+  }
+});

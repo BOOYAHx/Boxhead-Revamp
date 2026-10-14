@@ -37,6 +37,9 @@ DEATH_START = 36  # frames 36..41 of each direction: falling down
 # room for the widest frames (the head flying in the death frames) and the fire.
 W, H, OX, OY = 84, 100, 42, 64
 SHEET_WIDTH = 1024
+# Transparent space round every frame on the sheets: the game draws the upscaled (HD)
+# sheets smoothly, which reads a pixel or two past a frame's edge.
+GUTTER = 2
 
 BONE = [(150, 152, 158, 255), (200, 202, 208, 255), (234, 236, 240, 255), (252, 252, 252, 255)]  # white plastic
 BLACK = (14, 8, 6, 255)
@@ -468,6 +471,18 @@ def plastic(im, ramp, shine):
         px[x, y] = shine if (x, y) in top and (x, y - 1) not in top else ramp[min(3, int(l / 64))]
 
 
+def chest_sign(bc, bf, art, x0, y0, colors, where):
+    """A logo painted into the suit's own layer (not on the outline layer over it), so it
+    upscales as part of the chest instead of a few loose pixels."""
+    for dy, row in enumerate(art):
+        for dx, ch in enumerate(row):
+            x, y = x0 + dx, y0 + dy
+            if ch in colors and where(x, y):
+                put(bc, x, y, colors[ch])
+                if bf.getpixel((x, y))[3]:
+                    put(bf, x, y, CLEAR)
+
+
 def batman(src, i):
     bc, bf, hc, hf = (src.frame(layer, i) for layer in LAYERS)
     direction, step = divmod(i, FRAMES_PER_DIRECTION)
@@ -518,7 +533,7 @@ def batman(src, i):
                         put(hf, x, y, BAT_SKIN if y < hy1 else BAT_SKIN_DARK)
             for x in range(c0 - 1, c0 + 3):
                 put(hf, x, fy1 + 3, BAT_SKIN_DARK)
-            stamp(bf, BAT_SIGN if direction == 0 else BAT_SIGN_NARROW, c0 - (5 if direction == 0 else 3), hy1 + 3, sign, body)
+            chest_sign(bc, bf, BAT_SIGN if direction == 0 else BAT_SIGN_NARROW, c0 - (5 if direction == 0 else 3), hy1 + 3, sign, body)
         else:
             cols = {}
             for x, y in slit:
@@ -536,7 +551,7 @@ def batman(src, i):
                 for v, row in enumerate(BAT_THREE_QUARTER):
                     if row[u] in colors and head(x, top + v):
                         put(hf, x, top + v, colors[row[u]])
-            stamp(bf, BAT_SIGN_NARROW, c0 - 3, hy1 + 3, sign, body)
+            chest_sign(bc, bf, BAT_SIGN_NARROW, c0 - 3, hy1 + 3, sign, body)
     elif direction in (2, 6):  # profile: one eye, the jaw, the cape down the back
         facing_left = direction == 2
         edge, stp = (hx0, 1) if facing_left else (hx1, -1)
@@ -569,18 +584,19 @@ COSTUMES = {'GhostRider': ('Ninja', ghost_rider), 'Venom': ('Ninja', venom), 'Ba
 # --- sheets -----------------------------------------------------------------------------------
 
 def pack(frames):
-    """Crop each canvas to what is drawn and shelf-pack them: (sheet, [[x, y, w, h, dx, dy], ...])."""
+    """Crop each canvas to what is drawn and shelf-pack them, GUTTER apart: (sheet, [[x, y, w, h, dx, dy], ...])."""
     boxes = []
     for im in frames:
         box = im.getbbox() or (0, 0, 1, 1)
         boxes.append((im.crop(box), box))
     placed, x, y, shelf = [], 0, 0, 0
     for piece, _ in boxes:
-        if x + piece.width > SHEET_WIDTH:
+        w, h = piece.width + 2 * GUTTER, piece.height + 2 * GUTTER
+        if x + w > SHEET_WIDTH:
             x, y, shelf = 0, y + shelf, 0
-        placed.append((x, y))
-        x += piece.width
-        shelf = max(shelf, piece.height)
+        placed.append((x + GUTTER, y + GUTTER))
+        x += w
+        shelf = max(shelf, h)
     sheet = Image.new('RGBA', (SHEET_WIDTH, y + shelf))
     entries = []
     for (piece, box), (px, py) in zip(boxes, placed):
