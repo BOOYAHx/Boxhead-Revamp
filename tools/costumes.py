@@ -6,6 +6,8 @@
                 silver studs and a chain; drawn over the Ninja model's frames
     Venom       glossy black, big white eyes, a toothy grin with a red tongue
                 and the white spider on the chest and back; over the Ninja too
+    Batman      an all-black suit and cowl with ears, narrow white eyes, the
+                jaw showing, a dark grey bat logo and a black cape; over the Ninja
 
 Each costume is a model like the original twelve (game/bodyParts.js MODELS):
 four sheets, <Model>Body, <Model>BodyCustom, <Model>Head and <Model>HeadCustom,
@@ -427,7 +429,141 @@ def venom(src, i):
     return bc, bf, hc, hf
 
 
-COSTUMES = {'GhostRider': ('Ninja', ghost_rider), 'Venom': ('Ninja', venom)}
+# --- Batman -----------------------------------------------------------------------------------
+
+BAT_COWL = [(0, 0, 0, 255), (4, 4, 5, 255), (9, 9, 11, 255), (15, 15, 18, 255)]
+BAT_COWL_SHINE = (48, 49, 54, 255)
+BAT_SUIT = [(0, 0, 0, 255), (5, 5, 6, 255), (10, 10, 12, 255), (17, 17, 20, 255)]
+BAT_SUIT_SHINE = (44, 45, 50, 255)
+BAT_CAPE = [(0, 0, 0, 255), (11, 11, 13, 255)]
+BAT_EYE = (250, 250, 250, 255)
+BAT_SKIN = (176, 120, 80, 255)
+BAT_SKIN_DARK = (128, 82, 52, 255)
+BAT_LOGO = (42, 43, 48, 255)
+BAT_BLACK = (8, 8, 12, 255)
+# The chest logo: a black bat (B) on a dark grey oval (Y).
+BAT_SIGN = [
+    '..YYYYYYYY..',
+    '.YBYYBBYYBY.',
+    'YBBBBBBBBBBY',
+    '.YBBYBBYBBY.',
+    '..YYYYYYYY..',
+]
+BAT_SIGN_NARROW = [  # from three quarters
+    '.YYYYYY.',
+    'YBBBBBBY',
+    'YYBBBBYY',
+    '.YYYYYY.',
+]
+# The face from three quarters, sheared along the side of the head: W eye, S skin, D mouth.
+BAT_THREE_QUARTER = ['WW...WW', '.WW.WW.', '.......', 'SSSSSSS', 'SSSSSSS', 'SSDDDSS', 'SSSSSSS']
+
+
+def plastic(im, ramp, shine):
+    """The model's white geometry -> a dark plastic, a faint shine along lit top edges."""
+    px = im.load()
+    lum = {(x, y): sum(px[x, y][:3]) / 3 for y in range(H) for x in range(W) if px[x, y][3]}
+    top = {p for p, l in lum.items() if l >= 225}
+    for (x, y), l in lum.items():
+        px[x, y] = shine if (x, y) in top and (x, y - 1) not in top else ramp[min(3, int(l / 64))]
+
+
+def batman(src, i):
+    bc, bf, hc, hf = (src.frame(layer, i) for layer in LAYERS)
+    direction, step = divmod(i, FRAMES_PER_DIRECTION)
+    slit = [(x, y) for y in range(H) for x in range(W) if (lambda p: p[3] and p[0] > 55 and p[0] > p[2] + 15)(hf.getpixel((x, y)))]
+    fpx = bf.load()
+    for y in range(H):
+        for x in range(W):
+            r, g, b, a = fpx[x, y]
+            if a and r > 70 and abs(r - b) < 25:  # the Ninja's sash
+                fpx[x, y] = CLEAR
+    plastic(bc, BAT_SUIT, BAT_SUIT_SHINE)
+    plastic(hc, BAT_COWL, BAT_COWL_SHINE)
+    for x, y in slit:
+        put(hf, x, y, BAT_COWL[1])
+    head, bm = Mask(hc, hf), Mask(bc, bf)
+    hb = head.bbox()
+    if step >= DEATH_START or not hb or not bm.bbox():
+        return bc, bf, hc, hf
+    hx0, hy0, hx1, hy1 = hb
+    body = lambda x, y: bm(x, y) and not head(x, y)
+    # The cowl's ears: two points up from its top corners (along the ridge when turned).
+    if direction % 2 == 0:
+        for k, w in enumerate((3, 2, 2, 1, 1)):
+            for d in range(w):
+                put(hf, hx0 + 1 + d, hy0 + 2 - k, BAT_COWL[0] if d == 0 else BAT_COWL[1])
+                put(hf, hx1 - 1 - d, hy0 + 2 - k, BAT_COWL[0] if d == 0 else BAT_COWL[1])
+    else:
+        cx = (hx0 + hx1) // 2
+        for ex in (cx - 4, cx + 3):
+            ty = next((y for y in range(H) if head(ex, y)), hy0) + 1
+            for k, w in enumerate((2, 2, 1, 1)):
+                for d in range(w):
+                    put(hf, ex + d, ty - k, BAT_COWL[0])
+    waist = next((y for y in range(hy1 + 10, hy1 + 18) if bm.span(y)), None)
+    sign = {'Y': BAT_LOGO, 'B': BAT_BLACK}
+    if len(slit) >= 2:
+        fx0, fx1 = min(x for x, _ in slit), max(x for x, _ in slit)
+        fy0, fy1 = min(y for _, y in slit), max(y for _, y in slit)
+        c0 = (fx0 + fx1) // 2
+        if direction % 2 == 0:
+            # Narrow white eyes angled down to the middle, the jaw below them, a stern mouth.
+            for x, dy in ((fx0, -1), (fx0 + 1, -1), (fx0 + 1, 0), (fx0 + 2, 0)):
+                put(hf, x, fy0 + dy, BAT_EYE)
+                put(hf, fx1 - (x - fx0), fy0 + dy, BAT_EYE)
+            for y in range(fy1 + 1, hy1 + 1):
+                for x in range(fx0, fx1 + 1):
+                    if head(x, y):
+                        put(hf, x, y, BAT_SKIN if y < hy1 else BAT_SKIN_DARK)
+            for x in range(c0 - 1, c0 + 3):
+                put(hf, x, fy1 + 3, BAT_SKIN_DARK)
+            stamp(bf, BAT_SIGN if direction == 0 else BAT_SIGN_NARROW, c0 - (5 if direction == 0 else 3), hy1 + 3, sign, body)
+        else:
+            cols = {}
+            for x, y in slit:
+                cols.setdefault(x, []).append(y)
+            xs = sorted(cols)
+            slope = 1 if min(cols[xs[-1]]) > min(cols[xs[0]]) else -1
+            mid = xs[len(xs) // 2]
+            seam = (hx0 + hx1) // 2
+            lo, hi = (hx0 + 1, seam) if sum(xs) / len(xs) < (hx0 + hx1) / 2 else (seam + 1, hx1 - 1)
+            cx = (lo + hi) // 2
+            colors = {'W': BAT_EYE, 'S': BAT_SKIN, 'D': BAT_SKIN_DARK}
+            for u in range(7):
+                x = cx - 3 + u
+                top = min(cols[mid]) + slope * (x - mid) - 1
+                for v, row in enumerate(BAT_THREE_QUARTER):
+                    if row[u] in colors and head(x, top + v):
+                        put(hf, x, top + v, colors[row[u]])
+            stamp(bf, BAT_SIGN_NARROW, c0 - 3, hy1 + 3, sign, body)
+    elif direction in (2, 6):  # profile: one eye, the jaw, the cape down the back
+        facing_left = direction == 2
+        edge, stp = (hx0, 1) if facing_left else (hx1, -1)
+        fy = hy1 - 7
+        for d, dy in ((1, 0), (2, 0), (2, 1)):
+            put(hf, edge + stp * d, fy + dy, BAT_EYE)
+        for y in range(fy + 3, hy1 + 1):
+            for d in range(4):
+                if head(edge + stp * d, y):
+                    put(hf, edge + stp * d, y, BAT_SKIN)
+        for y in range(hy1 + 1, (waist or hy1 + 14) + 6):
+            sp = bm.span(y)
+            if sp:
+                bx = sp[1] if facing_left else sp[0]
+                for d in range(3):
+                    put(bc, bx - (d if facing_left else -d), y, BAT_CAPE[d % 2])
+    else:  # from behind: the cape over the back, down to the knees
+        for y in range(hy1 + 1, (waist or hy1 + 14) + 7):
+            for x in range(W):
+                if body(x, y):
+                    put(bc, x, y, BAT_CAPE[x % 4 == 0])
+                    if bf.getpixel((x, y))[3]:
+                        put(bf, x, y, CLEAR)
+    return bc, bf, hc, hf
+
+
+COSTUMES = {'GhostRider': ('Ninja', ghost_rider), 'Venom': ('Ninja', venom), 'Batman': ('Ninja', batman)}
 
 
 # --- sheets -----------------------------------------------------------------------------------

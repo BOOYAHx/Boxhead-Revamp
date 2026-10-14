@@ -484,9 +484,11 @@ In the lobby, **Customize Character** opens the original window:
 - **Head** and **Body**: pick any of the 12 models (Bond, Bambo, GI, Ninja,
   Swat, Croft, Bride, Cop, Mummy, Zombie, Vampire, Devil), or one of the
   costumes drawn for this port: **Ghost Rider** (a flaming LEGO-style skull
-  and a black leather jacket with studs and a chain) and **Venom** (glossy
+  and a black leather jacket with studs and a chain), **Venom** (glossy
   black, big white eyes, a toothy grin with a red tongue and the white spider
-  on the chest and back). Their colours are painted in, so each has one.
+  on the chest and back) and **Batman** (an all-black suit and cowl with
+  ears, narrow white eyes, the jaw showing, a dark grey bat logo and a black
+  cape). Their colours are painted in, so each has one.
   Then pick its colour from the model's own palette; the swatch shows it. A
   new model starts on its default colour, like the original. The practice bots
   wear the original twelve.
@@ -832,7 +834,7 @@ the original art and are not tracked by git (`art/templates/`); committing
 * `tools/save_maps.py` — saves every online bounty map into the game files (see "Website and updates").
 * `tools/export_intro.py` — exports the original loading screen from BBH.swf (see step 18).
 * `tools/redrawn_art.py` — drawing templates for, and loading of, hand-redrawn 4x art (see step 15).
-* `tools/costumes.py` — draws the costumes this port adds (Ghost Rider and Venom, over the
+* `tools/costumes.py` — draws the costumes this port adds (Ghost Rider, Venom and Batman, over the
   Ninja's frames) into the sprites and atlas; `build_assets.py` runs it.
 * `tools/extra_props.py` — draws the props this port adds (the school bus and
   box truck, across and up-down, and the raised deck), with their shadows,
