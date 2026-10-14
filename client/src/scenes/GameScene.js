@@ -4,7 +4,7 @@
 
 import { CELL_HEIGHT, CELL_WIDTH, PING_CYCLE_INTERVAL, PING_INTERVAL, PROCESS_INTERVAL, ROUND_END_TIME, ROUND_START_TIME, WINDOW_HEIGHT, WINDOW_WIDTH } from '../game/constants.js';
 import { DIRECTIONS, byVector } from '../game/Direction.js';
-import { KeyState, isKey } from '../game/controls.js';
+import { KeyState, bankForKey, isKey } from '../game/controls.js';
 import { Character } from '../game/Character.js';
 import { MODELS } from '../game/bodyParts.js';
 import { BountyCrate, CHAT_DELIM, CHAT_PREFIX, START_SCORE, bountyCrateTypes, chatLines, cleanChat, newStats, offlineAwards, parseCrates, placingString, rankPlayers, roundAwards } from '../game/bounty.js';
@@ -14,7 +14,7 @@ import { QuickPlay, playableMaps } from '../game/quickPlay.js';
 import { ShopState } from '../game/shop.js';
 import { DEBUG, FREE_GUNS, TEST_MAP } from '../config.js';
 import { loadLook } from '../game/profile.js';
-import { PISTOL_ID, SPLASH, WeaponID, parseWeaponStats, setWeaponStats } from '../game/weapons.js';
+import { PISTOL_ID, SPLASH, WeaponID, parseWeaponStats, setWeaponStats, weaponBank } from '../game/weapons.js';
 import { EquipmentWorld, gunSplash } from '../game/equipment.js';
 import { MAX_NPCS, NavGrid, NpcBrain, createNpc } from '../game/npc.js';
 import { runModeratorCommand } from '../game/moderation.js';
@@ -65,6 +65,9 @@ export class GameScene extends Phaser.Scene {
     this.connection = this.mode === 'online' ? this.app.connection : null;
     // Opeth's authenticated online account can fire a gun immediately after switching to it.
     this.instantWeaponCycling = (this.connection?.localUser?.name || '').toLowerCase() === 'opeth';
+    // Auto Assign AK-47: the bank the Weapon Bank 1 key selects after buying the AK-47, for
+    // this game only (every round and every room starts with the keys as they are saved).
+    this.akBank = null;
     this.map = null;
     this.loadingMap = false; // Phaser reuses the scene object for every game
     this.mapLoad = new AbortController();
@@ -916,7 +919,8 @@ export class GameScene extends Phaser.Scene {
     // Previous Weapon (E) goes back up.
     if (press('weaponDown')) changed = p.nextWeapon();
     if (press('weaponUp')) changed = p.prevWeapon() || changed;
-    for (let n = 1; n <= 8; n++) if (press('weapon' + n)) changed = p.selectWeaponBank(n) || changed;
+    const swap = Preferences.autoAssignAK ? this.akBank : null;
+    for (let n = 1; n <= 8; n++) if (press('weapon' + n)) changed = p.selectWeaponBank(bankForKey(n, swap)) || changed;
     if (changed) this.weaponChanged(p, true);
   }
 
@@ -959,6 +963,9 @@ export class GameScene extends Phaser.Scene {
       if (p.active) p.pickupWeapon(result.weapon);
       this.autoSelectWeapon = result.weapon;
     }
+    // Auto Assign AK-47: buying it puts the Weapon Bank 1 key on its bank; returning it puts it back.
+    if (id === WeaponID.AK47 && result.event === 'buy' && Preferences.autoAssignAK) this.akBank = weaponBank(id);
+    if (id === WeaponID.AK47 && result.event === 'refund') this.akBank = null;
     if (result.event === 'refund') {
       const held = p.weaponByID(id);
       if (held) {

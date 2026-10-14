@@ -82,6 +82,17 @@ export function isKey(action, keyCode) {
   return keyCode !== NO_KEY && (binds[i] === keyCode || binds[i + 1] === keyCode);
 }
 
+/**
+ * Auto Assign AK-47: with the AK-47's bank swapped in, the Weapon Bank 1 key
+ * selects that bank and that bank's key selects bank 1 (so both stay in
+ * reach). The saved bindings are not touched. swapBank: null, or the bank.
+ */
+export function bankForKey(n, swapBank) {
+  if (!swapBank || swapBank === 1) return n;
+  if (n === 1) return swapBank;
+  return n === swapBank ? 1 : n;
+}
+
 /** Input.load: saved bindings from this version of the key list. */
 export function loadBindings(storage = globalThis.localStorage) {
   defaultBindings();

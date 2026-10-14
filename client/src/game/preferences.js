@@ -16,6 +16,7 @@ const DEFAULTS = Object.freeze({
   autoShop: true,
   autoReload: false, // added by the patched game (boxhead.options.AutoReload)
   enhanced: true, // browser edition: sharper picture and extra effects ("Classic" when off)
+  autoAssignAK: false, // buying the AK-47 moves the Weapon Bank 1 key to its bank for that game
   npcs: 8, // computer players in offline practice (0 to 15)
 });
 

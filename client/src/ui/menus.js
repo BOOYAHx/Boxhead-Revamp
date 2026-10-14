@@ -528,7 +528,7 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
   // "Enhanced Graphics" (this edition's sharper picture and effects) is added the same way.
   const fps = screen.child('showFPSTickBox');
   const row = footsteps.y - fps.y > 0 ? footsteps.y - fps.y : 24;
-  const extras = [['autoReload', 'Auto Reload'], ['enhanced', 'Enhanced Graphics']].map(([key, label]) => {
+  const extras = [['autoReload', 'Auto Reload'], ['enhanced', 'Enhanced Graphics'], ['autoAssignAK', 'Auto Assign AK-47']].map(([key, label]) => {
     const tick = lib.create('MMOcha.lobby.OptionTickBox');
     tick.matrix = [...fps.matrix];
     tick.y = footsteps.y;
@@ -542,6 +542,18 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
   npcs.y = footsteps.y + row;
   for (const name of ['controlsButton', 'weaponsButton']) screen.child(name).y += row;
   screen.addChild(npcs);
+  // With every added row the buttons would reach the reset and close buttons at the
+  // bottom: the rows close up a little instead (a row stays as tall as it needs).
+  const rows = [...Object.keys(ticks).map((name) => screen.child(name)).filter(Boolean), ...extras.map((e) => e.tick), footsteps, npcs];
+  const [controlsButton, weaponsButton] = ['controlsButton', 'weaponsButton'].map((name) => screen.child(name));
+  const overlap = weaponsButton.y - (screen.child('resetButton').y - (weaponsButton.y - controlsButton.y));
+  if (overlap > 0 && rows.length > 1) {
+    const top = rows[0].y;
+    const pitch = (rows.at(-1).y - top - overlap) / (rows.length - 1);
+    rows.forEach((r, i) => (r.y = top + i * pitch));
+    controlsButton.y -= overlap;
+    weaponsButton.y -= overlap;
+  }
   const npcChoices = Array.from({ length: MAX_NPCS + 1 }, (_, i) => i);
   const display = () => {
     volume.displayOptions('Volume', Preferences.volume);

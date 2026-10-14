@@ -382,6 +382,11 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
 - After dying the shop opens by itself after 3 s ("Open shop on death"); you
   respawn when you close it. "Auto Reload" in Options refills a gun when it is
   down to its last round.
+- "Auto Assign AK-47" in Options (off unless ticked): buying the AK-47 puts
+  your Weapon Bank 1 key on the AK-47's bank, and that bank's key on bank 1,
+  for the rest of that game. Your saved controls do not change: the keys are
+  back as they were when the round ends or you leave, until you buy the
+  AK-47 again. Returning it in the Refund tab puts them back too.
 - Grenades, the Grenade Launcher, the Plasma Cannon and the equipment page are
   available. See Step 12 below for their controls.
 
