@@ -2697,6 +2697,10 @@ class ThreadedTCPServer(socketserver.ThreadingTCPServer):
         conn, address = self.socket.accept()
         player = PlayerSocket(conn.family, conn.type, conn.proto, fileno=conn.detach())
         player.settimeout(SEND_TIMEOUT)
+        # Game packets are tiny and must go out at once: without this, Nagle's
+        # algorithm holds a packet (a shot, a hit) sent right after another one
+        # until the first is acknowledged, up to ~40 ms per relay.
+        player.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return player, address
 
 def main():

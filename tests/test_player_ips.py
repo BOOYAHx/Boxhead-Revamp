@@ -118,6 +118,16 @@ class PlayerIPTests(ServerFixture, unittest.TestCase):
         self.assertIn(b'10;0;Banned\x00', handler.request.packets)
         self.assertFalse((self.temp / 'login_ips.log').exists())
 
+    def test_player_connections_send_without_delay(self):
+        import socket
+        tcp = self.server.ThreadedTCPServer(('127.0.0.1', 0), self.server.FlashGameHandler)
+        self.addCleanup(tcp.server_close)
+        client = socket.create_connection(tcp.server_address, 2)
+        self.addCleanup(client.close)
+        player, _ = tcp.get_request()
+        self.addCleanup(player.close)
+        self.assertTrue(player.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
+
     def test_direct_legacy_login_keeps_original_ip(self):
         handler = self.connection('203.0.113.20')
         self.assertIn('IP: 203.0.113.20', self.login(handler))
