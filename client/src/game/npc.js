@@ -59,16 +59,21 @@ export const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Super Hard'];
  * firing line before the first shot; dodge: chance to step off an enemy's
  * line; playerBias: the human looks this much closer (below 1: hunted first);
  * crates: how far (cells) a money crate draws it, 0 for never; cycle: chain
- * the heavy guns, switching at most every switchDelay ms.
+ * the heavy guns, switching at most every switchDelay ms; sight: ms behind
+ * the enemy it sees (it aims where they were, like a person reacting; 0 for
+ * where they are now); flank: keep out of the line the enemy faces when
+ * closing in; dodgeFirst: step off a line even when about to shoot; react:
+ * ms an enemy must aim at it before it notices and dodges (0: at once).
  */
 export const LEVELS = Object.freeze({
   // Easy fights exactly like the original practice bots did (before there were difficulties).
   Easy: { think: 100, aim: 120, dodge: 0.75, playerBias: 0.8, crates: 3, cycle: false },
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
   Hard: { think: 95, aim: 115, dodge: 0.72, playerBias: 0.75, crates: 10, cycle: true, switchDelay: 170 },
-  // Super Hard: near-instant reactions and aim, almost always dodges, hunts the human, chains guns with no pause
-  // and crates pay it double (crateMoney), so it reaches the Plasma Cannon and Magnum early.
-  'Super Hard': { think: 50, aim: 35, dodge: 0.95, playerBias: 0.55, crates: 14, cycle: true, switchDelay: 0, crateMoney: 2 },
+  // Super Hard: a person's aim and reflexes (it sees you sight ms late and takes aim ms to line up, so strafing
+  // beats it; it dodges react ms after you aim at it), but quick plans, flanking, dodging even mid-fight, hunting the human, guns chained with no pause
+  // and crates that pay it double (crateMoney), so it reaches the Plasma Cannon and Magnum early.
+  'Super Hard': { think: 50, aim: 80, sight: 120, react: 200, dodge: 0.95, playerBias: 0.55, crates: 14, cycle: true, switchDelay: 0, crateMoney: 2, flank: true, dodgeFirst: true },
 });
 /** The gun every bot starts each round with (full of ammo; it buys more shells later). */
 export const STARTING_GUN = WeaponID.SHOTGUN;
@@ -280,6 +285,7 @@ export class NpcBrain {
     this.lastProgress = { x: 0, y: 0, at: 0 };
     this.unstickUntil = 0;
     this.wander = null;
+    this.sightings = []; // where the target was ({ at, x, y }), for a bot that sees it late (level.sight)
   }
 
   /** Forget the old fight (after a respawn). */
@@ -290,6 +296,8 @@ export class NpcBrain {
     this.dodgeUntil = 0;
     this.wander = null;
     this.nextThink = 0;
+    this.sightings = [];
+    this.threat = null;
   }
 
   update(world) {
@@ -308,7 +316,26 @@ export class NpcBrain {
       this.think(world);
       this.nextThink = now + this.level.think * (0.8 + this.random() * 0.4);
     }
+    this.watch(now);
     this.aimAndFire(world);
+  }
+
+  /** Remember where the target is now (only bots that see it late need to). */
+  watch(now) {
+    if (!this.level.sight) return;
+    const target = this.target;
+    if (!target || target !== this.watched) this.sightings = [];
+    this.watched = target;
+    if (!target) return;
+    this.sightings.push({ at: now, x: target.pos.x, y: target.pos.y });
+    while (this.sightings.length > 2 && this.sightings[1].at <= now - this.level.sight) this.sightings.shift();
+  }
+
+  /** Where the bot aims: where the target was `sight` ms ago (null before it has been seen that long), or where it is. */
+  aimPoint(now) {
+    if (!this.level.sight) return this.target.pos;
+    const seen = this.sightings[0];
+    return seen && seen.at <= now - this.level.sight ? seen : null;
   }
 
   /**
@@ -390,9 +417,15 @@ export class NpcBrain {
         const along = dx * e.dir.dx + dy * e.dir.dy;
         return along > 0 && Math.abs(dx * e.dir.dy - dy * e.dir.dx) < FIRE_RADIUS + 0.3 && clearShot(map, e.pos, ch.pos);
       });
+      // A person needs a moment to notice a gun pointed at them.
+      if (threat !== this.threat) {
+        this.threat = threat;
+        this.threatSince = now;
+      }
+      const noticed = !this.level.react || now - this.threatSince >= this.level.react;
       const mine = bestLine(ch.pos, target.pos);
       const readyToShoot = mine.offset <= ALIGNED && this.alignedSince !== null && now - this.alignedSince >= this.level.aim;
-      if (threat && !readyToShoot && this.random() < this.level.dodge) {
+      if (threat && noticed && (this.level.dodgeFirst || !readyToShoot) && this.random() < this.level.dodge) {
         const side = this.random() < 0.5 ? 1 : -1;
         this.dodgeDir = facingFor(-threat.dir.dy * side, threat.dir.dx * side);
         this.dodgeUntil = now + DODGE_TIME;
@@ -410,7 +443,9 @@ export class NpcBrain {
         const t = sign * Math.max(1.5, Math.min(preferred, Math.abs(u) || preferred));
         const p = { x: target.pos.x + line.dx * t, y: target.pos.y + line.dy * t };
         if (!nav.walkable(Math.floor(p.x), Math.floor(p.y))) continue;
-        const cost = Math.hypot(p.x - ch.pos.x, p.y - ch.pos.y) + (clearShot(map, p, target.pos) ? 0 : 10) + (Math.sign(u) === sign ? 0 : 1);
+        let cost = Math.hypot(p.x - ch.pos.x, p.y - ch.pos.y) + (clearShot(map, p, target.pos) ? 0 : 10) + (Math.sign(u) === sign ? 0 : 1);
+        // Flanking: not straight into the line the enemy is facing (where it is already aiming).
+        if (this.level.flank && target.dir && line.dx * sign * target.dir.dx + line.dy * sign * target.dir.dy > 0.9) cost += 6;
         if (cost < goalCost) {
           goal = p;
           goalCost = cost;
@@ -504,12 +539,19 @@ export class NpcBrain {
       if (move) ch.dir = move;
       return;
     }
-    const line = bestLine(ch.pos, target.pos);
+    const aim = this.aimPoint(now);
+    if (!aim) {
+      // Not seen long enough to aim yet: turn its way, no shot.
+      ch.dir = bestLine(ch.pos, target.pos).dir;
+      this.alignedSince = null;
+      return;
+    }
+    const line = bestLine(ch.pos, aim);
     ch.dir = line.dir;
     // Hard bots switch to whichever gun reaches, so the longest of them counts (up to a screen away).
     const reach = this.level.cycle ? Math.min(25, Math.max(...ch.weapons.filter((w) => (w.kind === 'gun' || w.kind === 'projectile') && w.available).map((w) => w.range))) : ch.weapon.range;
     const inRange = line.along <= reach * 0.95;
-    if (line.offset <= ALIGNED && inRange && clearShot(map, ch.pos, target.pos)) {
+    if (line.offset <= ALIGNED && inRange && clearShot(map, ch.pos, aim)) {
       if (this.alignedSince === null) this.alignedSince = now;
       if (now - this.alignedSince >= this.level.aim) {
         if (this.level.cycle) this.cycleGuns(line.along, now);

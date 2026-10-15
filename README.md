@@ -644,8 +644,12 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   crates nearby (unless a fight is right next to them) and chain their guns like
   good players: Plasma, then Shotgun, then Rifle, then Magnum (each gun reloads
   on its own, so switching fires the next one; each switch takes them a moment).
-  **Super Hard** bots react and aim almost instantly, nearly always dodge,
-  hunt you first, chase every crate within reach, start with the Shotgun and
+  **Super Hard** bots aim and react like a quick person, not a machine: they see
+  you about 0.12 s late and take a moment to line up (about 0.2 s before the
+  first shot), so strafing off their line makes them miss, and they dodge only
+  once they notice a gun on them (0.2 s). They make up for it with tactics:
+  they come at you from the side instead of down the line you face, dodge
+  even mid-fight, hunt you first, chase every crate within reach, start with the Shotgun and
   the Rifle, earn double money from crates and chain their guns with no pause.
   Every bot's default gun is the Pistol: it respawns with it and holds it while
   walking about, switching to a bought gun to fight.
