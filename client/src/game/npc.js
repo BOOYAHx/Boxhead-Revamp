@@ -20,11 +20,29 @@ import { traceShot } from './world.js';
 import { Weapon, WeaponID } from './weapons.js';
 
 export const MAX_NPCS = 15;
-export const NPC_NAMES = [
-  'Grim Tuesday', 'Boxwell', 'Captain Crate', 'Rusty Nails', 'Mad Dog Mike', 'Square Sally', 'Blocky Balboa', 'Doc Cubeman',
-  'Nina Knuckles', 'Hexley', 'Big Lou', 'Tank Tompkins', 'Viper Vance', 'Slick Rico', 'Duchess Dynamo', 'Bones Malone',
-  'Sergeant Stack', 'Pixel Pete', 'Mona Mayhem', 'Count Cornerstone', 'Ziggy Zero', 'Brick Baxter', 'Lady Lockjaw', 'Dutch Dozer',
-];
+/**
+ * The bots and how each dresses: [model, colour] for the head and the body,
+ * the colour an index into that model's palette (bodyParts.js COLORS). A bot
+ * without a look gets a random one.
+ */
+export const NPC_BOTS = Object.freeze([
+  { name: 'PWNEDKevin', head: ['Devil', 2], body: ['Devil', 0] }, // orange, red
+  { name: 'Amrase', head: ['Ninja', 0], body: ['Vampire', 0] }, // black, white
+  { name: 'Aurora.light', head: ['Mummy', 2], body: ['Ninja', 0] }, // grey, black
+  { name: 'UltimateMakabre' },
+  { name: 'AngryNegro', head: ['Vampire', 4], body: ['Devil', 0] }, // brown, red
+  { name: 'HSV88', head: ['Bond', 3], body: ['Vampire', 1] }, // blonde, skin colour
+  { name: 'STANKMAN', head: ['Ninja', 0], body: ['Ninja', 0] }, // black, black
+  { name: '2k10Adder', head: ['Ninja', 4], body: ['Ninja', 2] }, // olive, dark red
+  { name: 'Bossi97', head: ['Zombie', 5], body: ['Zombie', 4] }, // white, brown
+  { name: 'Opii12', head: ['Croft', 0], body: ['Bride', 4] }, // Croft's own hair, white
+  { name: 'Gerrymie', head: ['Swat', 2], body: ['Vampire', 0] }, // black, white
+  { name: 'Panicnew', head: ['Ninja', 3], body: ['Mummy', 2] }, // blue, grey
+  { name: 'Chubear', head: ['Ninja', 0], body: ['Vampire', 0] }, // black, white
+  { name: 'Garrituh', head: ['Swat', 2], body: ['Vampire', 0] }, // black, white
+  { name: 'Neshie1996', head: ['Devil', 1], body: ['Croft', 0] }, // dark red, blue
+]);
+export const NPC_NAMES = NPC_BOTS.map((bot) => bot.name);
 // Which gun a bot holds for the range, best first (the Pistol when it has none of them).
 const CLOSE_RANGE = [WeaponID.SHOTGUN, WeaponID.PLASMA, WeaponID.MAGNUM, WeaponID.RIFLE];
 const MID_RANGE = [WeaponID.PLASMA, WeaponID.MAGNUM, WeaponID.SHOTGUN, WeaponID.RIFLE];
@@ -76,21 +94,24 @@ const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], 
 
 const pick = (list, random) => list[Math.floor(random() * list.length)];
 
-/** A computer player: a name from the list, a random costume and the Pistol (it buys the rest). */
+/** A computer player: one of the bots (its name and look) and the Pistol (it buys the rest). */
 export function createNpc(index, random = Math.random, usedNames = new Set()) {
-  const free = NPC_NAMES.filter((n) => !usedNames.has(n));
-  const name = free.length ? pick(free, random) : `Bot ${index + 1}`;
-  const ch = new Character({ id: 'n' + String((index % 99) + 1).padStart(2, '0'), name }); // 3 characters, like a server slot id
+  const free = NPC_BOTS.filter((bot) => !usedNames.has(bot.name));
+  const bot = free.length ? pick(free, random) : { name: `Bot ${index + 1}` };
+  const ch = new Character({ id: 'n' + String((index % 99) + 1).padStart(2, '0'), name: bot.name }); // 3 characters, like a server slot id
   ch.npc = true;
   ch.firePos = ch.pos;
   const model = Math.floor(random() * ORIGINAL_MODELS); // the bots wear the original game's costumes
-  Object.assign(ch.look, {
-    gender: FEMALE.has(MODELS[model]) ? 'Female' : MONSTER.has(MODELS[model]) ? 'Monster' : 'Male', // the voice when hurt
-    bodyModel: model,
-    headModel: random() < 0.8 ? model : Math.floor(random() * ORIGINAL_MODELS),
-    bodyColor: Math.floor(random() * COLORS),
-    headColor: Math.floor(random() * COLORS),
-  });
+  const look = bot.head && bot.body
+    ? { headModel: MODELS.indexOf(bot.head[0]), headColor: bot.head[1], bodyModel: MODELS.indexOf(bot.body[0]), bodyColor: bot.body[1] }
+    : {
+        bodyModel: model,
+        headModel: random() < 0.8 ? model : Math.floor(random() * ORIGINAL_MODELS),
+        bodyColor: Math.floor(random() * COLORS),
+        headColor: Math.floor(random() * COLORS),
+      };
+  const body = MODELS[look.bodyModel];
+  Object.assign(ch.look, look, { gender: FEMALE.has(body) ? 'Female' : MONSTER.has(body) ? 'Monster' : 'Male' }); // the voice when hurt
   ch.weapons = [];
   ch.banks = {};
   ch.weapon = null;

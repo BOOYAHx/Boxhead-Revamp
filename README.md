@@ -92,7 +92,7 @@ The port is built in small steps. Each one is tested before the next starts.
 | 11 | High-resolution textures: every sprite and ground texture upscaled 4x by AI (one command) | **ready to test** |
 | 12 | Grenades, Grenade Launcher, Plasma Cannon, C4, mines, airstrikes, barrels, barricades and spy satellite | **ready to playtest** |
 | 13 | Character customization in the lobby | done |
-| 17 | Practice NPCs: up to 15 computer players with costumes and made-up names in offline Quick Play (Options → Practice NPCs) | **ready to test** |
+| 17 | Practice NPCs: up to 15 computer players with costumes and named after players in offline Quick Play (Options → Practice NPCs) | **ready to test** |
 | 16 | Lobby player options: click a name for View Stats (yours) or Private Message, View Stats, Add Friend and Block (anyone else); private chat tabs | **ready to test** |
 | 14 | Lighting pass (Enhanced Graphics): lights from muzzle flashes and explosions on walls, props, people and the floor; contact shadows; ambient occlusion where walls meet the floor | **ready to test** |
 | 15 | Hand-redrawn 4x art: templates and loading (`tools/redrawn_art.py`); the drawing itself is done by an artist | tools ready |
@@ -750,8 +750,9 @@ Set how many (0 to 15) in **Options → Practice NPCs**, from the main menu or
 the in-game Esc menu; the change takes effect straight away. In the \`
 console, `npcs 12` does the same.
 
-Each one has a made-up name (Captain Crate, Viper Vance, Duchess Dynamo...),
-a random costume and colours, the Pistol and two guns with unlimited ammo:
+Each one is one of 15 named players (PWNEDKevin, Amrase, Aurora.light...),
+dressed as listed in `client/src/game/npc.js` (`NPC_BOTS`; UltimateMakabre
+gets a random costume and colours), the Pistol and two guns with unlimited ammo:
 an automatic (Dual Uzis, AK47, M16 or Minigun) and either the Shotgun or a
 long gun (Rifle, Magnum or Railgun), switching for the range. They are
 built to be hard:

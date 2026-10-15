@@ -81,3 +81,21 @@ test('practice awards go to the same players the server would pick', async () =>
   assert.equal(ids, 'n01n02youn01n02');
   assert.deepEqual(roundAwards(ids, players).map((a) => a.player.id), ['n01', 'n02', 'you', 'n01', 'n02']);
 });
+
+test('the bots are the named players, each dressed as listed (UltimateMakabre in anything)', async () => {
+  const { NPC_BOTS } = await import('../client/src/game/npc.js');
+  const { COLORS, MODELS } = await import('../client/src/game/bodyParts.js');
+  assert.equal(NPC_BOTS.length, MAX_NPCS);
+  const used = new Set();
+  for (let i = 0; i < MAX_NPCS; i++) {
+    const npc = createNpc(i, seeded(i + 1), used);
+    used.add(npc.name);
+    const bot = NPC_BOTS.find((b) => b.name === npc.name);
+    if (!bot.head) continue;
+    const { look } = npc;
+    assert.deepEqual([MODELS[look.headModel], look.headColor, MODELS[look.bodyModel], look.bodyColor], [...bot.head, ...bot.body], bot.name);
+    assert.ok(look.headColor < COLORS[bot.head[0] + 'Head'].length && look.bodyColor < COLORS[bot.body[0] + 'Body'].length, bot.name);
+  }
+  assert.equal(used.size, MAX_NPCS);
+  assert.equal(createNpc(0, seeded(1), new Set(NPC_BOTS.map((b) => b.name).filter((n) => n !== 'Opii12'))).look.gender, 'Female');
+});
