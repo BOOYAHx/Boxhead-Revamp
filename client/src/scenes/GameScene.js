@@ -1532,6 +1532,7 @@ export class GameScene extends Phaser.Scene {
       this.hud.showScoreboard(null);
       return; // the round is frozen behind the summary (Game.process)
     }
+    if (this.mode === 'online') this.handleInbox();
     this.accumulator += Math.min(delta, 250);
     while (this.accumulator >= PROCESS_INTERVAL) {
       this.tick();
@@ -1572,6 +1573,22 @@ export class GameScene extends Phaser.Scene {
     const sx = Math.max(b.x, Math.min(x - WINDOW_WIDTH / 2, b.x + b.width - WINDOW_WIDTH));
     const sy = Math.max(b.y, Math.min(y - WINDOW_HEIGHT / 2, b.y + b.height - WINDOW_HEIGHT));
     this.cameras.main.setScroll(sx, sy);
+  }
+
+  /**
+   * Peer messages as soon as they arrive (every frame), not at the next 50 ms
+   * tick: a peer's shot is judged on us at once, and the hit it causes goes
+   * straight back, so the shooter sees it up to two ticks sooner. Moves keep
+   * their order with the shots after them; a snap is smoothed as before.
+   */
+  handleInbox() {
+    if (!this.inbox.length) return;
+    // Something queued since the last tick (a respawn or weapon change from
+    // the shop) waits for the tick's move packet, and so does what follows it.
+    const sendNow = this.player.active && !this.outQueue.length;
+    while (this.inbox.length) this.handlePlayerMessage(this.inbox.shift());
+    // The hits these messages caused go now.
+    if (sendNow) while (this.outQueue.length) this.connection.sendGameMessage(this.outQueue.shift());
   }
 
   /**
