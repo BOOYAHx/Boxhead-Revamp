@@ -82,7 +82,7 @@ test('practice awards go to the same players the server would pick', async () =>
   assert.deepEqual(roundAwards(ids, players).map((a) => a.player.id), ['n01', 'n02', 'you', 'n01', 'n02']);
 });
 
-test('the bots are the named players, each dressed as listed (UltimateMakabre in anything)', async () => {
+test('the bots are the named players, each dressed as listed', async () => {
   const { NPC_BOTS } = await import('../client/src/game/npc.js');
   const { COLORS, MODELS } = await import('../client/src/game/bodyParts.js');
   assert.equal(NPC_BOTS.length, MAX_NPCS);
@@ -91,7 +91,6 @@ test('the bots are the named players, each dressed as listed (UltimateMakabre in
     const npc = createNpc(i, seeded(i + 1), used);
     used.add(npc.name);
     const bot = NPC_BOTS.find((b) => b.name === npc.name);
-    if (!bot.head) continue;
     const { look } = npc;
     assert.deepEqual([MODELS[look.headModel], look.headColor, MODELS[look.bodyModel], look.bodyColor], [...bot.head, ...bot.body], bot.name);
     assert.ok(look.headColor < COLORS[bot.head[0] + 'Head'].length && look.bodyColor < COLORS[bot.body[0] + 'Body'].length, bot.name);

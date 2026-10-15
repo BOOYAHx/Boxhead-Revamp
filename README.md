@@ -751,8 +751,7 @@ the in-game Esc menu; the change takes effect straight away. In the \`
 console, `npcs 12` does the same.
 
 Each one is one of 15 named players (PWNEDKevin, Amrase, Aurora.light...),
-dressed as listed in `client/src/game/npc.js` (`NPC_BOTS`; UltimateMakabre
-gets a random costume and colours), the Pistol and two guns with unlimited ammo:
+dressed as listed in `client/src/game/npc.js` (`NPC_BOTS`), the Pistol and two guns with unlimited ammo:
 an automatic (Dual Uzis, AK47, M16 or Minigun) and either the Shotgun or a
 long gun (Rifle, Magnum or Railgun), switching for the range. They are
 built to be hard:

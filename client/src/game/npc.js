@@ -23,13 +23,13 @@ export const MAX_NPCS = 15;
 /**
  * The bots and how each dresses: [model, colour] for the head and the body,
  * the colour an index into that model's palette (bodyParts.js COLORS). A bot
- * without a look gets a random one.
+ * without a look (a spare "Bot N") gets a random one.
  */
 export const NPC_BOTS = Object.freeze([
   { name: 'PWNEDKevin', head: ['Devil', 2], body: ['Devil', 0] }, // orange, red
   { name: 'Amrase', head: ['Ninja', 0], body: ['Vampire', 0] }, // black, white
   { name: 'Aurora.light', head: ['Mummy', 2], body: ['Ninja', 0] }, // grey, black
-  { name: 'UltimateMakabre' },
+  { name: 'SUP4RM4N', head: ['Mummy', 2], body: ['Mummy', 2] }, // grey, grey
   { name: 'AngryNegro', head: ['Vampire', 4], body: ['Devil', 0] }, // brown, red
   { name: 'HSV88', head: ['Bond', 3], body: ['Vampire', 1] }, // blonde, skin colour
   { name: 'STANKMAN', head: ['Ninja', 0], body: ['Ninja', 0] }, // black, black
