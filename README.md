@@ -712,8 +712,8 @@ To put a shared map in the game, send the code or the file: it is added to
 the map list like the others (the game itself is not changed by the editor).
 Maps added this way live in `client/src/game/customMaps.js`, after the saved
 bounty maps, each in its own slot (a room names its maps by slot letter, A-Z):
-so far **Hedge Town** (slot 7) and **Thorn Gardens** (slot 9; slot 8 was
-Nuketown, since removed). They are in Quick
+so far **Hedge Town** (slot 7), **Thorn Gardens** (slot 9; slot 8 was
+Nuketown, since removed), **Juke Town** (slot 10) and **Scrap** (slot 11). They are in Quick
 Play's map list and in Host Game's, and `tools/save_maps.py` leaves them alone.
 
 ### Step 19: Team Deathmatch and Infected
