@@ -31,7 +31,24 @@ test('warnings and timed bans use private moderator packets and preserve message
   assert.equal(s.run('/WARN hunter Please Stop'), true);
   assert.equal(s.run('/ban HUNTER 960 Repeated Spam; final warning'), true);
   assert.deepEqual(s.sent, ['0g002Please Stop', '0e002;960;Repeated Spam; final warning']);
-  assert.deepEqual(s.notices, []); // success comes from the server acknowledgement
+  // Sent requests are acknowledged at once; the result comes from the server.
+  assert.deepEqual(s.notices, ['Warning Hunter...', 'Banning Hunter for 960 minute(s)...']);
+});
+
+test('a request the server never answers says so; an answered one stays quiet', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { Emitter } = await import('../client/src/util/Emitter.js');
+  const s = session();
+  Object.setPrototypeOf(s.connection, Emitter.prototype);
+  s.connection.listeners = new Map();
+  s.run('/ban Hunter 10 Spam');
+  t.mock.timers.tick(5000);
+  assert.match(s.notices.at(-1), /did not answer/);
+  s.notices.length = 0;
+  s.run('/ban Hunter 10 Spam');
+  s.connection.emit(ServerEvent.MODERATION_RESULT, { message: 'Banned Hunter for 10 minute(s): Spam' });
+  t.mock.timers.tick(5000);
+  assert.deepEqual(s.notices, ['Banning Hunter for 10 minute(s)...']);
 });
 
 test('invalid durations, self bans, missing players and empty reasons are consumed locally', () => {

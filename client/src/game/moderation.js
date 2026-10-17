@@ -1,6 +1,10 @@
 // Original moderator chat commands. The server independently authorizes every request.
+import { ServerEvent } from '../net/Connection.js';
+
 export const MAX_BAN_MINUTES = 960;
 export const MAX_MOD_MESSAGE_LENGTH = 240;
+/** How long to wait for the server's answer before saying it never came. */
+export const MODERATION_REPLY_TIMEOUT = 5000;
 
 export const isModerator = (user) => Number.isFinite(Number(user?.level)) && Number(user?.level) > 0;
 
@@ -49,8 +53,29 @@ export function runModeratorCommand(connection, text, notify) {
       return true;
     }
     connection.sendRaw(`0e${target.id};${minutes};${message}`);
+    notify(`Banning ${target.name} for ${minutes} minute(s)...`);
   } else {
     connection.sendRaw(`0g${target.id}${message}`);
+    notify(`Warning ${target.name}...`);
   }
+  awaitReply(connection, notify);
   return true;
+}
+
+/**
+ * The server answers every request ("0t..."). Without an answer the request
+ * vanished (a game server still running code from before moderation was
+ * added, for one), so say so instead of leaving the moderator guessing.
+ */
+function awaitReply(connection, notify) {
+  if (!connection.on || !connection.off) return;
+  const answered = () => {
+    clearTimeout(timer);
+    connection.off(ServerEvent.MODERATION_RESULT, answered);
+  };
+  const timer = setTimeout(() => {
+    connection.off(ServerEvent.MODERATION_RESULT, answered);
+    notify('The game server did not answer. Restart it (boxhead-restart) and try again.');
+  }, MODERATION_REPLY_TIMEOUT);
+  connection.on(ServerEvent.MODERATION_RESULT, answered);
 }
