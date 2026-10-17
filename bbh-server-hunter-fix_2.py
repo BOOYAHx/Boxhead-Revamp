@@ -7,6 +7,7 @@ import time
 import math
 import random
 import threading
+import traceback
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 import datetime
@@ -1571,7 +1572,14 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
 
         # Moderator packets are private server actions, never generic relays.
         elif packet.startswith(('0g', '0e')):
-            self.handle_moderation(packet)
+            try:
+                self.handle_moderation(packet)
+            except Exception as error:
+                # Always answer the moderator: a silent failure looks like the
+                # command does nothing. The details go to the server log.
+                print(f'[MOD] {packet[:2]} from {self.username} failed: {error!r}')
+                traceback.print_exc()
+                self.moderation_result(f'The command failed on the server ({type(error).__name__}: {error}).')
             return
 
         # Notices and saved profile updates can only come from the server.

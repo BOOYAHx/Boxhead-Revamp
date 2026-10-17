@@ -189,6 +189,12 @@ class ModerationTests(unittest.TestCase):
         self.assertEqual(self.target['socket'].packets, [])
         self.assertIn(b'could not be saved', self.mod['socket'].packets[-1])
 
+    def test_an_unexpected_server_error_is_still_answered(self):
+        with patch.object(self.server, 'save_account_ban', side_effect=RuntimeError('disk on fire')):
+            self.ban()
+        self.assertIn(b'0tThe command failed on the server (RuntimeError: disk on fire)', self.mod['socket'].packets[-1])
+        self.assertFalse(self.target['socket'].closed)
+
     def test_ban_store_failure_does_not_admit_a_login(self):
         with patch.object(self.server, 'active_account_ban', side_effect=sqlite3.DatabaseError('broken')):
             login = self.connection()
