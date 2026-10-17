@@ -166,8 +166,8 @@ export class CharacterView {
   }
 
   /** The placing over the head ("1st", "2nd"...); first place also gets the bullseye behind it. */
-  setPlacing(text, first = false) {
-    this.placingText.setText(text);
+  setPlacing(text, first = false, color = '#ffffff') {
+    this.placingText.setText(text).setColor(color);
     this.first = first;
   }
 

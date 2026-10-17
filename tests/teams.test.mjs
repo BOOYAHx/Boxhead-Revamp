@@ -166,3 +166,22 @@ test('FFA rooms have no sides', (t) => {
   assert.equal(scene.friendly(scene.player, other), false);
   assert.equal(scene.needsTeam(), false);
 });
+
+test('Infected: the status line names the infected, and "INFECTED" shows over their heads', (t) => {
+  const { scene, peer } = setup(t, GameType.INFECTED);
+  const ann = peer('002', 'Ann');
+  const bob = peer('003', 'Bob');
+  ann.active = bob.active = true; // spawned: only players in the round are ranked
+  const placings = new Map();
+  for (const r of scene.remotes.values()) r.view.setPlacing = (text, first, color) => placings.set(r.id, { text, color });
+  scene.handlePlayerMessage({ source: '002', message: '0k3' });
+  const status = () => scene.teamStatus().map((part) => part.text).join('');
+  assert.equal(status(), 'Survivors 2  ·  Infected: Ann');
+  assert.equal(placings.get('002').text, 'INFECTED');
+  assert.equal(placings.get("002").color, teams.teamColor(GameType.INFECTED, INFECTED));
+  assert.notEqual(placings.get('003').text, 'INFECTED');
+  assert.equal(scene.leader.name, 'Ann', 'survivors are pointed at the infected');
+  assert.equal(scene.leader.placing, 'INFECTED');
+  scene.handlePlayerMessage({ source: '001', message: '0k3' });
+  assert.equal(status(), 'Survivors 1  ·  Infected: You, Ann');
+});

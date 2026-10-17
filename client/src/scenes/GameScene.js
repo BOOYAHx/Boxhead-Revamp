@@ -43,6 +43,7 @@ const MAX_FLOOD = 3; // chat messages per FLOOD_TIME before further ones are dro
 const FLOOD_TIME = 2000;
 const MAX_CHAT_LENGTH = 120;
 const LEADER_COLOR = 0xffffff;
+const MAX_INFECTED_NAMES = 3; // Infected's status line names this many, then only counts
 const AUTO_SHOP_DELAY = 3000; // ShopGame.AUTO_SHOP_DELAY
 const OFFLINE_ROUND = 600; // practice rounds: 10 minutes, like the server's (round_length 630 with the summary)
 const MAX_CRATES = 199; // crate indexes 000-198, like the game server
@@ -463,6 +464,10 @@ export class GameScene extends Phaser.Scene {
     view?.setNameColor(teamColor(this.gameType, team) || '#ffe08a');
   }
 
+  isInfected(id) {
+    return isInfectedMode(this.gameType) && this.teamOf(id) === INFECTED;
+  }
+
   /** Everyone with their side, for the boards and the round's result. */
   teamPlayers() {
     return this.players().map((p) => ({ ...p, team: this.teamOf(p.id) }));
@@ -481,10 +486,12 @@ export class GameScene extends Phaser.Scene {
       const green = teamColor(type, INFECTED);
       if (this.preparing) return [{ text: `The infection starts in ${Math.max(0, this.roundTime - INFECTION_STARTS_AT)}s`, color: green }];
       if (!totals[INFECTED].players) return [{ text: totals[SURVIVORS].players < 2 ? 'Waiting for another player to start the infection' : 'The infection is starting…', color: green }];
+      // Who is infected stays on screen after the announcement fades (a few names, else the count).
+      const infected = this.teamPlayers().filter((p) => p.team === INFECTED).map((p) => (p.local ? 'You' : p.name));
       return [
         { text: `Survivors ${totals[SURVIVORS].players}`, color: teamColor(type, SURVIVORS) },
         { text: '  ·  ' },
-        { text: `${totals[INFECTED].players} Infected`, color: green },
+        { text: infected.length <= MAX_INFECTED_NAMES ? `Infected: ${infected.join(', ')}` : `${infected.length} Infected`, color: green },
       ];
     }
     if (this.needsTeam()) return [{ text: 'Join a team to play', color: '#ffffff' }];
@@ -1221,14 +1228,26 @@ export class GameScene extends Phaser.Scene {
   updateScores() {
     if (!this.player) return;
     const board = rankPlayers(this.players());
-    for (const entry of board) entry.view?.setPlacing(placingString(entry.stats.placing), entry.stats.placing === 1);
+    for (const entry of board) {
+      // Infected: "INFECTED" over the infected's heads instead of their placing.
+      if (this.isInfected(entry.id)) entry.view?.setPlacing('INFECTED', false, teamColor(this.gameType, INFECTED));
+      else entry.view?.setPlacing(placingString(entry.stats.placing), entry.stats.placing === 1);
+    }
     const me = this.player.stats;
     this.hud.setPlacing(this.player.active ? me.placing : 0);
     this.hud.setMoney(me.money);
     this.hud.setBountyPoints(me.bountyPoints);
     // CharacterPointer: the best-placed other player (in team games, the best enemy).
     const leader = board.length > 1 ? board.find((p) => !p.local && !this.friendly(p.character, this.player)) : null;
-    this.leader = leader ? { character: leader.character, name: leader.name, placing: placingString(leader.stats.placing), color: LEADER_COLOR } : null;
+    const infectedLeader = leader && this.isInfected(leader.id);
+    this.leader = leader
+      ? {
+          character: leader.character,
+          name: leader.name,
+          placing: infectedLeader ? 'INFECTED' : placingString(leader.stats.placing),
+          color: infectedLeader ? parseInt(teamColor(this.gameType, INFECTED).slice(1), 16) : LEADER_COLOR,
+        }
+      : null;
     this.showTeamStatus();
     window.boxhead && (window.boxhead.remotes = this.remotes);
   }
