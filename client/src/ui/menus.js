@@ -536,6 +536,7 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
       tick.el.setAttribute('role', 'checkbox');
       tick.el.setAttribute('aria-label', label);
       tick.el.setAttribute('tabindex', '0');
+      tick.el.style.outline = 'none'; // Keep the original tick-box art without a browser focus rectangle.
       tick.on('change', () => tick.el.setAttribute('aria-checked', String(tick.ticked)));
       tick.on('keydown', (event) => {
         if (event.key !== ' ' && event.key !== 'Enter') return;
