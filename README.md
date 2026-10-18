@@ -48,7 +48,7 @@ Moderators can type these in lobby chat, game chat, or the console (opened
 with the backquote key):
 
 * `/warn name message` sends a private warning to that player.
-* `/ban name minutes reason` removes that player and blocks their account
+* `/ban name minutes reason` removes that player and blocks their account and IP
   for **1–960 whole minutes**. For example: `/ban Hunter 30 Repeated spam`.
 
 Use the name of a player in your current room. Commands are case-insensitive;
@@ -64,8 +64,17 @@ normal `git pull` does not conflict with edits to the tracked Python file.
 
 Timed bans are stored beside `users.db` in `users.db.moderation.sqlite3` and
 expire automatically, including after a server restart. Keep this file with
-your host backups. Bans apply to the account, so players sharing an IP are
-unaffected.
+your host backups. New bans block alternate accounts using the banned IP and
+disconnect sessions already logged in from it. Other people sharing that public
+IP are affected too. The target account remains banned even if its IP changes;
+another account on a different network or VPN is outside an IP ban's coverage.
+Existing account-only bans remain valid without rewriting the database.
+
+The server confirms a saved ban before disconnect cleanup, so a slow target connection
+does not delay confirmation. If the moderator still sees "The game server did
+not answer", verify that the running game backend has been restarted with this
+version. A missing or localhost player IP produces an explicit rejection asking
+the host to check the bridge/proxy, instead of banning a shared proxy address.
 
 This update changes the game server. When running the default `tools/host.py`
 setup (including `boxhead.service`), **`git pull` automatically restarts the

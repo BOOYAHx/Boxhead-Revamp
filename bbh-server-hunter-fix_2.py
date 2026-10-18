@@ -124,11 +124,14 @@ def clean_moderation_message(message):
 
 
 def open_moderation_store():
-    """Keep timed account bans on the host, independent of a player's IP or slot."""
+    """Keep timed account and network bans on the host across restarts."""
     connection = sqlite3.connect(DB_FILE + '.moderation.sqlite3', timeout=10)
     try:
         connection.execute('CREATE TABLE IF NOT EXISTS account_bans ('
                            'account_id TEXT PRIMARY KEY, expires_at REAL NOT NULL, '
+                           'reason TEXT NOT NULL, moderator_id TEXT NOT NULL)')
+        connection.execute('CREATE TABLE IF NOT EXISTS ip_bans ('
+                           'ip_address TEXT PRIMARY KEY, expires_at REAL NOT NULL, '
                            'reason TEXT NOT NULL, moderator_id TEXT NOT NULL)')
         connection.commit()
         return connection
@@ -152,10 +155,49 @@ def active_account_ban(account_id, now=None):
         return {'minutes': max(1, math.ceil((record[0] - now) / 60)), 'reason': record[1]}
 
 
-def save_account_ban(account_id, minutes, reason, moderator_id):
+def network_ban_ip(address):
+    """Canonical client IP; a missing/local proxy address must never ban everyone."""
+    if not isinstance(address, str):
+        return None
+    try:
+        address = ipaddress.ip_address(address)
+    except ValueError:
+        return None
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    if address.is_loopback or address.is_unspecified or address.is_multicast:
+        return None
+    return str(address)
+
+
+def active_ip_ban(ip_address, now=None):
+    ip_address = network_ban_ip(ip_address)
+    if ip_address is None or not os.path.exists(DB_FILE + '.moderation.sqlite3'):
+        return None
+    now = time.time() if now is None else now
+    with closing(open_moderation_store()) as connection, connection:
+        record = connection.execute('SELECT expires_at, reason FROM ip_bans WHERE ip_address=?',
+                                    (ip_address,)).fetchone()
+        if record is None:
+            return None
+        if record[0] <= now:
+            connection.execute('DELETE FROM ip_bans WHERE ip_address=?', (ip_address,))
+            return None
+        return {'minutes': max(1, math.ceil((record[0] - now) / 60)), 'reason': record[1]}
+
+
+def save_account_ban(account_id, minutes, reason, moderator_id, ip_address=None):
+    # Both records commit together, with the same expiry.
+    expires_at = time.time() + minutes * 60
     with closing(open_moderation_store()) as connection, connection:
         connection.execute('INSERT OR REPLACE INTO account_bans VALUES (?, ?, ?, ?)',
-                           (str(account_id), time.time() + minutes * 60, reason, str(moderator_id)))
+                           (str(account_id), expires_at, reason, str(moderator_id)))
+        if ip_address is not None:
+            connection.execute('INSERT INTO ip_bans VALUES (?, ?, ?, ?) '
+                               'ON CONFLICT(ip_address) DO UPDATE SET expires_at=excluded.expires_at, '
+                               'reason=excluded.reason, moderator_id=excluded.moderator_id '
+                               'WHERE excluded.expires_at > ip_bans.expires_at',
+                               (ip_address, expires_at, reason, str(moderator_id)))
 
 
 def log_player_ip(username, ip_address):
@@ -1118,7 +1160,8 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
 
     def reject_banned_login(self, account_id):
         try:
-            ban = active_account_ban(account_id)
+            ban = active_account_ban(account_id) or active_ip_ban(
+                getattr(self, 'player_ip', self.client_address[0]))
         except (OSError, sqlite3.Error) as error:
             print(f'[MOD BAN] Could not check bans: {error}')
             self.send(b'10;0;Unable to check account bans. Please try again later.\x00')
@@ -1167,26 +1210,38 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                 if target_account == self.account_id:
                     self.moderation_result('You cannot ban yourself.')
                     return
+                target_ip = network_ban_ip(target_user.get('player_ip'))
+                if target_ip is None:
+                    self.moderation_result('Ban not applied: real player IP unavailable. Check the bridge/proxy configuration.')
+                    return
                 try:
-                    save_account_ban(target_account, minutes, reason, self.account_id)
+                    save_account_ban(target_account, minutes, reason, self.account_id, target_ip)
                 except (OSError, sqlite3.Error) as error:
                     print(f'[MOD BAN] Could not save ban: {error}')
                     self.moderation_result('Ban could not be saved. Player was not banned.')
                     return
                 with SESSIONS_LOCK:
-                    owns_cleanup = USERS.get(target_account) is target_user and not target_user.get('closing')
-                    if owns_cleanup:
-                        target_user['closing'] = True
+                    affected = []
+                    for account, user in list(USERS.items()):
+                        if (account == target_account or network_ban_ip(user.get('player_ip')) == target_ip) and not user.get('closing'):
+                            user['closing'] = True
+                            affected.append((account, user))
 
         if is_ban:
-            try:
-                target_user['socket'].sendall(f'0e{minutes}; {reason}\x00'.encode('utf-8'))
-            except OSError:
-                pass
-            finally:
-                if owns_cleanup:
-                    self.close_reserved_session(target_account, target_user)
-            self.moderation_result(f'Banned {name} for {minutes} minute(s): {reason}')
+            # Confirm durable enforcement before any slow socket or room cleanup.
+            self.moderation_result(f'Banned {name} for {minutes} minute(s) (account + IP): {reason}')
+            for account, user in affected:
+                try:
+                    user['socket'].sendall(f'0e{minutes}; {reason}\x00'.encode('utf-8'))
+                except OSError:
+                    pass
+                finally:
+                    try:
+                        self.close_reserved_session(account, user)
+                    except Exception as error:
+                        # One room's cleanup must not leave the other banned sessions connected.
+                        print(f'[MOD BAN] Session cleanup for {account} failed: {error!r}')
+                        traceback.print_exc()
         else:
             try:
                 target_user['socket'].sendall(f'0g{reason}\x00'.encode('utf-8'))
@@ -1547,6 +1602,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                     USERS[acc_id] = {
                         "username": username, "display_username": display_username,
                         "socket": self.request, "room": None,
+                        "player_ip": client_ip,
                         "slot": SLOTS.allocate(acc_id), "session_id": uuid.uuid4().hex,
                         "hp": 100, "score": 1000, "kills": 0,
                         "deaths": 0, "bounty_points": 0,
@@ -1566,7 +1622,8 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
 
         # Everything below requires auth
         elif (not getattr(self, "account_id", None)
-              or USERS.get(self.account_id, {}).get("socket") is not self.request):
+              or USERS.get(self.account_id, {}).get("socket") is not self.request
+              or USERS.get(self.account_id, {}).get('closing')):
             # ignore any pre-auth junk
             return
 

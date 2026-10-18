@@ -75,21 +75,29 @@ greater than zero or `MODERATOR_USERNAMES`), never from client-supplied roles.
 | Client sends | Meaning |
 | --- | --- |
 | `0g<target3><message>` | private moderator warning |
-| `0e<target3>;<minutes>;<reason>` | timed account ban (1–960 whole minutes) |
+| `0e<target3>;<minutes>;<reason>` | timed account and IP ban (1–960 whole minutes) |
 
 | Server sends | Meaning |
 | --- | --- |
 | `0g<message>` | warning to the target only |
-| `0e<minutes>; <reason>` | ban to the target only, also returned on a banned login |
+| `0e<minutes>; <reason>` | ban to affected sessions, also returned on a banned login |
 | `0t<message>` | private command result to the requesting moderator |
 
 Non-moderator requests are denied and never relayed. Incoming client `0t`
 packets are discarded. Empty reasons, invalid durations and self-bans are
 rejected. Messages have control characters removed and are capped at 240
-characters. A ban is durably recorded before disconnecting the player, removing
-their room membership and deployables, and releasing their slot. The host's
-`users.db.moderation.sqlite3` persists bans across restarts; expired bans allow
-login again. Shared IPs are unaffected.
+characters. The account ban and the authenticated session's IP ban are committed
+together before confirmation and disconnect cleanup. Already connected accounts
+sharing that IP are also closed; packets from sessions marked for closure are
+ignored. New and existing alternate accounts on the banned IP cannot log in.
+Login admission and bans share the moderation lock, including the check after
+duplicate-session cleanup. A shorter ban cannot reduce an existing IP ban.
+The host's `users.db.moderation.sqlite3` persists both bans across restarts and
+automatically adds the IP table to older databases. Expired bans allow login
+again. The original account stays banned if its IP changes; alternate accounts
+on another network or VPN are outside IP enforcement. Shared public IPs are
+affected. A missing, loopback, unspecified or multicast IP rejects the command
+with an explicit result rather than banning a shared proxy address.
 
 ## In game
 
