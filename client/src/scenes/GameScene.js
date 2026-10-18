@@ -991,6 +991,23 @@ export class GameScene extends Phaser.Scene {
     this.updateScores();
   }
 
+  /** Buy affordable preferred guns without interrupting the player's weapon selection. */
+  autoBuyWeapons() {
+    if (!Preferences.autoBuyWeapons || !this.shop || !this.ui || !this.player || this.loadingMap || this.gameOver) return;
+    if (this.mode === 'online' && (!this.connection?.authenticated || !this.connection?.connected)) return;
+    const purchases = this.shop.autoBuy(performance.now());
+    if (!purchases.length) return;
+    const pendingSelection = this.autoSelectWeapon;
+    for (const result of purchases) {
+      this.purchased(result); // inventory, weapon banks and the normal multiplayer purchase message
+      this.hud.addMessage('Auto bought ' + result.weapon.name + '.', { local: true });
+    }
+    // An automatic purchase must not change the weapon the player chose.
+    this.autoSelectWeapon = pendingSelection;
+    this.ui.shop.refresh();
+    this.app?.playSound('ClickLong');
+  }
+
   /** ShopGame.refillCurrentWeapon (R / Delete): ammo for the emptied gun, or the one in hand. */
   refillCurrentWeapon() {
     const p = this.player;
@@ -1623,6 +1640,7 @@ export class GameScene extends Phaser.Scene {
     if (this.connection) while (this.connection.equipmentMessages.length) this.equipment.serverMessage(this.connection.equipmentMessages.shift());
     for (const { index, source } of this.equipmentActivations) this.equipment.activateMine(index, source);
     this.equipmentActivations = [];
+    this.autoBuyWeapons();
     // ShopGame.process: death opens the shop after 3 s.
     if (Preferences.autoShop && this.autoShopTime && performance.now() >= this.autoShopTime) {
       this.autoShopTime = 0;
@@ -1787,4 +1805,3 @@ export class GameScene extends Phaser.Scene {
     this.player = null;
   }
 }
-

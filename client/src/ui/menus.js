@@ -528,10 +528,25 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
   // "Enhanced Graphics" (this edition's sharper picture and effects) is added the same way.
   const fps = screen.child('showFPSTickBox');
   const row = footsteps.y - fps.y > 0 ? footsteps.y - fps.y : 24;
-  const extras = [['autoReload', 'Auto Reload'], ['enhanced', 'Enhanced Graphics'], ['autoAssignAK', 'Auto Assign AK-47']].map(([key, label]) => {
+  const extras = [['autoReload', 'Auto Reload'], ['autoBuyWeapons', 'Auto Buy Weapons'], ['enhanced', 'Enhanced Graphics'], ['autoAssignAK', 'Auto Assign AK-47']].map(([key, label]) => {
     const tick = lib.create('MMOcha.lobby.OptionTickBox');
     tick.matrix = [...fps.matrix];
     tick.y = footsteps.y;
+    if (key === 'autoBuyWeapons') {
+      tick.el.setAttribute('role', 'checkbox');
+      tick.el.setAttribute('aria-label', label);
+      tick.el.setAttribute('tabindex', '0');
+      tick.on('change', () => tick.el.setAttribute('aria-checked', String(tick.ticked)));
+      tick.on('keydown', (event) => {
+        if (event.key !== ' ' && event.key !== 'Enter') return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) tick.el.dispatchEvent(new MouseEvent('click'));
+      });
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = 'Buys Rifle, Plasma and Magnum with your cash, cheapest unowned first. Refunded guns stay manual until the next round.';
+      tick.el.appendChild(title);
+    }
     for (const name of ['footstepsSelector', 'controlsButton', 'weaponsButton']) screen.child(name).y += row;
     screen.addChild(tick);
     return { key, label, tick };
@@ -558,7 +573,10 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
   const display = () => {
     volume.displayOptions('Volume', Preferences.volume);
     for (const [name, [label, key]] of Object.entries(ticks)) screen.child(name)?.displayOption(label, Preferences[key]);
-    for (const { key, label, tick } of extras) tick.displayOption(label, Preferences[key]);
+    for (const { key, label, tick } of extras) {
+      tick.displayOption(label, Preferences[key]);
+      if (key === 'autoBuyWeapons') tick.el.setAttribute('aria-checked', String(tick.ticked));
+    }
     footsteps.displayOptions('Footstep Sounds', [FOOTSTEPS.OFF, FOOTSTEPS.PLAYER, FOOTSTEPS.ON], Preferences.footsteps);
     npcs.displayOptions('Practice NPCs', npcChoices, Preferences.npcs);
   };

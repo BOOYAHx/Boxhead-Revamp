@@ -39,6 +39,7 @@ export const UPGRADE2_ACTION = '2';
 export const REFUND_ACTION = '3'; // RefundPage
 export const REFUND_TIME = 60000; // ms a gun can be returned after buying it
 const REFUND_REPEAT = 350; // ms between refunds
+const AUTO_BUY_WEAPONS = [WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM];
 const BIG_PACKS = [WeaponID.AKIMBO_UZIS, WeaponID.AK47, WeaponID.M16, WeaponID.MINIGUN, WeaponID.FLAMER];
 // AutoReload: guns it refills when one round is left.
 const RELOADABLE = [
@@ -135,6 +136,7 @@ export class ShopState {
     this.equipment = EQUIPMENT_ROWS.map(([name, id]) => new ShopItem(name, id, true));
     this.receipts = new Map(); // weapon id -> { price, upgrade1, upgrade2, deadline, used }
     this.lastRefund = -Infinity;
+    this.autoBuyExcluded = new Set(); // a refund must not immediately buy the gun back
   }
 
   item(id) {
@@ -145,6 +147,20 @@ export class ShopState {
   /** Everything bought, weapons first (Shop.getOwnedWeapons). */
   ownedWeapons() {
     return [...this.weapons, ...this.equipment].filter((i) => i.owned).map((i) => i.weapon);
+  }
+
+  /** Buy only the three requested guns, cheapest unowned first, using normal prices/receipts. */
+  autoBuy(now = 0) {
+    const items = AUTO_BUY_WEAPONS.map((id) => this.item(id))
+      .filter((item) => item && !item.owned && !item.blocked && !this.autoBuyExcluded.has(item.id))
+      .sort((a, b) => a.fillCost - b.fillCost);
+    const purchases = [];
+    for (const item of items) {
+      if (this.money < item.fillCost) break;
+      const result = this.buy(item.id, now);
+      if (result.ok) purchases.push(result);
+    }
+    return purchases;
   }
 
   /**
@@ -227,6 +243,7 @@ export class ShopState {
     if (!item || !receipt || receipt.used || !item.owned || now - this.lastRefund < REFUND_REPEAT || now > receipt.deadline) return { ok: false, sound: null };
     this.lastRefund = now;
     receipt.used = true;
+    this.autoBuyExcluded.add(id);
     const old = item.weapon;
     item.owned = false;
     item.weapon = item.newWeapon();
