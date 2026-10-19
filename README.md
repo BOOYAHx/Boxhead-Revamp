@@ -392,12 +392,14 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
   respawn when you close it. "Auto Reload" in Options refills a gun when it is
   down to its last round.
 - **Auto Buy Weapons** in Options (off by default, saved in your browser):
-  automatically buys the cheapest unowned Shotgun ($7,000), Rifle ($8,500),
-  Plasma Cannon ($23,000), or Magnum ($30,000) when your current cash covers its shop price.
+  waits until you manually buy the Shotgun ($7,000) each round. It then buys
+  the cheapest unowned Rifle ($8,500), Plasma Cannon ($23,000), or Magnum
+  ($30,000) when your current cash covers its shop price.
   Each purchase deducts cash before checking the next gun. Works online and in
   practice, including the initial shop; it does not switch your held weapon or
   buy ammo/upgrades. Refunding a gun excludes it from Auto Buy until the next
-  round, so it stays refunded. Turn the toggle off to stop automatic spending.
+  round, so it stays refunded. Refunding the Shotgun pauses Auto Buy until you
+  manually buy it again. Turn the toggle off to stop automatic spending.
 - "Auto Assign AK-47" in Options (off unless ticked): buying the AK-47 puts
   your Weapon Bank 1 key on the AK-47's bank, and that bank's key on bank 1,
   for the rest of that game. Your saved controls do not change: the keys are

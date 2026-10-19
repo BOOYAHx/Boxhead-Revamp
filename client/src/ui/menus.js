@@ -545,7 +545,7 @@ export function createOptionsScreen(lib, { changed: onChange, close: onClose, co
         if (!event.repeat) tick.el.dispatchEvent(new MouseEvent('click'));
       });
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-      title.textContent = 'Buys Shotgun, Rifle, Plasma and Magnum with your cash, cheapest unowned first. Refunded guns stay manual until the next round.';
+      title.textContent = 'Buy Shotgun manually each round to start Auto Buy for Rifle, Plasma and Magnum, cheapest unowned first. Refunding Shotgun pauses Auto Buy; other refunded guns stay manual until the next round.';
       tick.el.appendChild(title);
     }
     for (const name of ['footstepsSelector', 'controlsButton', 'weaponsButton']) screen.child(name).y += row;
