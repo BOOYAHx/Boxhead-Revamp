@@ -39,7 +39,7 @@ export const UPGRADE2_ACTION = '2';
 export const REFUND_ACTION = '3'; // RefundPage
 export const REFUND_TIME = 60000; // ms a gun can be returned after buying it
 const REFUND_REPEAT = 350; // ms between refunds
-const AUTO_BUY_WEAPONS = [WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM];
+const AUTO_BUY_WEAPONS = [WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM];
 const BIG_PACKS = [WeaponID.AKIMBO_UZIS, WeaponID.AK47, WeaponID.M16, WeaponID.MINIGUN, WeaponID.FLAMER];
 // AutoReload: guns it refills when one round is left.
 const RELOADABLE = [
@@ -149,7 +149,7 @@ export class ShopState {
     return [...this.weapons, ...this.equipment].filter((i) => i.owned).map((i) => i.weapon);
   }
 
-  /** Buy only the three requested guns, cheapest unowned first, using normal prices/receipts. */
+  /** Buy only the four requested guns, cheapest unowned first, using normal prices/receipts. */
   autoBuy(now = 0) {
     const items = AUTO_BUY_WEAPONS.map((id) => this.item(id))
       .filter((item) => item && !item.owned && !item.blocked && !this.autoBuyExcluded.has(item.id))

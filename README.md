@@ -392,8 +392,8 @@ python tools/build_assets.py --bbh BBH.swf --assets assets.swf --constants const
   respawn when you close it. "Auto Reload" in Options refills a gun when it is
   down to its last round.
 - **Auto Buy Weapons** in Options (off by default, saved in your browser):
-  automatically buys the cheapest unowned Rifle ($8,500), Plasma Cannon
-  ($23,000), or Magnum ($30,000) when your current cash covers its shop price.
+  automatically buys the cheapest unowned Shotgun ($7,000), Rifle ($8,500),
+  Plasma Cannon ($23,000), or Magnum ($30,000) when your current cash covers its shop price.
   Each purchase deducts cash before checking the next gun. Works online and in
   practice, including the initial shop; it does not switch your held weapon or
   buy ammo/upgrades. Refunding a gun excludes it from Auto Buy until the next
