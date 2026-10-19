@@ -217,21 +217,19 @@ test('the Pistol stays the default: bots only take out a bought gun to fight', (
   assert.equal(hard.npc.weapon.id, WeaponID.PISTOL, 'Hard walks with the Pistol, not the Magnum');
 });
 
-test('Super Hard bots start with Shotgun and Rifle, aim like a person and chain guns without a pause', () => {
+test('Super Hard bots start with Shotgun and Rifle, aim very fast (not instantly) and chain guns without a pause', () => {
   const { npc } = bot('Super Hard');
   assert.ok(npc.weaponByID(WeaponID.SHOTGUN) && npc.weaponByID(WeaponID.RIFLE));
   assert.equal(cleanSettings({ difficulty: 'Super Hard' }).difficulty, 'Super Hard');
   const { npc: s, brain, world } = duel('Super Hard');
   brain.update(world(0));
+  assert.equal(s.firing, false, 'not on the very first look');
   brain.update(world(50));
   brain.update(world(100));
-  brain.update(world(150));
-  assert.equal(s.firing, false, 'no instant shot: it reacts like a person');
-  brain.update(world(250));
-  assert.equal(s.firing, true, 'a fifth of a second later it fires');
+  assert.equal(s.firing, true, 'a tenth of a second later it fires');
   assert.equal(s.weapon.id, WeaponID.PLASMA);
   s.weapon.timeSinceFire = 0;
-  brain.update(world(260));
+  brain.update(world(110));
   assert.equal(s.weapon.id, WeaponID.SHOTGUN, 'the next gun straight away');
 });
 
@@ -270,7 +268,7 @@ test('Super Hard bots need a moment to notice a gun pointed at them before they 
     if (brain.dodgeUntil > 0) dodged = t;
   }
   assert.ok(dodged !== null, 'it does dodge');
-  assert.ok(dodged >= 200, `not before a person could react (dodged at ${dodged} ms)`);
+  assert.ok(dodged >= 50, `not on the very first look (dodged at ${dodged} ms)`);
 });
 
 test('Super Hard bots: same guns, health, damage, speed and respawn time as before', () => {
