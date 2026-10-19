@@ -663,10 +663,13 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   **Super Hard** bots aim and react like a quick person, not a machine: they see
   you about 0.12 s late and take a moment to line up (about 0.2 s before the
   first shot), so strafing off their line makes them miss, and they dodge only
-  once they notice a gun on them (0.2 s). They make up for it with tactics:
-  they come at you from the side instead of down the line you face, dodge
-  even mid-fight, hunt you first, chase every crate within reach, start with the Shotgun and
-  the Rifle, earn double money from crates and chain their guns with no pause.
+  once they notice a gun on them (0.2 s). Their health, damage taken and
+  speed are a player's too. They make up for it with everything else: they
+  start with every gun (Shotgun, Rifle, Plasma Cannon, Magnum), come back
+  twice as fast after dying (2.5 s), earn triple money from crates, come at
+  you from the side instead of down the line you face, always dodge once
+  they notice, even mid-fight, hunt you before the other bots, chase every
+  crate within reach and chain their guns with no pause.
   Every bot's default gun is the Pistol: it respawns with it and holds it while
   walking about, switching to a bought gun to fight.
 * **Starting Money**: $10,000 to $100,000 each round.
