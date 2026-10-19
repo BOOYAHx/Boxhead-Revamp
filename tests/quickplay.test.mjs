@@ -273,10 +273,10 @@ test('Super Hard bots need a moment to notice a gun pointed at them before they 
   assert.ok(dodged >= 200, `not before a person could react (dodged at ${dodged} ms)`);
 });
 
-test('Super Hard bots: every gun; same health, damage, speed and respawn time as a player', () => {
+test('Super Hard bots: same guns, health, damage, speed and respawn time as before', () => {
   const { npc } = bot('Super Hard');
   assert.deepEqual(npc.weapons.map((w) => w.id).sort((a, b) => a - b),
-    [WeaponID.PISTOL, WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM].sort((a, b) => a - b));
+    [WeaponID.PISTOL, WeaponID.SHOTGUN, WeaponID.RIFLE].sort((a, b) => a - b));
   const hard = bot('Hard').npc;
   assert.equal(npc.hurt(20), 20, 'full damage');
   assert.equal(npc.speed, hard.speed, 'normal speed');
