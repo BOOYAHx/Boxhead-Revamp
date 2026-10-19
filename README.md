@@ -668,8 +668,10 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   else: they start with the Shotgun and the Rifle, earn double money from
   crates, come at
   you from the side instead of down the line you face, always dodge once
-  they notice, even mid-fight, hunt you before the other bots, chase every
-  crate within reach and chain their guns with no pause.
+  they notice, even mid-fight (they also notice a gun aimed close to them,
+  not only right at them, and step further out of its line), hunt you
+  before the other bots (you count as 5 times closer), chase crates from
+  far across the map and chain their guns with no pause.
   Every bot's default gun is the Pistol: it respawns with it and holds it while
   walking about, switching to a bought gun to fight.
 * **Starting Money**: $10,000 to $100,000 each round.
