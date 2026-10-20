@@ -63,7 +63,8 @@ export const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Super Hard'];
  * the enemy it sees (it aims where they were, like a person reacting; 0 for
  * where they are now); flank: keep out of the line the enemy faces when
  * closing in; dodgeFirst: step off a line even when about to shoot; react:
- * ms an enemy must aim at it before it notices and dodges (0: at once).
+ * ms an enemy must aim at it before it notices and dodges (0: at once);
+ * respawn: ms dead before coming back (default RESPAWN_TIME).
  */
 export const LEVELS = Object.freeze({
   // Easy fights exactly like the original practice bots did (before there were difficulties).
@@ -71,9 +72,13 @@ export const LEVELS = Object.freeze({
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
   Hard: { think: 95, aim: 115, dodge: 0.72, playerBias: 0.75, crates: 10, cycle: true, switchDelay: 170 },
   // Super Hard: a person's aim and reflexes (it sees you sight ms late and takes aim ms to line up, so strafing
-  // beats it; it dodges react ms after you aim at it), but quick plans, flanking, dodging even mid-fight, hunting the human, guns chained with no pause
-  // and crates that pay it double (crateMoney), so it reaches the Plasma Cannon and Magnum early.
-  'Super Hard': { think: 50, aim: 80, sight: 120, react: 200, dodge: 0.95, playerBias: 0.55, crates: 14, cycle: true, switchDelay: 0, crateMoney: 2, flank: true, dodgeFirst: true },
+  // beats it; it dodges react ms after you aim at it), and a player's health and speed. Its edge is the rest:
+  // it comes back twice as fast, starts with every gun, earns triple crate money, plans fast, flanks, always
+  // dodges once it notices, and hunts the human above all.
+  'Super Hard': {
+    think: 40, aim: 80, sight: 120, react: 200, dodge: 1, playerBias: 0.4, crates: 16, cycle: true, switchDelay: 0,
+    crateMoney: 3, flank: true, dodgeFirst: true, respawn: 2500,
+  },
 });
 /** The gun every bot starts each round with (full of ammo; it buys more shells later). */
 export const STARTING_GUN = WeaponID.SHOTGUN;
@@ -84,7 +89,7 @@ export const SHOPPING = Object.freeze({
   Easy: { guns: BUY_ORDER, refillBelow: 0.2 },
   Medium: { guns: BUY_ORDER, refillBelow: 0.3 },
   Hard: { guns: BUY_ORDER, refillBelow: 0.5 },
-  'Super Hard': { guns: BUY_ORDER, refillBelow: 0.7, start: [WeaponID.SHOTGUN, WeaponID.RIFLE] },
+  'Super Hard': { guns: BUY_ORDER, refillBelow: 0.9, start: [WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM] },
 });
 const SHOP_TIME = 1000; // ms between shopping trips (sooner when a gun runs dry)
 export const levelFor = (difficulty) => LEVELS[difficulty] || LEVELS.Medium;
@@ -306,6 +311,7 @@ export class NpcBrain {
     if (!ch.active || ch.dead) {
       ch.moveDir = null;
       ch.firing = false;
+      if (ch.dead && this.level.respawn && ch.respawnTime > this.level.respawn) ch.respawnTime = this.level.respawn;
       return;
     }
     if (now >= this.nextShop || !ch.weapon.available) {
