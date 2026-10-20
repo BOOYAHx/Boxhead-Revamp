@@ -72,13 +72,12 @@ export const LEVELS = Object.freeze({
   Easy: { think: 100, aim: 120, dodge: 0.75, playerBias: 0.8, crates: 3, cycle: false },
   Medium: { think: 140, aim: 200, dodge: 0.5, playerBias: 0.9, crates: 5, cycle: false },
   Hard: { think: 95, aim: 115, dodge: 0.72, playerBias: 0.75, crates: 10, cycle: true, switchDelay: 170 },
-  // Super Hard: very sharp aim and reflexes, just short of perfect (it sees you sight ms late and takes aim ms
-  // to line up, about 0.07 s to the first shot, so a quick strafe can still beat it; it dodges react ms after
-  // you aim at it), and a player's health, speed and respawn time. Its other edge
+  // Super Hard: a person's aim and reflexes (it sees you sight ms late and takes aim ms to line up, so strafing
+  // beats it; it dodges react ms after you aim at it), and a player's health, speed and respawn time. Its edge
   // is the rest: it starts with the Shotgun and Rifle, earns double crate money, plans fast, flanks, always
   // dodges once it notices, and hunts the human above all.
   'Super Hard': {
-    think: 20, aim: 30, sight: 40, react: 50, dodge: 1, dodgeMargin: 0.7, dodgeTime: 450, playerBias: 0.2,
+    think: 20, aim: 80, sight: 120, react: 200, dodge: 1, dodgeMargin: 0.7, dodgeTime: 450, playerBias: 0.2,
     crates: 24, cycle: true, switchDelay: 0, crateMoney: 2, flank: true, dodgeFirst: true,
   },
 });

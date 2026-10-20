@@ -662,10 +662,10 @@ Pressing **Quick Play** first shows its setup (kept in the browser for next time
   crates nearby (unless a fight is right next to them) and chain their guns like
   good players: Plasma, then Shotgun, then Rifle, then Magnum (each gun reloads
   on its own, so switching fires the next one; each switch takes them a moment).
-  **Super Hard** bots aim and react very fast, just short of perfect: they see
-  you about 0.04 s late and line up in 0.03 s (about 0.07 s before the first
-  shot), so only a quick strafe off their line makes them miss, and they dodge
-  0.05 s after they notice a gun on them. Their health, damage taken, speed
+  **Super Hard** bots aim and react like a quick person, not a machine: they see
+  you about 0.12 s late and take a moment to line up (about 0.2 s before the
+  first shot), so strafing off their line makes them miss, and they dodge only
+  once they notice a gun on them (0.2 s). Their health, damage taken, speed
   and respawn time are a player's too. They make up for it with everything
   else: they start with the Shotgun and the Rifle, earn double money from
   crates, come at
