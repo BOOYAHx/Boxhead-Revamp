@@ -63,7 +63,9 @@ export const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Super Hard'];
  * the enemy it sees (it aims where they were, like a person reacting; 0 for
  * where they are now); flank: keep out of the line the enemy faces when
  * closing in; dodgeFirst: step off a line even when about to shoot; react:
- * ms an enemy must aim at it before it notices and dodges (0: at once).
+ * ms an enemy must aim at it before it notices and dodges (0: at once);
+ * dodgeMargin: how far (cells) off an enemy's line still counts as aimed at
+ * (default 0.3, wider dodges sooner); dodgeTime: ms of each sidestep (default DODGE_TIME).
  */
 export const LEVELS = Object.freeze({
   // Easy fights exactly like the original practice bots did (before there were difficulties).
@@ -75,8 +77,8 @@ export const LEVELS = Object.freeze({
   // is the rest: it starts with the Shotgun and Rifle, earns double crate money, plans fast, flanks, always
   // dodges once it notices, and hunts the human above all.
   'Super Hard': {
-    think: 40, aim: 80, sight: 120, react: 200, dodge: 1, playerBias: 0.4, crates: 16, cycle: true, switchDelay: 0,
-    crateMoney: 2, flank: true, dodgeFirst: true,
+    think: 20, aim: 80, sight: 120, react: 200, dodge: 1, dodgeMargin: 0.7, dodgeTime: 450, playerBias: 0.2,
+    crates: 24, cycle: true, switchDelay: 0, crateMoney: 2, flank: true, dodgeFirst: true,
   },
 });
 /** The gun every bot starts each round with (full of ammo; it buys more shells later). */
@@ -419,7 +421,7 @@ export class NpcBrain {
         const dx = ch.pos.x - e.pos.x;
         const dy = ch.pos.y - e.pos.y;
         const along = dx * e.dir.dx + dy * e.dir.dy;
-        return along > 0 && Math.abs(dx * e.dir.dy - dy * e.dir.dx) < FIRE_RADIUS + 0.3 && clearShot(map, e.pos, ch.pos);
+        return along > 0 && Math.abs(dx * e.dir.dy - dy * e.dir.dx) < FIRE_RADIUS + (this.level.dodgeMargin ?? 0.3) && clearShot(map, e.pos, ch.pos);
       });
       // A person needs a moment to notice a gun pointed at them.
       if (threat !== this.threat) {
@@ -432,7 +434,7 @@ export class NpcBrain {
       if (threat && noticed && (this.level.dodgeFirst || !readyToShoot) && this.random() < this.level.dodge) {
         const side = this.random() < 0.5 ? 1 : -1;
         this.dodgeDir = facingFor(-threat.dir.dy * side, threat.dir.dx * side);
-        this.dodgeUntil = now + DODGE_TIME;
+        this.dodgeUntil = now + (this.level.dodgeTime || DODGE_TIME);
       }
     }
 
