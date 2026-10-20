@@ -72,11 +72,11 @@ export const LEVELS = Object.freeze({
   Hard: { think: 95, aim: 115, dodge: 0.72, playerBias: 0.75, crates: 10, cycle: true, switchDelay: 170 },
   // Super Hard: a person's aim and reflexes (it sees you sight ms late and takes aim ms to line up, so strafing
   // beats it; it dodges react ms after you aim at it), and a player's health, speed and respawn time. Its edge
-  // is the rest: it starts with the Shotgun and Rifle, earns double crate money, plans fast, flanks, always
-  // dodges once it notices, and hunts the human above all.
+  // is the rest: it starts with every gun, earns triple crate money, plans fast, flanks, always dodges once it
+  // notices, and hunts the human above all.
   'Super Hard': {
     think: 40, aim: 80, sight: 120, react: 200, dodge: 1, playerBias: 0.4, crates: 16, cycle: true, switchDelay: 0,
-    crateMoney: 2, flank: true, dodgeFirst: true,
+    crateMoney: 3, flank: true, dodgeFirst: true,
   },
 });
 /** The gun every bot starts each round with (full of ammo; it buys more shells later). */
@@ -88,7 +88,7 @@ export const SHOPPING = Object.freeze({
   Easy: { guns: BUY_ORDER, refillBelow: 0.2 },
   Medium: { guns: BUY_ORDER, refillBelow: 0.3 },
   Hard: { guns: BUY_ORDER, refillBelow: 0.5 },
-  'Super Hard': { guns: BUY_ORDER, refillBelow: 0.7, start: [WeaponID.SHOTGUN, WeaponID.RIFLE] },
+  'Super Hard': { guns: BUY_ORDER, refillBelow: 0.9, start: [WeaponID.SHOTGUN, WeaponID.RIFLE, WeaponID.PLASMA, WeaponID.MAGNUM] },
 });
 const SHOP_TIME = 1000; // ms between shopping trips (sooner when a gun runs dry)
 export const levelFor = (difficulty) => LEVELS[difficulty] || LEVELS.Medium;
