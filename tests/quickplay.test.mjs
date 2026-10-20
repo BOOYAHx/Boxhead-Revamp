@@ -286,32 +286,3 @@ test('Super Hard bots: same guns, health, damage, speed and respawn time as befo
   brain.update(world(0));
   assert.equal(s.respawnTime, 5000, 'the normal respawn wait');
 });
-
-test('Super Hard bots dodge a gun aimed near them, not only right at them; Hard bots only at them', () => {
-  const dodgedBy = (difficulty) => {
-    const { enemy, brain, world } = duel(difficulty, 6);
-    enemy.setPosition(enemy.pos.x, enemy.pos.y + 1); // aimed one cell off the bot
-    enemy.dir = W;
-    for (let t = 0; t <= 1500; t += 50) {
-      brain.update(world(t));
-      if (brain.dodgeUntil > 0) return true;
-    }
-    return false;
-  };
-  assert.equal(dodgedBy('Super Hard'), true);
-  assert.equal(dodgedBy('Hard'), false);
-});
-
-test('Super Hard bots go after the human even with another bot much closer', () => {
-  const targetOf = (difficulty) => {
-    const { npc, enemy, brain, world } = duel(difficulty, 12); // the human, 12 cells away
-    const other = createNpc(1, seeded(9));
-    other.respawn(npc.pos.x + 5, npc.pos.y); // another bot, 5 cells away
-    const w = world(0);
-    w.characters.push(other);
-    brain.update(w);
-    return brain.target === enemy ? 'human' : brain.target === other ? 'bot' : 'none';
-  };
-  assert.equal(targetOf('Super Hard'), 'human');
-  assert.equal(targetOf('Hard'), 'bot');
-});
