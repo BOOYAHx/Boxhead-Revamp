@@ -217,26 +217,34 @@ test('the Pistol stays the default: bots only take out a bought gun to fight', (
   assert.equal(hard.npc.weapon.id, WeaponID.PISTOL, 'Hard walks with the Pistol, not the Magnum');
 });
 
-test('Super Hard bots start with Shotgun and Rifle, fire the moment they are lined up and chain guns without a pause', () => {
+test('Super Hard bots start with Shotgun and Rifle, aim very fast (not instantly) and chain guns without a pause', () => {
   const { npc } = bot('Super Hard');
   assert.ok(npc.weaponByID(WeaponID.SHOTGUN) && npc.weaponByID(WeaponID.RIFLE));
   assert.equal(cleanSettings({ difficulty: 'Super Hard' }).difficulty, 'Super Hard');
   const { npc: s, brain, world } = duel('Super Hard');
   brain.update(world(0));
-  assert.equal(s.firing, true, 'fires at once');
+  assert.equal(s.firing, false, 'not on the very first look');
+  brain.update(world(50));
+  brain.update(world(100));
+  assert.equal(s.firing, true, 'a tenth of a second later it fires');
   assert.equal(s.weapon.id, WeaponID.PLASMA);
   s.weapon.timeSinceFire = 0;
   brain.update(world(110));
   assert.equal(s.weapon.id, WeaponID.SHOTGUN, 'the next gun straight away');
 });
 
-test('Super Hard bots follow a strafe at once', () => {
+test('Super Hard bots shoot where you were a moment ago: strafing off the line beats them', () => {
   const { npc, enemy, brain, world } = duel('Super Hard');
-  brain.update(world(0));
+  for (let t = 0; t <= 300; t += 50) brain.update(world(t));
+  assert.equal(npc.firing, true);
   assert.equal(npc.dir, E);
-  enemy.setPosition(enemy.pos.x, enemy.pos.y + 3); // stepped off the line
-  brain.update(world(50));
-  assert.notEqual(npc.dir, E, 'already turned to where you went');
+  enemy.setPosition(enemy.pos.x, enemy.pos.y + 3); // stepped off the line (the bot is at x 4.5, the enemy 6 cells east)
+  brain.update(world(350));
+  assert.equal(npc.dir, E, 'still shooting at the old spot');
+  assert.equal(npc.firing, true);
+  for (let t = 400; t <= 500; t += 50) brain.update(world(t));
+  assert.notEqual(npc.dir, E, 'then it turns to where you went');
+  assert.equal(npc.firing, false, 'and has to line up again');
 });
 
 test('Super Hard bots flank: they close in from the side, not down the line you face', () => {
@@ -251,7 +259,7 @@ test('Super Hard bots flank: they close in from the side, not down the line you 
   assert.ok(Math.abs(hard.brain.goal.y - hard.enemy.pos.y) < 0.01, 'Hard bots still walk straight down the line');
 });
 
-test('Super Hard bots dodge a gun pointed at them at once', () => {
+test('Super Hard bots need a moment to notice a gun pointed at them before they dodge', () => {
   const { enemy, brain, world } = duel('Super Hard');
   enemy.dir = W; // lined up on the bot
   let dodged = null;
@@ -260,7 +268,7 @@ test('Super Hard bots dodge a gun pointed at them at once', () => {
     if (brain.dodgeUntil > 0) dodged = t;
   }
   assert.ok(dodged !== null, 'it does dodge');
-  assert.ok(dodged <= 50, `at once (dodged at ${dodged} ms)`);
+  assert.ok(dodged >= 50, `not on the very first look (dodged at ${dodged} ms)`);
 });
 
 test('Super Hard bots: same guns, health, damage, speed and respawn time as before', () => {
