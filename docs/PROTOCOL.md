@@ -88,8 +88,10 @@ packets are discarded. Empty reasons, invalid durations and self-bans are
 rejected. Messages have control characters removed and are capped at 240
 characters. The account ban and the authenticated session's IP ban are committed
 together before confirmation and disconnect cleanup. Already connected accounts
-sharing that IP are also closed; packets from sessions marked for closure are
-ignored. New and existing alternate accounts on the banned IP cannot log in.
+sharing that IP are also closed (except the moderator and other moderators);
+packets from sessions marked for closure are ignored. When the target's real IP
+is unknown (local, proxy or invalid) or equals the moderator's own, only the
+account is banned, and the confirmation says so. New and existing alternate accounts on the banned IP cannot log in.
 Login admission and bans share the moderation lock, including the check after
 duplicate-session cleanup. A shorter ban cannot reduce an existing IP ban.
 The host's `users.db.moderation.sqlite3` persists both bans across restarts and

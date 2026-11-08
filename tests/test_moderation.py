@@ -339,14 +339,43 @@ class ModerationTests(unittest.TestCase):
                 self.assertIsNone(login.account_id)
                 self.assertIn(b'0e10; Network ban\x00', login.request.packets)
 
-    def test_local_proxy_or_invalid_addresses_are_not_banned(self):
+    def test_unknown_or_local_addresses_still_ban_the_account_but_never_the_ip(self):
+        # A player behind a tunnel or proxy, or on the host itself, still gets banned;
+        # only the IP part is skipped (it would ban everyone sharing that address).
         for address in [None, 'bad', '127.0.0.1', '::1', '::ffff:127.0.0.1', '0.0.0.0', '::', '224.0.0.1']:
             with self.subTest(address=address):
+                with closing(self.server.open_moderation_store()) as connection, connection:
+                    connection.execute('DELETE FROM account_bans')
+                self.target = self.player('200', 'Hunter', 0, 'Arena')
                 self.target['player_ip'] = address
                 self.ban()
-                self.assertFalse(self.target['socket'].closed)
-                self.assertIsNone(self.server.active_account_ban('200'))
-                self.assertIn(b'real player IP unavailable', self.mod['socket'].packets[-1])
+                self.assertTrue(self.target['socket'].closed)
+                self.assertIsNotNone(self.server.active_account_ban('200'))
+                self.assertIn(b'account only: their real IP is unknown', self.mod['socket'].packets[-1])
+                with closing(self.server.open_moderation_store()) as connection:
+                    self.assertEqual(connection.execute('SELECT COUNT(*) FROM ip_bans').fetchone()[0], 0)
+
+    def test_banning_someone_on_the_moderators_own_ip_never_bans_the_moderator(self):
+        self.mod['player_ip'] = '203.0.113.2'
+        self.target['player_ip'] = '203.0.113.2'
+        self.ban()
+        self.assertTrue(self.target['socket'].closed)
+        self.assertFalse(self.mod['socket'].closed)
+        self.assertIsNotNone(self.server.active_account_ban('200'))
+        self.assertIsNone(self.server.active_ip_ban('203.0.113.2'), 'the moderator could not log in again')
+        self.assertIn(b'account only: they share your IP', self.mod['socket'].packets[-1])
+
+    def test_an_ip_ban_spares_other_moderators_on_that_ip(self):
+        self.target['player_ip'] = '203.0.113.2'
+        helper = self.player('400', 'Helper', 1, 'Arena')
+        helper['player_ip'] = '203.0.113.2'
+        bystander = self.player('500', 'Bystander', 0, 'Arena')
+        bystander['player_ip'] = '203.0.113.2'
+        self.ban()
+        self.assertTrue(self.target['socket'].closed)
+        self.assertTrue(bystander['socket'].closed, 'other accounts on the banned IP are disconnected')
+        self.assertFalse(helper['socket'].closed, 'a moderator on that IP stays')
+        self.assertIn(b'(account + IP)', self.mod['socket'].packets[-1])
 
     def test_account_and_ip_ban_writes_are_atomic(self):
         with closing(self.server.open_moderation_store()) as connection, connection:

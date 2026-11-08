@@ -1210,26 +1210,40 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                 if target_account == self.account_id:
                     self.moderation_result('You cannot ban yourself.')
                     return
+                # The account ban always applies. The IP ban comes on top only when the
+                # player's real address is known (not a local/proxy one) and is not the
+                # moderator's own (same house): an IP ban there would lock the moderator out.
                 target_ip = network_ban_ip(target_user.get('player_ip'))
+                own_ip = network_ban_ip(USERS.get(self.account_id, {}).get('player_ip'))
                 if target_ip is None:
-                    self.moderation_result('Ban not applied: real player IP unavailable. Check the bridge/proxy configuration.')
-                    return
+                    ip_note = 'account only: their real IP is unknown, so no IP ban'
+                elif target_ip == own_ip:
+                    target_ip = None
+                    ip_note = 'account only: they share your IP, so no IP ban'
+                else:
+                    ip_note = 'account + IP'
                 try:
                     save_account_ban(target_account, minutes, reason, self.account_id, target_ip)
                 except (OSError, sqlite3.Error) as error:
                     print(f'[MOD BAN] Could not save ban: {error}')
                     self.moderation_result('Ban could not be saved. Player was not banned.')
                     return
+                # Moderators on the banned IP keep their sessions (checked before taking
+                # the session lock: the check takes the account database lock).
+                moderators = {account for account in list(USERS) if account_is_moderator(account)}
                 with SESSIONS_LOCK:
                     affected = []
                     for account, user in list(USERS.items()):
-                        if (account == target_account or network_ban_ip(user.get('player_ip')) == target_ip) and not user.get('closing'):
+                        same_ip = target_ip is not None and network_ban_ip(user.get('player_ip')) == target_ip
+                        if account == self.account_id or user.get('closing'):
+                            continue
+                        if account == target_account or (same_ip and account not in moderators):
                             user['closing'] = True
                             affected.append((account, user))
 
         if is_ban:
             # Confirm durable enforcement before any slow socket or room cleanup.
-            self.moderation_result(f'Banned {name} for {minutes} minute(s) (account + IP): {reason}')
+            self.moderation_result(f'Banned {name} for {minutes} minute(s) ({ip_note}): {reason}')
             for account, user in affected:
                 try:
                     user['socket'].sendall(f'0e{minutes}; {reason}\x00'.encode('utf-8'))

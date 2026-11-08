@@ -69,6 +69,12 @@ disconnect sessions already logged in from it. Other people sharing that public
 IP are affected too. The target account remains banned even if its IP changes;
 another account on a different network or VPN is outside an IP ban's coverage.
 Existing account-only bans remain valid without rewriting the database.
+The account is always banned. The IP is banned too only when the server knows
+the player's real address: a player on the host itself (`localhost`) or behind
+a tunnel or proxy that makes everyone look local gets an account-only ban, and
+so does a player on the moderator's own IP (otherwise the moderator would be
+locked out). Moderators on a banned IP keep their sessions. The reply says
+which kind of ban was applied.
 
 The server confirms a saved ban before disconnect cleanup, so a slow target connection
 does not delay confirmation. If the moderator still sees "The game server did
