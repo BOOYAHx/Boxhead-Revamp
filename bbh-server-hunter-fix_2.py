@@ -51,7 +51,8 @@ GAME_MODE_FFA = "A"
 GAME_MODE_TDM = "B"
 GAME_MODE_INFECTED = "C"
 GAME_MODE_LAST_SURVIVOR = "D"
-GAME_MODES = (GAME_MODE_FFA, GAME_MODE_TDM, GAME_MODE_INFECTED, GAME_MODE_LAST_SURVIVOR)
+GAME_MODE_LASER_TAG = "E"
+GAME_MODES = (GAME_MODE_FFA, GAME_MODE_TDM, GAME_MODE_INFECTED, GAME_MODE_LAST_SURVIVOR, GAME_MODE_LASER_TAG)
 FFA_MAX_PLAYERS = 16
 # Team Deathmatch: two teams (the client's BLUE_TEAM=2 and RED_TEAM=3 ids,
 # shown to players as "Team A" and "Team B").
@@ -83,8 +84,10 @@ USERS = {}  # account_id -> dict(socket, username, slot, room)
 # Helpers
 ###############################################################################
 
-# The Laser Gun (weapon 22, not in the original game): every online player carries it.
+# The Laser Gun (weapon 22, not in the original game) exists only in Laser Tag rooms,
+# where it and the Railgun are the only weapons.
 LASER_WEAPON = "22"
+LASER_TAG_WEAPONS = (LASER_WEAPON, "16")
 
 
 def is_configured_moderator(username):
@@ -324,6 +327,10 @@ def room_is_tdm(room) -> bool:
     return bool(room) and room.get("mode") == GAME_MODE_TDM
 
 
+def room_is_laser_tag(room) -> bool:
+    return bool(room) and room.get("mode") == GAME_MODE_LASER_TAG
+
+
 def room_has_teams(room) -> bool:
     """Team Deathmatch and Infected: teammates cannot hurt each other."""
     return room_is_tdm(room) or room_is_infected(room)
@@ -346,7 +353,7 @@ def is_private_room(room) -> bool:
 
 def room_is_unranked(room) -> bool:
     """Rounds in these rooms never change saved stats (anti stat-farming)."""
-    return room_is_tdm(room) or room_is_infected(room) or is_private_room(room)
+    return room_is_tdm(room) or room_is_infected(room) or room_is_laser_tag(room) or is_private_room(room)
 
 
 def room_name_key(name: str) -> str:
@@ -2126,7 +2133,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             creator["last_state"] = None
             creator["team"] = SURVIVORS if mode in (GAME_MODE_INFECTED, GAME_MODE_LAST_SURVIVOR) else TEAM_NONE
 
-            mode_name = {GAME_MODE_TDM: 'Team Deathmatch', GAME_MODE_INFECTED: 'Infected', GAME_MODE_LAST_SURVIVOR: 'Last Survivor'}.get(mode, 'FFA')
+            mode_name = {GAME_MODE_TDM: 'Team Deathmatch', GAME_MODE_INFECTED: 'Infected', GAME_MODE_LAST_SURVIVOR: 'Last Survivor', GAME_MODE_LASER_TAG: 'Laser Tag'}.get(mode, 'FFA')
             print(f"[+] {self.username} created {'private ' if header[2:3] == '1' else ''}{mode_name} room '{room_name}'")
 
             # Tell creator it joined (with the room's game mode)
@@ -2593,7 +2600,15 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
         elif packet.startswith("0q"):
             user_info = USERS.get(self.account_id)
             if not user_info: return
-            
+
+            # Laser Tag rooms have only the Laser Gun and the Railgun; the Laser Gun exists
+            # nowhere else. Any other switch is ignored, so nobody sees or replays it.
+            laser_tag = room_is_laser_tag(self.server.rooms.get(user_info.get("room")))
+            if laser_tag and packet[2:4] not in LASER_TAG_WEAPONS:
+                return
+            if not laser_tag and packet[2:4] == LASER_WEAPON:
+                return
+
             # Save the active weapon for late joiners!
             user_info["weapon"] = packet[2:4]
             

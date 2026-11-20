@@ -115,7 +115,7 @@ Positions are cells × 100, five digits per axis (`x5 y5`); a cell is
 | `6<attacker3><weapon2><damage2>` | — | **you** were hit (victim-side hit detection) |
 | `o<index2><attacker3><damage2>` | — | the owner reports damage to a deployable |
 | `8<cellX3><cellY3>` | `8<id><cell>` | respawned at a cell |
-| `0q<weapon2>` | `M<id>0q<weapon2>` | switched weapon |
+| `0q<weapon2>` | `M<id>0q<weapon2>` | switched weapon (Laser Tag rooms, mode `E`: only `22` Laser Gun and `16` Railgun; `22` is refused in every other room) |
 | `0m<crate3>` | `0m<id><crate3><bountyPoints>` | picked up a bounty crate |
 | `9<encrypted>` | `M<id>9<encrypted>` | chat bundle (`c<text>;` chat, `a<index>;` deployable activation) |
 

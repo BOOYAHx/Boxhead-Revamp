@@ -197,3 +197,17 @@ test('the Laser Gun kills with one hit, and the server is told the full 100 (as 
   const hits = scene.outQueue.filter((m) => m.startsWith('6'));
   assert.deepEqual(hits, ['600222' + '99', '600222' + '01']);
 });
+
+test('Laser Tag: only the Laser Gun (in hand) and the Railgun, no shop; normal rooms have no laser', async (t) => {
+  const { WeaponID } = await import('../client/src/game/weapons.js');
+  const { MODE_NAMES } = await import('../client/src/game/teams.js');
+  assert.equal(MODE_NAMES[GameType.LASER_TAG], 'Laser Tag');
+  const { scene } = setup(t, GameType.LASER_TAG);
+  assert.deepEqual(scene.player.weapons.map((w) => w.id).sort((a, b) => a - b), [WeaponID.RAILGUN, WeaponID.LASER]);
+  assert.equal(scene.player.weapon.id, WeaponID.LASER);
+  scene.ui = { shopOpen: false, menuOpen: false, openShop: () => assert.fail('Laser Tag has no shop') };
+  scene.openShop();
+  const ffa = setup(t, GameType.FFA).scene;
+  assert.equal(ffa.player.weaponByID(WeaponID.LASER), null);
+  assert.equal(ffa.player.weaponByID(WeaponID.RAILGUN), null);
+});

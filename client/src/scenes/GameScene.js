@@ -18,7 +18,7 @@ import { PISTOL_ID, SPLASH, Weapon, WeaponID, parseWeaponStats, setWeaponStats, 
 import { EquipmentWorld, gunSplash } from '../game/equipment.js';
 import { MAX_NPCS, NavGrid, NpcBrain, createNpc } from '../game/npc.js';
 import { runModeratorCommand } from '../game/moderation.js';
-import { BLUE_TEAM, GameType, INFECTED, INFECTION_STARTS_AT, NO_TEAM, RED_TEAM, SURVIVORS, ZOMBIE_LOOK, allies, hasTeams, infectionPreparing, isInfectedMode, isTeam, roundResult, teamColor, teamName, teamTotals } from '../game/teams.js';
+import { BLUE_TEAM, GameType, INFECTED, INFECTION_STARTS_AT, NO_TEAM, RED_TEAM, SURVIVORS, ZOMBIE_LOOK, allies, hasTeams, infectionPreparing, isInfectedMode, isLaserTag, isTeam, roundResult, teamColor, teamName, teamTotals } from '../game/teams.js';
 import { EquipmentView } from '../render/EquipmentView.js';
 import { GameUi } from '../ui/gameUi.js';
 import { chooseSpawn, parseMap, traceShot } from '../game/world.js';
@@ -281,9 +281,20 @@ export class GameScene extends Phaser.Scene {
       // No shop art: spawn straight away (Game.respawnLocalCharacter).
       this.player.active = true;
       this.connection.sendGameMessage('8' + cellPosToString(this.player.pos));
+    } else if (this.laserTag) {
+      // Laser Tag has no shop: spawn straight away with the Laser Gun in hand.
+      this.respawnLocal(false);
+      this.weaponChanged(this.player, true);
+      this.ui.slider.setBanks(this.player.banks);
+      this.ui.slider.update(this.player.weapon, true);
     }
     this.forcePositionUpdate = true;
     this.updateScores();
+  }
+
+  /** Laser Tag (online): only the Laser Gun and the Railgun, no shop. */
+  get laserTag() {
+    return this.mode === 'online' && isLaserTag(this.gameType);
   }
 
   /** Game.receiveServerMessage / processServerMessage. */
@@ -938,7 +949,7 @@ export class GameScene extends Phaser.Scene {
   // --- shop (ShopGame) -----------------------------------------------------------------
 
   openShop() {
-    if (!this.ui || this.ui.shopOpen || this.ui.menuOpen || this.gameOver) return;
+    if (!this.ui || this.ui.shopOpen || this.ui.menuOpen || this.gameOver || this.laserTag) return; // Laser Tag has no shop
     this.autoShopTime = 0;
     const p = this.player;
     p.moveDir = null;
@@ -1453,14 +1464,14 @@ export class GameScene extends Phaser.Scene {
     this.equipmentView = new EquipmentView(this, this.equipment);
     // The round starts in the shop (BountyGame.showInitUI); we spawn when it closes.
     this.shop = new ShopState(this.player.stats, { freeGuns: FREE_GUNS });
-    // Share the shop's pistol so upgrades apply to the weapon in hand.
     this.player.dropWeapon(this.player.weapon);
-    this.player.selectWeapon(this.player.pickupWeapon(this.shop.item(PISTOL_ID).weapon));
-    // Online, every player also carries the Laser Gun and the Railgun (neither is sold in the
-    // shop), both with unlimited ammo, every round. Not in Quick Play.
-    if (this.mode === 'online') {
-      this.player.pickupWeapon(new Weapon(WeaponID.LASER));
-      this.player.pickupWeapon(new Weapon(WeaponID.RAILGUN, { remote: true })); // remote: no ammo count
+    if (this.laserTag) {
+      // Laser Tag: only the Laser Gun and the Railgun, both with unlimited ammo (remote: no ammo count).
+      this.player.selectWeapon(this.player.pickupWeapon(new Weapon(WeaponID.LASER)));
+      this.player.pickupWeapon(new Weapon(WeaponID.RAILGUN, { remote: true }));
+    } else {
+      // Share the shop's pistol so upgrades apply to the weapon in hand.
+      this.player.selectWeapon(this.player.pickupWeapon(this.shop.item(PISTOL_ID).weapon));
     }
     const lib = this.app?.menus?.lib;
     const root = document.getElementById('game-ui');
@@ -1472,11 +1483,14 @@ export class GameScene extends Phaser.Scene {
         this.ui = null;
       }
     }
-    if (this.ui) {
+    if (this.ui && !this.laserTag) {
       this.player.active = false;
       const b = map.borderRect;
       this.player.setPosition(b.x + b.width / 2, b.y + b.height / 2); // the camera looks at the middle meanwhile
       this.openShop();
+    } else if (this.ui) {
+      // Laser Tag has no shop: wait for the map like every round, then spawn with the lasers.
+      this.player.active = false;
     }
 
     const { borderRect } = map;

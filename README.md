@@ -744,14 +744,20 @@ so far **Hedge Town** (slot 7), **Thorn Gardens** (slot 9; slot 8 was
 Nuketown, since removed), **Juke Town** (slot 10), **Scrap** (slot 11) and **Prison Yard** (slot 12). They are in Quick
 Play's map list and in Host Game's, and `tools/save_maps.py` leaves them alone.
 
-### The Laser Gun and the Railgun
+### Laser Tag
 
-Every player starts every online round (not Quick Play) with two extra guns,
-both with unlimited ammo and on Weapon Bank 1:
+**Host Game → Game Modes → Laser Tag** creates a free-for-all room where the
+only guns are these two, both with unlimited ammo and on Weapon Bank 1:
 
 * **Laser Gun**: a red beam that goes through everyone in its line and kills
-  with one hit (100 damage, fires 5 times a second). It uses the Railgun's model and is never sold.
-* **Railgun**, which the shop does not sell.
+  with one hit (100 damage, fires 5 times a second). It uses the Railgun's model.
+* **Railgun**.
+
+Players spawn straight away with the Laser Gun in hand: there is no shop in
+Laser Tag (crates still drop and still count for score). Laser Tag rounds are
+unranked, like Team Deathmatch and Infected: they never change saved stats.
+The Laser Gun exists only in Laser Tag; the game server refuses it anywhere
+else, and refuses any other weapon in a Laser Tag room.
 
 
 ### Step 19: Team Deathmatch and Infected

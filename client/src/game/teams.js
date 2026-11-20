@@ -3,8 +3,11 @@
 // Both use the same two team ids on the wire ("0k<team>", the handshake's team
 // character); the server keeps teammates from hurting each other.
 
-export const GameType = Object.freeze({ FFA: 'A', TDM: 'B', INFECTED: 'C', LAST_SURVIVOR: 'D' });
-export const MODE_NAMES = Object.freeze({ A: 'FFA', B: 'Team Deathmatch', C: 'Infected', D: 'Last Survivor Infected' });
+export const GameType = Object.freeze({ FFA: 'A', TDM: 'B', INFECTED: 'C', LAST_SURVIVOR: 'D', LASER_TAG: 'E' });
+export const MODE_NAMES = Object.freeze({ A: 'FFA', B: 'Team Deathmatch', C: 'Infected', D: 'Last Survivor Infected', E: 'Laser Tag' });
+
+/** Laser Tag: free-for-all with only the Laser Gun and the Railgun, no shop, unranked. */
+export const isLaserTag = (type) => type === GameType.LASER_TAG;
 
 export const NO_TEAM = 0;
 export const BLUE_TEAM = 2; // TeamBountyGame.BLUE_TEAM

@@ -25,7 +25,7 @@ const SPAM_TIME = 5000;
 const AUTO_REFRESH = 6000; // GameBrowserWindow.AUTO_REFRESH_TIME
 const ROOM_RESTRICT = /[^0-9 a-zA-Z,.]/g; // HostGameWindow.RESTRICT
 // GAME_MODE_NAMES / CODES: the patched HostGameWindow's "Game Modes" (Last Survivor is not offered).
-const MODES = ['A', 'B', 'C'].map((code) => ({ name: MODE_NAMES[code], code }));
+const MODES = ['A', 'B', 'C', 'E'].map((code) => ({ name: MODE_NAMES[code], code }));
 const MAP_ROW = 18;
 const NAME_INDENT = 15; // room for a player's icon (friend, moderator, most wanted...) before the name
 const CHAT_HINT = 'Type a message…';
