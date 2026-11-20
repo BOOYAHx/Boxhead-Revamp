@@ -82,6 +82,15 @@ class DeveloperWeaponTests(unittest.TestCase):
         self.handlers['202'].handle_packet('0q03')
         self.assertIn('M' + self.server.wire_id('202') + '0q03', self.sockets['203'].text())
 
+    def test_a_laser_hit_reported_as_99_plus_1_kills_on_the_server(self):
+        self.handlers['202'].handle_packet('6' + self.server.wire_id('201') + '22' + '99')
+        self.assertEqual(self.server.USERS['202']['hp'], 1)
+        self.handlers['202'].handle_packet('6' + self.server.wire_id('201') + '22' + '01')
+        self.assertEqual(self.server.USERS['202']['hp'], 0)
+        self.assertEqual(self.server.USERS['202']['stats']['deaths'], 1)
+        self.assertEqual(self.server.USERS['201']['stats']['kills'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
+

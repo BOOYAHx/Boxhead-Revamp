@@ -1975,7 +1975,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                                 
                                 # Map the weapon ID to its actual damage
                                 # 00 = Pistol (7 dmg), 01 = Uzi (Change this to Uzi's true damage!)
-                                weapon_damage = {"00": 7, "02": 5, "03": 6, "04": 8, "05": 3, "06": 55, "07": 35, "11": 45, "13": 9, "14": 10, "15": 25, "16": 50, "17": 40, "18": 75, "19": 30, "20": 55, "21": 60, LASER_WEAPON: 50} 
+                                weapon_damage = {"00": 7, "02": 5, "03": 6, "04": 8, "05": 3, "06": 55, "07": 35, "11": 45, "13": 9, "14": 10, "15": 25, "16": 50, "17": 40, "18": 75, "19": 30, "20": 55, "21": 60, LASER_WEAPON: 100} 
                                 
                                 # Deduct the exact damage for the currently equipped weapon
                                 applied_damage = weapon_damage.get(current_weapon, 7)

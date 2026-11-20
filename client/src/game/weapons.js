@@ -247,14 +247,14 @@ const LASER_STATS = {
   shortName: 'Laser',
   ammo: null, // unlimited
   ammoIncrement: 0,
-  damage: 50,
+  damage: 100, // one hit kills (every player has 100 health)
   range: 40,
   spread: 0,
   fireDelay: 0.2,
   moveSpeed: 1,
   cost: 0,
   ammoCost: 0,
-  description: 'The Laser Gun: a red beam that goes through everyone in its line.',
+  description: 'The Laser Gun: a red beam that kills everyone in its line with one hit.',
   upgrades: [null, null],
 };
 let weaponStats = { [PISTOL_ID]: DEFAULT_STATS, [WeaponID.LASER]: LASER_STATS };

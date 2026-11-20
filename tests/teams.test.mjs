@@ -185,3 +185,15 @@ test('Infected: the status line names the infected, and "INFECTED" shows over th
   scene.handlePlayerMessage({ source: '001', message: '0k3' });
   assert.equal(status(), 'Survivors 1  ·  Infected: You, Ann');
 });
+
+test('the Laser Gun kills with one hit, and the server is told the full 100 (as 99 + 1)', async (t) => {
+  const { Weapon, WeaponID } = await import('../client/src/game/weapons.js');
+  const { scene, peer } = setup(t, GameType.FFA);
+  const shooter = peer('002', 'Shooter');
+  scene.player.hp = 100;
+  scene.hurtCharacter(scene.player, shooter, new Weapon(WeaponID.LASER));
+  assert.equal(scene.player.hp, 0);
+  assert.equal(scene.player.dead, true);
+  const hits = scene.outQueue.filter((m) => m.startsWith('6'));
+  assert.deepEqual(hits, ['600222' + '99', '600222' + '01']);
+});

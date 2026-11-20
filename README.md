@@ -749,8 +749,8 @@ Play's map list and in Host Game's, and `tools/save_maps.py` leaves them alone.
 Every player starts every online round (not Quick Play) with two extra guns,
 both with unlimited ammo and on Weapon Bank 1:
 
-* **Laser Gun**: a red beam that goes through everyone in its line (50 damage,
-  fires 5 times a second). It uses the Railgun's model and is never sold.
+* **Laser Gun**: a red beam that goes through everyone in its line and kills
+  with one hit (100 damage, fires 5 times a second). It uses the Railgun's model and is never sold.
 * **Railgun**, which the shop does not sell.
 
 

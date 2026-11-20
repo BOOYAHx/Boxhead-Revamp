@@ -780,7 +780,11 @@ export class GameScene extends Phaser.Scene {
     if (Preferences.shake) this.cameras.main.shake(200, 0.006 / (Display.scale * Display.scale));
     if (p.dead) this.localDeath(shooter);
     if (p.dead && this.mode === 'offline') this.countKill(p, shooter);
-    if (this.mode === 'online') this.outQueue.push(encodeHit(shooter.id, weapon.id, Math.min(99, lost)));
+    // A hit message carries at most 99: a bigger one (the Laser Gun's 100) goes as several,
+    // so the server counts the full damage, and the kill.
+    if (this.mode === 'online') {
+      for (let left = lost; left > 0; left -= 99) this.outQueue.push(encodeHit(shooter.id, weapon.id, Math.min(99, left)));
+    }
   }
 
   /** Game.characterDeath: kill message and the respawn countdown. */
