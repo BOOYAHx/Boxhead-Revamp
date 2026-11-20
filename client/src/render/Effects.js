@@ -105,7 +105,8 @@ export class Effects {
   /** TracerLine: a thin line from the muzzle that fades out in 80 ms (white; the Railgun's purple). */
   addTracer(line) {
     if (line.length <= 0) return;
-    this.tracers.push({ color: TRACER_COLOR, alpha: TRACER_ALPHA, ...line, end: this.now() + TRACER_TIME });
+    const time = line.beam?.time || TRACER_TIME;
+    this.tracers.push({ color: TRACER_COLOR, alpha: TRACER_ALPHA, ...line, time, end: this.now() + time });
   }
 
   /** Map.addBlood: one splat per 5 points of damage, remainders carried per character. */
@@ -442,12 +443,24 @@ export class Effects {
     g.clear();
     this.tracers = this.tracers.filter((t) => t.end > now);
     for (const t of this.tracers) {
-      const k = (t.end - now) / TRACER_TIME;
+      const k = (t.end - now) / (t.time || TRACER_TIME);
       const x = t.x * CELL_WIDTH;
       const y = t.y * CELL_HEIGHT - t.altitude;
       const x2 = x + t.dx * t.length * CELL_WIDTH;
       const y2 = y + t.dy * t.length * CELL_HEIGHT;
       const alpha = (1 - Math.pow(1 - k, 1.5)) * t.alpha;
+      if (t.beam) {
+        // The Laser Gun: a wide glow, the coloured beam, then a white-hot core (in both graphics modes).
+        g.lineStyle(t.beam.glow, t.color, alpha * 0.25);
+        g.lineBetween(x, y, x2, y2);
+        g.lineStyle(t.beam.glow / 2, t.color, alpha * 0.45);
+        g.lineBetween(x, y, x2, y2);
+        g.lineStyle(t.beam.width, t.color, alpha);
+        g.lineBetween(x, y, x2, y2);
+        g.lineStyle(t.beam.core, 0xffffff, alpha);
+        g.lineBetween(x, y, x2, y2);
+        continue;
+      }
       if (this.enhanced) {
         // A faint glow around the line.
         g.lineStyle(3, t.color === TRACER_COLOR ? 0xffe0a0 : t.color, alpha * 0.35);

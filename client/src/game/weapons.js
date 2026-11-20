@@ -171,7 +171,7 @@ const INFO = {
   [WeaponID.GRENADE_LAUNCHER]: { ...TWO_HAND, kind: 'projectile', bank: 4, priority: 1, sprite: 'GrenadeLauncher', fireSounds: fireSounds('GrenadeLauncher'), reloadSound: 'GrenadeLauncherReload', changeSound: 'ChangeWeapon3', shellDistance: 0.8, particles: 'none', flashTime: 0 },
   [WeaponID.PLASMA]: { ...TWO_HAND, kind: 'projectile', bank: 3, priority: 1, barrelDistance: 0.7, sprite: 'PlasmaCannon', displays: ['PlasmaCannon', 'PlasmaCannonLit'], fireSounds: fireSounds('PlasmaCannon'), reloadSound: 'PlasmaCannonReload', changeSound: 'ChangeWeapon3', smokeSize: 1.6, smokeDistance: 0, particles: 'none', lights: true },
   // The developer's Laser Gun: the Railgun's body with a red beam that goes through everyone in its line.
-  [WeaponID.LASER]: { ...ONE_HAND, bank: 1, priority: 0, barrelAltitude: 23, sprite: 'RailgunLit', displays: ['Railgun', 'RailgunLit'], portraitID: WeaponID.RAILGUN, muzzleFlashes: ['MuzzleFlashRailgun'], muzzleOffsets: MUZZLE.Railgun, fireSounds: fireSounds('Railgun'), changeSound: 'ChangeWeapon1', tracerColor: 0xff1a1a, tracerAlpha: 1, particles: 'smokeTrail', penetrates: true, lights: true },
+  [WeaponID.LASER]: { ...ONE_HAND, bank: 1, priority: 0, barrelAltitude: 23, sprite: 'RailgunLit', displays: ['Railgun', 'RailgunLit'], portraitID: WeaponID.RAILGUN, muzzleFlashes: ['MuzzleFlashRailgun'], muzzleOffsets: MUZZLE.Railgun, fireSounds: fireSounds('Railgun'), changeSound: 'ChangeWeapon1', tracerColor: 0xff1a1a, tracerAlpha: 1, beam: { width: 4, glow: 16, core: 1.5, time: 260 }, particles: 'smokeTrail', penetrates: true, lights: true },
 };
 
 // Weapon banks (WeaponInfo.bankID / bankPriority): which number key a
@@ -656,6 +656,7 @@ export class Weapon {
       altitude: this.barrelAltitude,
       color: this.tracerColor,
       alpha: this.tracerAlpha,
+      beam: this.beam || null, // the Laser Gun: a thick glowing beam with a white-hot core
     }));
   }
 }

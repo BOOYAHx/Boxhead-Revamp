@@ -32,3 +32,12 @@ test("other players' characters can show the Laser Gun when the developer switch
   assert.ok(remote.selectWeaponByID(WeaponID.LASER));
   assert.equal(remote.weapon.id, WeaponID.LASER);
 });
+
+test('the Laser Gun draws a thick glowing beam that lasts longer; other guns keep the thin tracer', () => {
+  const laser = new Weapon(WeaponID.LASER);
+  const shot = { tracers: [{ angle: 0 }] };
+  const [line] = laser.tracerLines({ shot, distances: [10], muzzle: { x: 1, y: 1 } });
+  assert.ok(line.beam.width >= 3 && line.beam.glow > line.beam.width && line.beam.time > 80);
+  const [rifle] = new Weapon(WeaponID.RIFLE).tracerLines({ shot, distances: [10], muzzle: { x: 1, y: 1 } });
+  assert.equal(rifle.beam, null);
+});
