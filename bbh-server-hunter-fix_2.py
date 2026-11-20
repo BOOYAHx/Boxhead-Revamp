@@ -83,14 +83,8 @@ USERS = {}  # account_id -> dict(socket, username, slot, room)
 # Helpers
 ###############################################################################
 
-# The developer's accounts: only they may hold the Laser Gun (weapon 22, never sold).
-DEVELOPER_USERNAMES = frozenset({"opeth"})
+# The Laser Gun (weapon 22, not in the original game): every online player carries it.
 LASER_WEAPON = "22"
-
-
-def is_developer(account_id):
-    user = USERS.get(account_id)
-    return bool(user) and str(user.get("username", "")).casefold() in DEVELOPER_USERNAMES
 
 
 def is_configured_moderator(username):
@@ -2600,11 +2594,6 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             user_info = USERS.get(self.account_id)
             if not user_info: return
             
-            # The Laser Gun belongs to the developer: anyone else switching to it is ignored,
-            # so other players never see it in their hands or replay its shots.
-            if packet[2:4] == LASER_WEAPON and not is_developer(self.account_id):
-                return
-
             # Save the active weapon for late joiners!
             user_info["weapon"] = packet[2:4]
             

@@ -1,10 +1,10 @@
-// The developer's Laser Gun: only Opeth carries it, others see it in Opeth's hands.
+// The Laser Gun: every online player carries it, and others see it in their hands.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
 import { Character } from '../client/src/game/Character.js';
-import { ALL_WEAPON_IDS, NUM_WEAPONS, Weapon, WeaponID, isDeveloper, parseWeaponStats, setWeaponStats } from '../client/src/game/weapons.js';
+import { ALL_WEAPON_IDS, NUM_WEAPONS, Weapon, WeaponID, parseWeaponStats, setWeaponStats } from '../client/src/game/weapons.js';
 
 setWeaponStats(parseWeaponStats(fs.readFileSync(new URL('../client/assets/game/constants.xml', import.meta.url), 'utf8')));
 
@@ -20,13 +20,8 @@ test('the Laser Gun: a hard-hitting red beam through everyone in line, unlimited
   assert.equal(NUM_WEAPONS, 22, 'the shop and Weapon Banks screen keep the original 22');
 });
 
-test('only the developer account is the developer', () => {
-  for (const name of ['Opeth', 'opeth', 'OPETH']) assert.equal(isDeveloper(name), true, name);
-  for (const name of ['Opeth2', 'Hunter', '', undefined, null]) assert.equal(isDeveloper(name), false, String(name));
-});
-
-test("other players' characters can show the Laser Gun when the developer switches to it", () => {
-  const remote = new Character({ id: '002', name: 'Opeth' });
+test("other players' characters can show the Laser Gun when someone switches to it", () => {
+  const remote = new Character({ id: '002', name: 'Hunter' });
   remote.pickupRemoteWeapons();
   assert.ok(ALL_WEAPON_IDS.includes(WeaponID.LASER));
   assert.ok(remote.selectWeaponByID(WeaponID.LASER));

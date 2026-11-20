@@ -1,4 +1,4 @@
-"""The developer's Laser Gun (weapon 22): only the developer account may hold it."""
+"""The Laser Gun (weapon 22): every online player may hold it, and the room sees it."""
 import importlib.util
 import os
 from pathlib import Path
@@ -68,16 +68,15 @@ class DeveloperWeaponTests(unittest.TestCase):
         handler.server = self.host
         self.handlers[account] = handler
 
-    def test_the_developer_switches_to_the_laser_and_everyone_sees_it(self):
+    def test_a_player_switches_to_the_laser_and_everyone_sees_it(self):
         self.handlers['201'].handle_packet('0q22')
         self.assertEqual(self.server.USERS['201']['weapon'], '22')
         self.assertIn('M' + self.server.wire_id('201') + '0q22', self.sockets['202'].text())
 
-    def test_anyone_else_switching_to_the_laser_is_ignored(self):
-        self.handlers['202'].handle_packet('0q11')  # a Magnum in hand first
+    def test_any_player_can_switch_to_the_laser(self):
         self.handlers['202'].handle_packet('0q22')
-        self.assertEqual(self.server.USERS['202']['weapon'], '11', 'still the Magnum')
-        self.assertNotIn('0q22', self.sockets['201'].text() + self.sockets['203'].text())
+        self.assertEqual(self.server.USERS['202']['weapon'], '22')
+        self.assertIn('M' + self.server.wire_id('202') + '0q22', self.sockets['203'].text())
 
     def test_other_weapons_still_switch_for_everyone(self):
         self.handlers['202'].handle_packet('0q03')

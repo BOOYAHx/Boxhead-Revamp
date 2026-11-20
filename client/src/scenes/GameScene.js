@@ -14,7 +14,7 @@ import { QuickPlay, playableMaps } from '../game/quickPlay.js';
 import { ShopState } from '../game/shop.js';
 import { DEBUG, FREE_GUNS, TEST_MAP } from '../config.js';
 import { loadLook } from '../game/profile.js';
-import { PISTOL_ID, SPLASH, Weapon, WeaponID, isDeveloper, parseWeaponStats, setWeaponStats, weaponBank } from '../game/weapons.js';
+import { PISTOL_ID, SPLASH, Weapon, WeaponID, parseWeaponStats, setWeaponStats, weaponBank } from '../game/weapons.js';
 import { EquipmentWorld, gunSplash } from '../game/equipment.js';
 import { MAX_NPCS, NavGrid, NpcBrain, createNpc } from '../game/npc.js';
 import { runModeratorCommand } from '../game/moderation.js';
@@ -1452,9 +1452,9 @@ export class GameScene extends Phaser.Scene {
     // Share the shop's pistol so upgrades apply to the weapon in hand.
     this.player.dropWeapon(this.player.weapon);
     this.player.selectWeapon(this.player.pickupWeapon(this.shop.item(PISTOL_ID).weapon));
-    // Online, the developer (Opeth) also carries the Laser Gun (nobody else can have it) and
-    // the Railgun (not sold in the shop), both with unlimited ammo, every round. Not in Quick Play.
-    if (this.mode === 'online' && isDeveloper(this.app?.connection?.localUser?.name)) {
+    // Online, every player also carries the Laser Gun and the Railgun (neither is sold in the
+    // shop), both with unlimited ammo, every round. Not in Quick Play.
+    if (this.mode === 'online') {
       this.player.pickupWeapon(new Weapon(WeaponID.LASER));
       this.player.pickupWeapon(new Weapon(WeaponID.RAILGUN, { remote: true })); // remote: no ammo count
     }

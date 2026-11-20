@@ -29,7 +29,7 @@ export const WeaponID = {
   MINES: 19,
   GRENADE_LAUNCHER: 20,
   PLASMA: 21,
-  LASER: 22, // the developer's Laser Gun (not in the original game; never sold)
+  LASER: 22, // the Laser Gun (not in the original game; never sold, every online player has it)
 };
 export const PISTOL_ID = WeaponID.PISTOL;
 
@@ -54,12 +54,8 @@ export const SPLASH = {
   [WeaponID.LASER]: { radius: 1.2, inner: 0.4, share: 0.4 },
 };
 export const NUM_WEAPONS = 22; // the original game's weapons (shop, Weapon Banks screen)
-/** Every weapon id, the developer's Laser Gun included (other players can hold it). */
+/** Every weapon id, the Laser Gun included (other players can hold it). */
 export const ALL_WEAPON_IDS = [...Array.from({ length: NUM_WEAPONS }, (_, id) => id), WeaponID.LASER];
-
-/** The developer's accounts: only they get the Laser Gun (the server enforces it too). */
-const DEVELOPERS = ['opeth'];
-export const isDeveloper = (name) => typeof name === 'string' && DEVELOPERS.includes(name.toLowerCase());
 export const NUM_BANKS = 8;
 
 export const Pose = { UNARMED: 0, ONE_HAND: 1, TWO_HAND: 2, AKIMBO: 3 }; // Weapon.animID
@@ -170,7 +166,7 @@ const INFO = {
   [WeaponID.MINES]: { ...PLANTER, bank: 5, priority: 2, sprite: 'ClaymoreHeld', fireSounds: ['PreDeployLight'], changeSound: 'ChangeWeapon7' },
   [WeaponID.GRENADE_LAUNCHER]: { ...TWO_HAND, kind: 'projectile', bank: 4, priority: 1, sprite: 'GrenadeLauncher', fireSounds: fireSounds('GrenadeLauncher'), reloadSound: 'GrenadeLauncherReload', changeSound: 'ChangeWeapon3', shellDistance: 0.8, particles: 'none', flashTime: 0 },
   [WeaponID.PLASMA]: { ...TWO_HAND, kind: 'projectile', bank: 3, priority: 1, barrelDistance: 0.7, sprite: 'PlasmaCannon', displays: ['PlasmaCannon', 'PlasmaCannonLit'], fireSounds: fireSounds('PlasmaCannon'), reloadSound: 'PlasmaCannonReload', changeSound: 'ChangeWeapon3', smokeSize: 1.6, smokeDistance: 0, particles: 'none', lights: true },
-  // The developer's Laser Gun: the Railgun's body with a red beam that goes through everyone in its line.
+  // The Laser Gun: the Railgun's body with a red beam that goes through everyone in its line.
   [WeaponID.LASER]: { ...ONE_HAND, bank: 1, priority: 0, barrelAltitude: 23, sprite: 'RailgunLit', displays: ['Railgun', 'RailgunLit'], portraitID: WeaponID.RAILGUN, muzzleFlashes: ['MuzzleFlashRailgun'], muzzleOffsets: MUZZLE.Railgun, fireSounds: fireSounds('Railgun'), changeSound: 'ChangeWeapon1', tracerColor: 0xff1a1a, tracerAlpha: 1, beam: { width: 4, glow: 16, core: 1.5, time: 260 }, particles: 'smokeTrail', penetrates: true, lights: true },
 };
 
@@ -258,7 +254,7 @@ const LASER_STATS = {
   moveSpeed: 1,
   cost: 0,
   ammoCost: 0,
-  description: "The developer's Laser Gun: a red beam that goes through everyone in its line.",
+  description: 'The Laser Gun: a red beam that goes through everyone in its line.',
   upgrades: [null, null],
 };
 let weaponStats = { [PISTOL_ID]: DEFAULT_STATS, [WeaponID.LASER]: LASER_STATS };
