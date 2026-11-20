@@ -746,9 +746,8 @@ Play's map list and in Host Game's, and `tools/save_maps.py` leaves them alone.
 
 ### The developer's guns
 
-The developer account **Opeth** starts every round, online or in Quick Play
-(when logged in), with two extra guns, both with unlimited ammo and on Weapon
-Bank 1:
+The developer account **Opeth** starts every online round (not Quick Play)
+with two extra guns, both with unlimited ammo and on Weapon Bank 1:
 
 * **Laser Gun**: a red beam that goes through everyone in its line (50 damage,
   fires 5 times a second). It uses the Railgun's model and is never sold.

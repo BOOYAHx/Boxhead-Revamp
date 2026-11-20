@@ -1452,9 +1452,9 @@ export class GameScene extends Phaser.Scene {
     // Share the shop's pistol so upgrades apply to the weapon in hand.
     this.player.dropWeapon(this.player.weapon);
     this.player.selectWeapon(this.player.pickupWeapon(this.shop.item(PISTOL_ID).weapon));
-    // The developer (Opeth) also carries the Laser Gun (nobody else can have it) and the
-    // Railgun (not sold in the shop), both with unlimited ammo, every round.
-    if (isDeveloper(this.app?.connection?.localUser?.name)) {
+    // Online, the developer (Opeth) also carries the Laser Gun (nobody else can have it) and
+    // the Railgun (not sold in the shop), both with unlimited ammo, every round. Not in Quick Play.
+    if (this.mode === 'online' && isDeveloper(this.app?.connection?.localUser?.name)) {
       this.player.pickupWeapon(new Weapon(WeaponID.LASER));
       this.player.pickupWeapon(new Weapon(WeaponID.RAILGUN, { remote: true })); // remote: no ammo count
     }
