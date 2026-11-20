@@ -489,7 +489,7 @@ class WeaponSlider {
       const [weapon, slot] = entry;
       d.x = this.open.x + (slot - 0.5) * SPACING;
       d.weapon = weapon;
-      d.child('portrait').gotoAndStop(weapon.id + 1);
+      d.child('portrait').gotoAndStop((weapon.portraitID ?? weapon.id) + 1); // the Laser Gun shows the Railgun's picture
       d.child('nameField').text = weapon.shortName;
       d.child('portrait').el.setAttribute('filter', weapon === this.current ? `url(#${this.lib.filter(null, GLOW)})` : '');
       d.previousAmmo = -1;

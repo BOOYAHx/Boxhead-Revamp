@@ -744,6 +744,20 @@ so far **Hedge Town** (slot 7), **Thorn Gardens** (slot 9; slot 8 was
 Nuketown, since removed), **Juke Town** (slot 10), **Scrap** (slot 11) and **Prison Yard** (slot 12). They are in Quick
 Play's map list and in Host Game's, and `tools/save_maps.py` leaves them alone.
 
+### The developer's guns
+
+The developer account **Opeth** starts every round, online or in Quick Play
+(when logged in), with two extra guns, both with unlimited ammo and on Weapon
+Bank 1:
+
+* **Laser Gun**: a red beam that goes through everyone in its line (50 damage,
+  fires 5 times a second). It uses the Railgun's model and is never sold.
+* **Railgun**, which the shop does not sell.
+
+The game server refuses the Laser Gun from any other account (`DEVELOPER_USERNAMES`
+in `bbh-server-hunter-fix_2.py`, `DEVELOPERS` in `client/src/game/weapons.js`), so
+other players only ever see it in Opeth's hands.
+
 ### Step 19: Team Deathmatch and Infected
 
 **Host Game → Game Modes** offers **FFA**, **Team Deathmatch** and

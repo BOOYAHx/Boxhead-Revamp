@@ -5,7 +5,7 @@
 import { S } from './Direction.js';
 import { HitCircle, moveCharacter } from './world.js';
 import { CHARACTER_HEIGHT, FIRE_RADIUS, MAX_SPEED, MOVE_RADIUS, MAX_STORED_POSITIONS, PROCESS_INTERVAL, RESPAWN_TIME, SECOND } from './constants.js';
-import { NUM_WEAPONS, PISTOL_ID, Weapon, WeaponID } from './weapons.js';
+import { ALL_WEAPON_IDS, PISTOL_ID, Weapon, WeaponID } from './weapons.js';
 
 const ANIM_FPS = 20;
 const SMOOTH_TIME = 200; // ms to blend a corrected remote position (Mover.SMOOTH_TIME)
@@ -171,7 +171,7 @@ export class Character {
 
   /** Every weapon, with unlimited ammo, for other players (pickupRemoteWeapons). */
   pickupRemoteWeapons() {
-    for (let id = 0; id < NUM_WEAPONS; id++) if (!this.weaponByID(id)) this.pickupWeapon(new Weapon(id, { remote: true }));
+    for (const id of ALL_WEAPON_IDS) if (!this.weaponByID(id)) this.pickupWeapon(new Weapon(id, { remote: true }));
   }
 
   dropWeapon(weapon) {

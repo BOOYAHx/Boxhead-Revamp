@@ -83,6 +83,16 @@ USERS = {}  # account_id -> dict(socket, username, slot, room)
 # Helpers
 ###############################################################################
 
+# The developer's accounts: only they may hold the Laser Gun (weapon 22, never sold).
+DEVELOPER_USERNAMES = frozenset({"opeth"})
+LASER_WEAPON = "22"
+
+
+def is_developer(account_id):
+    user = USERS.get(account_id)
+    return bool(user) and str(user.get("username", "")).casefold() in DEVELOPER_USERNAMES
+
+
 def is_configured_moderator(username):
     return str(username).casefold() in {str(name).casefold() for name in MODERATOR_USERNAMES}
 
@@ -1917,7 +1927,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                     current_weapon = USERS[self.account_id].get("weapon", "00")
                     
                     # 00 = Pistol, 01 = Uzi (Check your logs if Uzi is different!)
-                    if current_weapon in ["00", "01", "02", "03", "04", "05", "11", "13", "14", "15", "16", "20", "21"]:
+                    if current_weapon in ["00", "01", "02", "03", "04", "05", "11", "13", "14", "15", "16", "20", "21", LASER_WEAPON]:
                         last_pos = USERS[self.account_id].get("last_pos")
                         
                         if last_pos and len(last_pos) >= 10 and len(packet) >= 4:
@@ -1971,7 +1981,7 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
                                 
                                 # Map the weapon ID to its actual damage
                                 # 00 = Pistol (7 dmg), 01 = Uzi (Change this to Uzi's true damage!)
-                                weapon_damage = {"00": 7, "02": 5, "03": 6, "04": 8, "05": 3, "06": 55, "07": 35, "11": 45, "13": 9, "14": 10, "15": 25, "16": 50, "17": 40, "18": 75, "19": 30, "20": 55, "21": 60} 
+                                weapon_damage = {"00": 7, "02": 5, "03": 6, "04": 8, "05": 3, "06": 55, "07": 35, "11": 45, "13": 9, "14": 10, "15": 25, "16": 50, "17": 40, "18": 75, "19": 30, "20": 55, "21": 60, LASER_WEAPON: 50} 
                                 
                                 # Deduct the exact damage for the currently equipped weapon
                                 applied_damage = weapon_damage.get(current_weapon, 7)
@@ -2590,6 +2600,11 @@ class FlashGameHandler(socketserver.BaseRequestHandler):
             user_info = USERS.get(self.account_id)
             if not user_info: return
             
+            # The Laser Gun belongs to the developer: anyone else switching to it is ignored,
+            # so other players never see it in their hands or replay its shots.
+            if packet[2:4] == LASER_WEAPON and not is_developer(self.account_id):
+                return
+
             # Save the active weapon for late joiners!
             user_info["weapon"] = packet[2:4]
             
